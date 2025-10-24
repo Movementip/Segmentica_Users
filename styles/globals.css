@@ -1,0 +1,10 @@
+// Global styles for Segmentica CRM
+body {
+  margin: 0;
+  font-family: 'Segoe UI', Arial, sans-serif;
+  background: #f7f8fa;
+  color: #222;
+}
+h1 {
+  color: #2e5aac;
+}

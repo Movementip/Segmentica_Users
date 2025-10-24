@@ -1,0 +1,138 @@
+.overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.dialog {
+  background: white;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 450px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+.header {
+  padding: 20px 24px;
+  border-bottom: 1px solid #eee;
+}
+
+.header h3 {
+  margin: 0;
+  color: #333;
+  font-size: 1.25rem;
+}
+
+.content {
+  padding: 24px;
+}
+
+.content p {
+  margin: 0 0 16px 0;
+  color: #666;
+  line-height: 1.5;
+}
+
+.orderInfo {
+  background-color: #f8f9fa;
+  padding: 16px;
+  border-radius: 6px;
+  margin: 16px 0;
+  border-left: 4px solid #007bff;
+}
+
+.orderInfo strong {
+  display: block;
+  margin-bottom: 8px;
+  color: #333;
+  font-size: 1.1rem;
+}
+
+.orderInfo div {
+  margin-bottom: 4px;
+  color: #666;
+}
+
+.warning {
+  background-color: #fff3cd;
+  padding: 12px;
+  border-radius: 4px;
+  border: 1px solid #ffeaa7;
+  color: #856404;
+  font-size: 0.9rem;
+}
+
+.warning strong {
+  color: #856404;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 20px 24px;
+  border-top: 1px solid #eee;
+}
+
+.cancelButton {
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.3s;
+}
+
+.cancelButton:hover:not(:disabled) {
+  background-color: #5a6268;
+}
+
+.cancelButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.deleteButton {
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.3s;
+  min-width: 120px;
+}
+
+.deleteButton:hover:not(:disabled) {
+  background-color: #c82333;
+}
+
+.deleteButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 480px) {
+  .dialog {
+    width: 95%;
+    margin: 10px;
+  }
+  
+  .actions {
+    flex-direction: column;
+  }
+  
+  .actions button {
+    width: 100%;
+  }
+}

@@ -1,0 +1,166 @@
+import type { NextApiRequest, NextApiResponse } from 'next';
+import { query } from '../../lib/db';
+
+interface MissingProduct {
+  id: number;
+  заявка_id: number;
+  товар_id: number;
+  необходимое_количество: number;
+  недостающее_количество: number;
+  статус: string;
+  товар_название?: string;
+  товар_артикул?: string;
+}
+
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
+  const { order_id } = req.query;
+  
+  if (req.method === 'GET') {
+    try {
+      let queryText = '';
+      let queryParams: any[] = [];
+      
+      if (order_id) {
+        // Get missing products for a specific order
+        queryText = `
+          SELECT 
+            nt.*,
+            т."название" as товар_название,
+            т."артикул" as товар_артикул
+          FROM "Недостающие_товары" nt
+          LEFT JOIN "Товары" т ON nt."товар_id" = т.id
+          WHERE nt."заявка_id" = $1
+          ORDER BY nt.id DESC
+        `;
+        queryParams = [order_id];
+      } else {
+        // Get all missing products with product information
+        queryText = `
+          SELECT 
+            nt.*,
+            т."название" as товар_название,
+            т."артикул" as товар_артикул
+          FROM "Недостающие_товары" nt
+          LEFT JOIN "Товары" т ON nt."товар_id" = т.id
+          ORDER BY nt.id DESC
+        `;
+      }
+
+      const result = await query(queryText, queryParams);
+
+      res.status(200).json(result.rows);
+    } catch (error) {
+      console.error('Error fetching missing products:', error);
+      res.status(500).json({ error: 'Failed to fetch missing products: ' + (error instanceof Error ? error.message : 'Unknown error') });
+    }
+  } else if (req.method === 'POST') {
+    try {
+      const { заявка_id, товар_id, необходимое_количество, недостающее_количество } = req.body;
+
+      // Validate required fields
+      if (!заявка_id || !товар_id || !необходимое_количество || !недостающее_количество) {
+        return res.status(400).json({ 
+          error: 'Заявка, товар, необходимое количество и недостающее количество обязательны' 
+        });
+      }
+
+      // Check if order exists
+      const orderCheck = await query(
+        'SELECT id FROM "Заявки" WHERE id = $1',
+        [заявка_id]
+      );
+
+      if (orderCheck.rows.length === 0) {
+        return res.status(400).json({ error: 'Заявка не найдена' });
+      }
+
+      // Check if product exists
+      const productCheck = await query(
+        'SELECT id FROM "Товары" WHERE id = $1',
+        [товар_id]
+      );
+
+      if (productCheck.rows.length === 0) {
+        return res.status(400).json({ error: 'Товар не найден' });
+      }
+
+      // Add missing product with unique constraint handling
+      const result = await query(`
+        INSERT INTO "Недостающие_товары" (
+          "заявка_id", "товар_id", "необходимое_количество", "недостающее_количество"
+        ) VALUES ($1, $2, $3, $4)
+        ON CONFLICT ("заявка_id", "товар_id") 
+        DO UPDATE SET 
+          "необходимое_количество" = EXCLUDED."необходимое_количество",
+          "недостающее_количество" = EXCLUDED."недостающее_количество"
+        RETURNING *
+      `, [заявка_id, товар_id, необходимое_количество, недостающее_количество]);
+
+      res.status(201).json(result.rows[0]);
+    } catch (error) {
+      console.error('Error adding missing product:', error);
+      res.status(500).json({ 
+        error: 'Ошибка добавления недостающего товара: ' + (error instanceof Error ? error.message : 'Неизвестная ошибка')
+      });
+    }
+  } else if (req.method === 'PUT') {
+    try {
+      const { id, статус } = req.body;
+
+      // Validate required fields
+      if (!id || !статус) {
+        return res.status(400).json({ error: 'ID и статус обязательны' });
+      }
+
+      // Update missing product status
+      const result = await query(`
+        UPDATE "Недостающие_товары" 
+        SET "статус" = $1
+        WHERE id = $2
+        RETURNING *
+      `, [статус, id]);
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Недостающий товар не найден' });
+      }
+
+      res.status(200).json(result.rows[0]);
+    } catch (error) {
+      console.error('Error updating missing product:', error);
+      res.status(500).json({ 
+        error: 'Ошибка обновления недостающего товара: ' + (error instanceof Error ? error.message : 'Неизвестная ошибка')
+      });
+    }
+  } else if (req.method === 'DELETE') {
+    try {
+      const { id } = req.query;
+
+      if (!id) {
+        return res.status(400).json({ error: 'ID обязателен' });
+      }
+
+      // Delete missing product
+      const result = await query(
+        'DELETE FROM "Недостающие_товары" WHERE id = $1 RETURNING *',
+        [id]
+      );
+
+      if (result.rows.length === 0) {
+        return res.status(404).json({ error: 'Недостающий товар не найден' });
+      }
+
+      res.status(200).json({ message: 'Недостающий товар успешно удален' });
+    } catch (error) {
+      console.error('Error deleting missing product:', error);
+      res.status(500).json({ 
+        error: 'Ошибка удаления недостающего товара: ' + (error instanceof Error ? error.message : 'Неизвестная ошибка')
+      });
+    }
+  } else {
+    res.setHeader('Allow', ['GET', 'POST', 'PUT', 'DELETE']);
+    res.status(405).end(`Method ${req.method} Not Allowed`);
+  }
+}
