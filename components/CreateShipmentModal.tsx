@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Button, Dialog, Flex, Select, Text, TextField } from '@radix-ui/themes';
+import { fetchOrderDefaults } from '../lib/orderModes';
 import styles from './CreateShipmentModal.module.css';
 
 interface CreateShipmentModalProps {
@@ -13,6 +14,7 @@ interface CreateShipmentModalProps {
 
 type FormState = {
     заявка_id: string;
+    использовать_доставку: boolean;
     статус: string;
     номер_отслеживания: string;
     стоимость_доставки: string;
@@ -41,9 +43,11 @@ export function CreateShipmentModal({ isOpen, onClose, onCreated, transportId, i
     const [transportsError, setTransportsError] = useState<string | null>(null);
     const [transports, setTransports] = useState<TransportOption[]>([]);
     const [selectedTransportId, setSelectedTransportId] = useState<number>(transportId ?? 0);
+    const [autoCalculateDeliveryCost, setAutoCalculateDeliveryCost] = useState(false);
 
     const [formData, setFormData] = useState<FormState>({
         заявка_id: '',
+        использовать_доставку: true,
         статус: 'в пути',
         номер_отслеживания: '',
         стоимость_доставки: '',
@@ -56,9 +60,13 @@ export function CreateShipmentModal({ isOpen, onClose, onCreated, transportId, i
         setSelectedTransportId(transportId ?? 0);
         setFormData({
             заявка_id: initialOrderId ? String(initialOrderId) : '',
+            использовать_доставку: true,
             статус: 'в пути',
             номер_отслеживания: '',
             стоимость_доставки: '',
+        });
+        void fetchOrderDefaults().then(({ autoCalculateShipmentDeliveryCost }) => {
+            setAutoCalculateDeliveryCost(Boolean(autoCalculateShipmentDeliveryCost));
         });
     }, [initialOrderId, isOpen, transportId]);
 
@@ -135,11 +143,10 @@ export function CreateShipmentModal({ isOpen, onClose, onCreated, transportId, i
     }, [isOpen, transportId]);
 
     const canSubmit = useMemo(() => {
-        const orderOk = formData.заявка_id.trim().length > 0 && !Number.isNaN(Number(formData.заявка_id));
         const statusOk = ['в пути', 'доставлено', 'отменено'].includes(formData.статус);
-        const transportOk = Number(transportId ?? selectedTransportId) > 0;
-        return orderOk && statusOk && transportOk && !loading;
-    }, [formData.заявка_id, formData.статус, loading, selectedTransportId, transportId]);
+        const transportOk = !formData.использовать_доставку || Number(transportId ?? selectedTransportId) > 0;
+        return statusOk && transportOk && !loading;
+    }, [formData.использовать_доставку, formData.статус, loading, selectedTransportId, transportId]);
 
     const handleClose = () => {
         if (loading) return;
@@ -158,11 +165,14 @@ export function CreateShipmentModal({ isOpen, onClose, onCreated, transportId, i
 
         try {
             const payload = {
-                заявка_id: Number(formData.заявка_id),
-                транспорт_id: Number(transportId ?? selectedTransportId),
+                заявка_id: formData.заявка_id.trim() ? Number(formData.заявка_id) : null,
+                использовать_доставку: formData.использовать_доставку,
+                транспорт_id: formData.использовать_доставку ? Number(transportId ?? selectedTransportId) : null,
                 статус: formData.статус?.trim() || 'в пути',
                 номер_отслеживания: formData.номер_отслеживания.trim() || null,
-                стоимость_доставки: formData.стоимость_доставки.trim() ? Number(formData.стоимость_доставки) : null,
+                стоимость_доставки: formData.использовать_доставку && formData.стоимость_доставки.trim()
+                    ? Number(formData.стоимость_доставки)
+                    : null,
             };
 
             const resp = await fetch('/api/shipments', {
@@ -198,7 +208,31 @@ export function CreateShipmentModal({ isOpen, onClose, onCreated, transportId, i
                 <form onSubmit={handleSubmit} className={styles.form}>
                     <Flex direction="column" gap="4">
                         <div className={styles.formGrid}>
-                            {!transportId ? (
+                            <Box className={styles.formGroup}>
+                                <label className={styles.checkboxRow}>
+                                    <input
+                                        type="checkbox"
+                                        checked={formData.использовать_доставку}
+                                        onChange={(e) => {
+                                            const checked = e.target.checked;
+                                            setFormData((p) => ({
+                                                ...p,
+                                                использовать_доставку: checked,
+                                                номер_отслеживания: checked ? p.номер_отслеживания : '',
+                                                стоимость_доставки: checked ? p.стоимость_доставки : '',
+                                            }));
+                                        }}
+                                        className={styles.checkboxInput}
+                                        disabled={loading}
+                                    />
+                                    <span>Использовать доставку</span>
+                                </label>
+                                <Text as="p" size="1" color="gray" className={styles.fieldHint}>
+                                    Если выключено, отгрузка оформляется как передача без доставки.
+                                </Text>
+                            </Box>
+
+                            {!transportId && formData.использовать_доставку ? (
                                 <Box className={styles.formGroup}>
                                     <Text as="label" size="2" weight="medium">
                                         Транспортная компания
@@ -249,8 +283,11 @@ export function CreateShipmentModal({ isOpen, onClose, onCreated, transportId, i
                                     >
                                         <Select.Trigger variant="surface" color="gray" className={styles.textField} placeholder="Выберите заявку" />
                                         <Select.Content position="popper" variant="solid" color="gray" highContrast>
+                                            <Select.Item value={EMPTY_SELECT_VALUE}>
+                                                Без заявки
+                                            </Select.Item>
                                             {orders.length === 0 ? (
-                                                <Select.Item value={EMPTY_SELECT_VALUE} disabled>
+                                                <Select.Item value="__empty_orders__" disabled>
                                                     {ordersLoading ? 'Загрузка...' : 'Нет заявок'}
                                                 </Select.Item>
                                             ) : (
@@ -263,6 +300,11 @@ export function CreateShipmentModal({ isOpen, onClose, onCreated, transportId, i
                                         </Select.Content>
                                     </Select.Root>
                                 )}
+                                {!formData.заявка_id ? (
+                                    <Text as="p" size="1" color="gray" className={styles.fieldHint}>
+                                        Если заявку не выбирать, отгрузка будет создана как самостоятельная складская отгрузка без автоподбора позиций из заявки.
+                                    </Text>
+                                ) : null}
                             </Box>
 
                             <Box className={styles.formGroup}>
@@ -293,6 +335,7 @@ export function CreateShipmentModal({ isOpen, onClose, onCreated, transportId, i
                                     placeholder={'TRACK-001'}
                                     className={styles.textField}
                                     size="2"
+                                    disabled={!formData.использовать_доставку}
                                 />
                             </Box>
 
@@ -306,7 +349,15 @@ export function CreateShipmentModal({ isOpen, onClose, onCreated, transportId, i
                                     placeholder={'400.00'}
                                     className={styles.textField}
                                     size="2"
+                                    disabled={!formData.использовать_доставку || autoCalculateDeliveryCost}
                                 />
+                                <Text as="p" size="1" color="gray" className={styles.fieldHint}>
+                                    {!formData.использовать_доставку
+                                        ? 'Стоимость доставки не используется, потому что отгрузка оформляется без доставки.'
+                                        : autoCalculateDeliveryCost
+                                        ? 'Стоимость будет рассчитана автоматически по тарифу выбранной транспортной компании.'
+                                        : 'Стоимость доставки можно ввести вручную. По умолчанию используется именно этот режим.'}
+                                </Text>
                             </Box>
                         </div>
 

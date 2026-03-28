@@ -5,13 +5,34 @@ import { calculateVatAmountsFromLine, DEFAULT_VAT_RATE_ID, getVatRateOption, isV
 import { syncOrderWorkflowStatus } from '../../lib/orderWorkflow';
 import { checkAndCreateMissingProducts, syncMissingProductsFromPurchases } from '../../lib/missingProductsHelper';
 import { syncOrderPositionsFromLinkedPurchases } from '../../lib/orderFulfillment';
+import { normalizeOrderExecutionMode } from '../../lib/orderModes';
+import { ensureLogisticsDeliverySchema, normalizeDeliveryCost, toBoolean } from '../../lib/logisticsDelivery';
+import { syncPurchaseWarehouseState } from '../../lib/purchaseWarehouse';
 
-const calculatePurchaseTotal = (positions: Array<{ количество: number; цена: number; ндс_id?: number }>) => (
+const calculatePurchasePositionsTotal = (positions: Array<{ количество: number; цена: number; ндс_id?: number }>) => (
     positions.reduce((sum, item) => {
         const vatRate = getVatRateOption(item?.ндс_id ?? DEFAULT_VAT_RATE_ID).rate;
         return sum + calculateVatAmountsFromLine(Number(item?.количество), Number(item?.цена), vatRate).total;
     }, 0)
 );
+
+const calculatePurchaseTotal = (
+    positions: Array<{ количество: number; цена: number; ндс_id?: number }>,
+    deliveryCost?: number | null
+) => (
+    calculatePurchasePositionsTotal(positions) + (Number(deliveryCost) || 0)
+);
+
+const purchaseTotalExpression = `
+  (
+    COALESCE(totals.total_amount, 0)
+    + CASE
+      WHEN COALESCE(з."использовать_доставку", false)
+        THEN COALESCE(з."стоимость_доставки", 0)
+      ELSE 0
+    END
+  )::numeric
+`;
 
 export interface CreatePurchaseRequest {
     create_token?: string;
@@ -19,6 +40,9 @@ export interface CreatePurchaseRequest {
     заявка_id?: number;
     дата_поступления?: string;
     статус: string;
+    использовать_доставку?: boolean;
+    транспорт_id?: number | null;
+    стоимость_доставки?: number | null;
     позиции: {
         товар_id: number;
         количество: number;
@@ -33,6 +57,9 @@ interface UpdatePurchaseRequest {
     дата_поступления?: string;
     поставщик_id?: number;
     заявка_id?: number | null;
+    использовать_доставку?: boolean;
+    транспорт_id?: number | null;
+    стоимость_доставки?: number | null;
     позиции?: {
         товар_id: number;
         количество: number;
@@ -70,6 +97,7 @@ export default async function handler(
     res: NextApiResponse
 ) {
     const { id } = req.query;
+    await ensureLogisticsDeliverySchema();
 
     if (req.method === 'GET') {
         const actor = await requirePermission(req, res, id ? 'purchases.view' : 'purchases.list');
@@ -81,12 +109,14 @@ export default async function handler(
                 const purchaseResult = await query(`
           SELECT 
             з.*,
-            COALESCE(NULLIF(з."общая_сумма", 0), totals.total_amount, 0) as "общая_сумма",
+            ${purchaseTotalExpression} as "общая_сумма",
             п."название" as поставщик_название,
             п."телефон" as поставщик_телефон,
-            п."email" as поставщик_email
+            п."email" as поставщик_email,
+            тк."название" as транспорт_название
           FROM "Закупки" з
           LEFT JOIN "Поставщики" п ON з."поставщик_id" = п.id
+          LEFT JOIN "Транспортные_компании" тк ON з."транспорт_id" = тк.id
           LEFT JOIN (
             SELECT
               пз."закупка_id",
@@ -134,12 +164,14 @@ export default async function handler(
                 const result = await query(`
           SELECT 
             з.*,
-            COALESCE(NULLIF(з."общая_сумма", 0), totals.total_amount, 0) as "общая_сумма",
+            ${purchaseTotalExpression} as "общая_сумма",
             п."название" as поставщик_название,
             п."телефон" as поставщик_телефон,
-            п."email" as поставщик_email
+            п."email" as поставщик_email,
+            тк."название" as транспорт_название
           FROM "Закупки" з
           LEFT JOIN "Поставщики" п ON з."поставщик_id" = п.id
+          LEFT JOIN "Транспортные_компании" тк ON з."транспорт_id" = тк.id
           LEFT JOIN (
             SELECT
               пз."закупка_id",
@@ -170,7 +202,17 @@ export default async function handler(
                 });
             }
 
-            const { create_token, поставщик_id, заявка_id, дата_поступления, статус, позиции }: CreatePurchaseRequest = req.body;
+            const {
+                create_token,
+                поставщик_id,
+                заявка_id,
+                дата_поступления,
+                статус,
+                использовать_доставку,
+                транспорт_id,
+                стоимость_доставки,
+                позиции
+            }: CreatePurchaseRequest = req.body;
 
             if (!create_token || typeof create_token !== 'string') {
                 return res.status(409).json({
@@ -219,6 +261,24 @@ export default async function handler(
                 return res.status(400).json({ error: 'Поставщик не найден' });
             }
 
+            const useDelivery = toBoolean(использовать_доставку, false);
+            const normalizedTransportId = useDelivery && транспорт_id != null ? Number(транспорт_id) : null;
+            const normalizedDeliveryCost = useDelivery ? normalizeDeliveryCost(стоимость_доставки) : null;
+
+            if (useDelivery && (!normalizedTransportId || normalizedTransportId <= 0)) {
+                return res.status(400).json({ error: 'При включенной доставке нужно выбрать транспортную компанию' });
+            }
+
+            if (normalizedTransportId) {
+                const transportCheck = await query(
+                    'SELECT id FROM "Транспортные_компании" WHERE id = $1',
+                    [normalizedTransportId]
+                );
+                if (transportCheck.rows.length === 0) {
+                    return res.status(400).json({ error: 'Транспортная компания не найдена' });
+                }
+            }
+
             // Validate all products exist
             for (const position of позиции) {
                 const productCheck = await query(
@@ -238,7 +298,7 @@ export default async function handler(
             }
 
             // Calculate total amount
-            const общая_сумма = calculatePurchaseTotal(позиции);
+            const общая_сумма = calculatePurchaseTotal(позиции, normalizedDeliveryCost);
             const incomingFingerprint = normalizePositionFingerprint(позиции);
 
             const duplicateCandidates = await query(`
@@ -278,14 +338,32 @@ export default async function handler(
             await query('BEGIN');
 
             try {
+                let orderExecutionMode = 'warehouse';
+                if (заявка_id) {
+                    const orderModeResult = await query(
+                        'SELECT "режим_исполнения" FROM "Заявки" WHERE id = $1 LIMIT 1',
+                        [заявка_id]
+                    );
+                    orderExecutionMode = normalizeOrderExecutionMode(orderModeResult.rows[0]?.режим_исполнения);
+                }
+
                 // Create purchase
                 const purchaseResult = await query(`
           INSERT INTO "Закупки" (
             "поставщик_id", "заявка_id", "дата_заказа", "дата_поступления", 
-            "статус", "общая_сумма"
-          ) VALUES ($1, $2, CURRENT_TIMESTAMP, $3, $4, $5)
+            "статус", "общая_сумма", "использовать_доставку", "транспорт_id", "стоимость_доставки"
+          ) VALUES ($1, $2, CURRENT_TIMESTAMP, $3, $4, $5, $6, $7, $8)
           RETURNING id
-        `, [поставщик_id, заявка_id, дата_поступления, статус, общая_сумма]);
+        `, [
+                    поставщик_id,
+                    заявка_id,
+                    дата_поступления,
+                    статус,
+                    общая_сумма,
+                    useDelivery,
+                    normalizedTransportId,
+                    normalizedDeliveryCost,
+                ]);
 
                 const purchaseId = purchaseResult.rows[0].id;
 
@@ -296,39 +374,9 @@ export default async function handler(
               "закупка_id", "товар_id", "количество", "цена", "ндс_id"
             ) VALUES ($1, $2, $3, $4, $5)
           `, [purchaseId, position.товар_id, position.количество, position.цена, normalizeVatRateId(position.ндс_id)]);
-
-                    // If purchase is received, update warehouse
-                    if (статус === 'получено') {
-                        // Check if product exists in warehouse
-                        const warehouseCheck = await query(
-                            'SELECT * FROM "Склад" WHERE "товар_id" = $1',
-                            [position.товар_id]
-                        );
-
-                        if (warehouseCheck.rows.length > 0) {
-                            // Update existing warehouse record
-                            await query(`
-                UPDATE "Склад" 
-                SET "количество" = "количество" + $1,
-                    "дата_последнего_поступления" = CURRENT_TIMESTAMP
-                WHERE "товар_id" = $2
-              `, [position.количество, position.товар_id]);
-                        } else {
-                            // Create new warehouse record
-                            await query(`
-                INSERT INTO "Склад" ("товар_id", "количество", "дата_последнего_поступления")
-                VALUES ($1, $2, CURRENT_TIMESTAMP)
-              `, [position.товар_id, position.количество]);
-                        }
-
-                        // Create warehouse movement record
-                        await query(`
-              INSERT INTO "Движения_склада" (
-                "товар_id", "тип_операции", "количество", "дата_операции", "закупка_id"
-              ) VALUES ($1, 'приход', $2, CURRENT_TIMESTAMP, $3)
-            `, [position.товар_id, position.количество, purchaseId]);
-                    }
                 }
+
+                await syncPurchaseWarehouseState({ query }, purchaseId, статус === 'получено' && orderExecutionMode !== 'direct');
 
                 // Commit transaction
                 await query('COMMIT');
@@ -360,9 +408,18 @@ export default async function handler(
         const actor = await requirePermission(req, res, 'purchases.edit');
         if (!actor) return;
         try {
-            const { статус, дата_поступления, поставщик_id, заявка_id, позиции }: UpdatePurchaseRequest = req.body;
+            const {
+                статус,
+                дата_поступления,
+                поставщик_id,
+                заявка_id,
+                использовать_доставку,
+                транспорт_id,
+                стоимость_доставки,
+                позиции
+            }: UpdatePurchaseRequest = req.body;
             const existingPurchaseResult = await query(
-                'SELECT id, "заявка_id" FROM "Закупки" WHERE id = $1',
+                'SELECT id, "заявка_id", "использовать_доставку", "транспорт_id", "стоимость_доставки" FROM "Закупки" WHERE id = $1',
                 [id]
             );
 
@@ -382,6 +439,9 @@ export default async function handler(
                 !дата_поступления &&
                 typeof поставщик_id === 'undefined' &&
                 typeof заявка_id === 'undefined' &&
+                typeof использовать_доставку === 'undefined' &&
+                typeof транспорт_id === 'undefined' &&
+                typeof стоимость_доставки === 'undefined' &&
                 typeof позиции === 'undefined'
             ) {
                 return res.status(400).json({ error: 'Нет данных для обновления' });
@@ -397,6 +457,49 @@ export default async function handler(
                     if (supplierCheck.rows.length === 0) {
                         await query('ROLLBACK');
                         return res.status(400).json({ error: 'Поставщик не найден' });
+                    }
+                }
+
+                const useDelivery = typeof использовать_доставку === 'undefined'
+                    ? undefined
+                    : toBoolean(использовать_доставку, false);
+                const normalizedTransportId = typeof транспорт_id === 'undefined'
+                    ? undefined
+                    : транспорт_id == null || транспорт_id === 0
+                        ? null
+                        : Number(транспорт_id);
+                const normalizedDeliveryCost = typeof стоимость_доставки === 'undefined'
+                    ? undefined
+                    : normalizeDeliveryCost(стоимость_доставки);
+
+                const effectiveUseDelivery = typeof useDelivery === 'undefined'
+                    ? toBoolean(existingPurchaseResult.rows[0]?.использовать_доставку, false)
+                    : useDelivery;
+                const effectiveTransportId = effectiveUseDelivery
+                    ? (
+                        typeof normalizedTransportId === 'undefined'
+                            ? (existingPurchaseResult.rows[0]?.транспорт_id == null ? null : Number(existingPurchaseResult.rows[0].транспорт_id))
+                            : normalizedTransportId
+                    )
+                    : null;
+                const effectiveDeliveryCost = effectiveUseDelivery
+                    ? (
+                        typeof normalizedDeliveryCost === 'undefined'
+                            ? normalizeDeliveryCost(existingPurchaseResult.rows[0]?.стоимость_доставки)
+                            : normalizedDeliveryCost
+                    )
+                    : 0;
+
+                if (effectiveUseDelivery && (!effectiveTransportId || effectiveTransportId <= 0)) {
+                    await query('ROLLBACK');
+                    return res.status(400).json({ error: 'При включенной доставке нужно выбрать транспортную компанию' });
+                }
+
+                if (effectiveTransportId) {
+                    const transportCheck = await query('SELECT id FROM "Транспортные_компании" WHERE id = $1', [effectiveTransportId]);
+                    if (transportCheck.rows.length === 0) {
+                        await query('ROLLBACK');
+                        return res.status(400).json({ error: 'Транспортная компания не найдена' });
                     }
                 }
 
@@ -424,6 +527,24 @@ export default async function handler(
                             return res.status(400).json({ error: `Товар с ID ${pos.товар_id} не найден` });
                         }
                     }
+                }
+
+                const shouldRecalculateTotal = (
+                    typeof позиции !== 'undefined'
+                    || typeof useDelivery !== 'undefined'
+                    || typeof normalizedDeliveryCost !== 'undefined'
+                    || typeof normalizedTransportId !== 'undefined'
+                );
+                let recalculatedTotal: number | undefined;
+
+                if (shouldRecalculateTotal) {
+                    const positionsForTotal = typeof позиции !== 'undefined'
+                        ? позиции
+                        : (await query(
+                            'SELECT "товар_id", "количество", "цена", "ндс_id" FROM "Позиции_закупки" WHERE "закупка_id" = $1 ORDER BY id',
+                            [id]
+                        )).rows;
+                    recalculatedTotal = calculatePurchaseTotal(positionsForTotal as Array<{ количество: number; цена: number; ндс_id?: number }>, effectiveDeliveryCost);
                 }
 
                 // Update purchase
@@ -455,10 +576,27 @@ export default async function handler(
                     paramCount++;
                 }
 
-                if (typeof позиции !== 'undefined') {
-                    const общая_сумма = calculatePurchaseTotal(позиции);
+                if (typeof useDelivery !== 'undefined') {
+                    updateFields.push(`"использовать_доставку" = $${paramCount}`);
+                    values.push(useDelivery);
+                    paramCount++;
+                }
+
+                if (typeof normalizedTransportId !== 'undefined' || typeof useDelivery !== 'undefined') {
+                    updateFields.push(`"транспорт_id" = $${paramCount}`);
+                    values.push(effectiveUseDelivery ? effectiveTransportId : null);
+                    paramCount++;
+                }
+
+                if (typeof normalizedDeliveryCost !== 'undefined' || typeof useDelivery !== 'undefined') {
+                    updateFields.push(`"стоимость_доставки" = $${paramCount}`);
+                    values.push(effectiveUseDelivery ? effectiveDeliveryCost : null);
+                    paramCount++;
+                }
+
+                if (typeof recalculatedTotal !== 'undefined') {
                     updateFields.push(`"общая_сумма" = $${paramCount}`);
-                    values.push(общая_сумма);
+                    values.push(recalculatedTotal);
                     paramCount++;
                 }
 
@@ -489,48 +627,21 @@ export default async function handler(
                     }
                 }
 
-                // If status is "получено", update warehouse and missing products
-                if (статус === 'получено') {
-                    // Get purchase positions
-                    const positionsResult = await query(`
-            SELECT "товар_id", "количество"
-            FROM "Позиции_закупки"
-            WHERE "закупка_id" = $1
-          `, [id]);
-
-                    // Update warehouse for each position
-                    for (const position of positionsResult.rows) {
-                        // Check if product exists in warehouse
-                        const warehouseCheck = await query(
-                            'SELECT * FROM "Склад" WHERE "товар_id" = $1',
-                            [position.товар_id]
-                        );
-
-                        if (warehouseCheck.rows.length > 0) {
-                            // Update existing warehouse record
-                            await query(`
-                UPDATE "Склад" 
-                SET "количество" = "количество" + $1,
-                    "дата_последнего_поступления" = CURRENT_TIMESTAMP
-                WHERE "товар_id" = $2
-              `, [position.количество, position.товар_id]);
-                        } else {
-                            // Create new warehouse record
-                            await query(`
-                INSERT INTO "Склад" ("товар_id", "количество", "дата_последнего_поступления")
-                VALUES ($1, $2, CURRENT_TIMESTAMP)
-              `, [position.товар_id, position.количество]);
-                        }
-
-                        // Create warehouse movement record
-                        await query(`
-              INSERT INTO "Движения_склада" (
-                "товар_id", "тип_операции", "количество", "дата_операции", "закупка_id"
-              ) VALUES ($1, 'приход', $2, CURRENT_TIMESTAMP, $3)
-            `, [position.товар_id, position.количество, id]);
-
-                    }
+                let orderExecutionMode = 'warehouse';
+                if (updatedPurchase.заявка_id != null) {
+                    const orderModeResult = await query(
+                        'SELECT "режим_исполнения" FROM "Заявки" WHERE id = $1 LIMIT 1',
+                        [updatedPurchase.заявка_id]
+                    );
+                    orderExecutionMode = normalizeOrderExecutionMode(orderModeResult.rows[0]?.режим_исполнения);
                 }
+
+                await syncPurchaseWarehouseState(
+                    { query },
+                    Number(id),
+                    normalizeOrderExecutionMode(orderExecutionMode) !== 'direct'
+                    && String(updatedPurchase.статус || '').trim().toLowerCase() === 'получено'
+                );
 
                 // Commit transaction
                 await query('COMMIT');

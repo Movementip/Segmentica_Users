@@ -645,6 +645,14 @@ export function Header(): JSX.Element {
                                 <DropdownMenu.Item
                                     onSelect={async (e) => {
                                         e?.preventDefault?.();
+                                        await router.push('/admin/settings');
+                                    }}
+                                >
+                                    Настройки системы
+                                </DropdownMenu.Item>
+                                <DropdownMenu.Item
+                                    onSelect={async (e) => {
+                                        e?.preventDefault?.();
                                         await router.push('/admin');
                                     }}
                                 >

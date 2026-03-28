@@ -60,6 +60,15 @@
     gap: 6px;
 }
 
+.checkboxRow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 40px;
+    font-size: 14px;
+    color: #111111;
+}
+
 .selectTrigger {
     height: 40px;
     border-radius: 15px;
@@ -117,7 +126,8 @@
 }
 
 .positionsSection {
-    --positions-grid: 92px minmax(260px, 2.4fr) 90px 110px 140px 150px 120px 150px 150px 44px;
+    --positions-grid: 84px minmax(360px, 3fr) 72px 110px 140px 150px 120px 150px 150px 36px;
+    --positions-grid-compact: minmax(360px, 3fr) 72px 110px 140px 150px 120px 150px 150px 36px;
 }
 
 .positionsTable {
@@ -158,11 +168,21 @@
     border: 1px solid #e0e0e0;
     border-radius: 12px;
     background: #ffffff;
-    min-width: 1380px;
+    min-width: 1450px;
 }
 
 .positionHeaderRow {
-    min-width: 1380px;
+    min-width: 1450px;
+}
+
+.positionRowCompact {
+    grid-template-columns: var(--positions-grid-compact);
+    min-width: 1320px;
+}
+
+.positionHeaderRowCompact {
+    grid-template-columns: var(--positions-grid-compact);
+    min-width: 1320px;
 }
 
 .positionRowMuted {
@@ -376,7 +396,17 @@
     background: #f5f5f5;
     border-radius: 12px;
     display: flex;
-    justify-content: flex-end;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+}
+
+.totalRowSecondary {
+    color: #6b7280;
+}
+
+.totalRowPrimary {
+    color: #111111;
 }
 
 .modalActions {
@@ -388,6 +418,14 @@
     padding: 0 16px;
     border-radius: 18px;
     border: 1px solid #e0e0e0;
+}
+
+.removePositionButton:global(.rt-Button) {
+    width: 36px;
+    min-width: 36px;
+    height: 40px;
+    padding: 0;
+    border-radius: 12px;
 }
 
 .secondaryButton {

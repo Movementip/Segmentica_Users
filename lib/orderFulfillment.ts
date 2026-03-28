@@ -1,5 +1,6 @@
 import type { QueryResult } from 'pg';
 import { calculateVatAmountsFromLine, DEFAULT_VAT_RATE_ID, getVatRateOption, normalizeVatRateId } from './vat';
+import { normalizeOrderExecutionMode } from './orderModes';
 
 type QueryFn = (text: string, params?: any[]) => Promise<QueryResult<any>>;
 
@@ -175,6 +176,18 @@ export async function getNextShipmentBranchMeta(db: DbLike, orderId: number) {
 }
 
 export async function getRemainingShipmentDraft(db: DbLike, orderId: number) {
+    const orderResult = await runQuery(
+        db,
+        `
+            SELECT "режим_исполнения"
+            FROM "Заявки"
+            WHERE id = $1
+            LIMIT 1
+        `,
+        [orderId]
+    );
+    const executionMode = normalizeOrderExecutionMode(orderResult.rows[0]?.режим_исполнения);
+
     const result = await runQuery(
         db,
         `
@@ -298,6 +311,18 @@ export async function reconcileOrderExecutionsForPositionUpdate(
     orderId: number,
     nextPositions: Array<{ товар_id: number; количество: number }>
 ) {
+    const orderResult = await runQuery(
+        db,
+        `
+            SELECT "режим_исполнения"
+            FROM "Заявки"
+            WHERE id = $1
+            LIMIT 1
+        `,
+        [orderId]
+    );
+    const executionMode = normalizeOrderExecutionMode(orderResult.rows[0]?.режим_исполнения);
+
     const desiredQtyByProduct = new Map<number, number>();
     for (const position of nextPositions) {
         desiredQtyByProduct.set(Number(position.товар_id), Number(position.количество) || 0);
@@ -435,33 +460,35 @@ export async function reconcileOrderExecutionsForPositionUpdate(
             throw new Error(`Не удалось откатить сборку для позиции «${productName}»`);
         }
 
-        await runQuery(
-            db,
-            `
-                INSERT INTO "Склад" ("товар_id", "количество")
-                VALUES ($1, $2)
-                ON CONFLICT ("товар_id")
-                DO UPDATE SET
-                    "количество" = "Склад"."количество" + EXCLUDED."количество",
-                    updated_at = CURRENT_TIMESTAMP
-            `,
-            [productId, rollbackQty]
-        );
+        if (executionMode !== 'direct') {
+            await runQuery(
+                db,
+                `
+                    INSERT INTO "Склад" ("товар_id", "количество")
+                    VALUES ($1, $2)
+                    ON CONFLICT ("товар_id")
+                    DO UPDATE SET
+                        "количество" = "Склад"."количество" + EXCLUDED."количество",
+                        updated_at = CURRENT_TIMESTAMP
+                `,
+                [productId, rollbackQty]
+            );
 
-        await runQuery(
-            db,
-            `
-                INSERT INTO "Движения_склада" (
-                    "товар_id",
-                    "тип_операции",
-                    "количество",
-                    "дата_операции",
-                    "заявка_id",
-                    "комментарий"
-                ) VALUES ($1, 'приход', $2, CURRENT_TIMESTAMP, $3, $4)
-            `,
-            [productId, rollbackQty, orderId, `Откат сборки по заявке #${orderId} после изменения состава заявки`]
-        );
+            await runQuery(
+                db,
+                `
+                    INSERT INTO "Движения_склада" (
+                        "товар_id",
+                        "тип_операции",
+                        "количество",
+                        "дата_операции",
+                        "заявка_id",
+                        "комментарий"
+                    ) VALUES ($1, 'приход', $2, CURRENT_TIMESTAMP, $3, $4)
+                `,
+                [productId, rollbackQty, orderId, `Откат сборки по заявке #${orderId} после изменения состава заявки`]
+            );
+        }
     }
 
     await runQuery(
@@ -491,6 +518,17 @@ export async function rollbackOrderFulfillment(
     const reason = options?.reason?.trim() || `Отмена заявки #${orderId}`;
     const detachOrderReferences = Boolean(options?.detachOrderReferences);
     const closeMissingProducts = options?.closeMissingProducts !== false;
+    const orderResult = await runQuery(
+        db,
+        `
+            SELECT "режим_исполнения"
+            FROM "Заявки"
+            WHERE id = $1
+            LIMIT 1
+        `,
+        [orderId]
+    );
+    const executionMode = normalizeOrderExecutionMode(orderResult.rows[0]?.режим_исполнения);
 
     const assembledResult = await runQuery(
         db,
@@ -532,33 +570,35 @@ export async function rollbackOrderFulfillment(
             continue;
         }
 
-        await runQuery(
-            db,
-            `
-                INSERT INTO "Склад" ("товар_id", "количество")
-                VALUES ($1, $2)
-                ON CONFLICT ("товар_id")
-                DO UPDATE SET
-                    "количество" = "Склад"."количество" + EXCLUDED."количество",
-                    updated_at = CURRENT_TIMESTAMP
-            `,
-            [productId, assembledQty]
-        );
+        if (executionMode !== 'direct') {
+            await runQuery(
+                db,
+                `
+                    INSERT INTO "Склад" ("товар_id", "количество")
+                    VALUES ($1, $2)
+                    ON CONFLICT ("товар_id")
+                    DO UPDATE SET
+                        "количество" = "Склад"."количество" + EXCLUDED."количество",
+                        updated_at = CURRENT_TIMESTAMP
+                `,
+                [productId, assembledQty]
+            );
 
-        await runQuery(
-            db,
-            `
-                INSERT INTO "Движения_склада" (
-                    "товар_id",
-                    "тип_операции",
-                    "количество",
-                    "дата_операции",
-                    "заявка_id",
-                    "комментарий"
-                ) VALUES ($1, 'приход', $2, CURRENT_TIMESTAMP, $3, $4)
-            `,
-            [productId, assembledQty, orderId, `${reason}: возврат на склад позиции «${productName}»`]
-        );
+            await runQuery(
+                db,
+                `
+                    INSERT INTO "Движения_склада" (
+                        "товар_id",
+                        "тип_операции",
+                        "количество",
+                        "дата_операции",
+                        "заявка_id",
+                        "комментарий"
+                    ) VALUES ($1, 'приход', $2, CURRENT_TIMESTAMP, $3, $4)
+                `,
+                [productId, assembledQty, orderId, `${reason}: возврат на склад позиции «${productName}»`]
+            );
+        }
     }
 
     await runQuery(

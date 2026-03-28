@@ -3,11 +3,13 @@ import { query } from '../../../../lib/db';
 import { requirePermission } from '../../../../lib/auth';
 import { calculateVatAmountsFromLine, DEFAULT_VAT_RATE_ID, getVatRateOption, isValidVatRateId, normalizeVatRateId } from '../../../../lib/vat';
 import { checkAndCreateMissingProducts } from '../../../../lib/missingProductsHelper';
+import { normalizeOrderExecutionMode, normalizeOrderSupplyMode, type OrderSupplyMode } from '../../../../lib/orderModes';
 
 export interface OrderPosition {
     id: number;
     заявка_id: number;
     товар_id: number;
+    способ_обеспечения: OrderSupplyMode;
     количество: number;
     цена: number;
     ндс_id: number | null;
@@ -31,9 +33,11 @@ export default async function handler(
             const result = await query(`
         SELECT 
           pz.*,
+          z."режим_исполнения" as режим_исполнения,
           t."название" as товар_название,
           t."артикул" as товар_артикул
         FROM "Позиции_заявки" pz
+        INNER JOIN "Заявки" z ON z.id = pz."заявка_id"
         LEFT JOIN "Товары" t ON pz."товар_id" = t.id
         WHERE pz."заявка_id" = $1
         ORDER BY pz.id
@@ -43,6 +47,7 @@ export default async function handler(
                 id: row.id,
                 заявка_id: row.заявка_id,
                 товар_id: row.товар_id,
+                способ_обеспечения: normalizeOrderSupplyMode(row.способ_обеспечения, row.режим_исполнения),
                 количество: parseInt(row.количество) || 0,
                 цена: parseFloat(row.цена) || 0,
                 ндс_id: row.ндс_id == null ? null : Number(row.ндс_id),
@@ -61,7 +66,7 @@ export default async function handler(
         const actor = await requirePermission(req, res, 'orders.edit');
         if (!actor) return;
         try {
-            const { товар_id, количество, цена, ндс_id } = req.body;
+            const { товар_id, количество, цена, ндс_id, способ_обеспечения } = req.body;
 
             if (!товар_id || !количество || !цена) {
                 return res.status(400).json({ error: 'Товар, количество и цена обязательны' });
@@ -71,16 +76,29 @@ export default async function handler(
                 return res.status(400).json({ error: 'Некорректная ставка НДС' });
             }
 
+            const orderResult = await query(
+                `
+                    SELECT "режим_исполнения"
+                    FROM "Заявки"
+                    WHERE id = $1
+                    LIMIT 1
+                `,
+                [id]
+            );
+            const executionMode = normalizeOrderExecutionMode(orderResult.rows[0]?.режим_исполнения);
+            const supplyMode = normalizeOrderSupplyMode(способ_обеспечения, executionMode);
+
             const result = await query(`
         INSERT INTO "Позиции_заявки" (
           "заявка_id", 
           "товар_id", 
           "количество", 
           "цена",
-          "ндс_id"
-        ) VALUES ($1, $2, $3, $4, $5)
+          "ндс_id",
+          "способ_обеспечения"
+        ) VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING *
-      `, [id, товар_id, количество, цена, normalizeVatRateId(ндс_id)]);
+      `, [id, товар_id, количество, цена, normalizeVatRateId(ндс_id), supplyMode]);
 
             // Update order total
             await updateOrderTotal(id);

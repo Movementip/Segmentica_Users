@@ -1,7 +1,17 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import styles from './CreateOrderModal.module.css';
 import { Box, Button, Dialog, Flex, Select, Text, TextField } from '@radix-ui/themes';
-import { calculateVatAmountsFromLine, DEFAULT_VAT_RATE_ID, fetchDefaultVatRateId, getVatRateOption, VAT_RATE_OPTIONS } from '../lib/vat';
+import OrderSearchSelect from './OrderSearchSelect';
+import { calculateVatAmountsFromLine, DEFAULT_VAT_RATE_ID, getVatRateOption, VAT_RATE_OPTIONS } from '../lib/vat';
+import {
+    DEFAULT_ORDER_EXECUTION_MODE,
+    DEFAULT_ORDER_SUPPLY_MODE,
+    fetchOrderDefaults,
+    getOrderExecutionModeLabel,
+    getOrderSupplyModeLabel,
+    type OrderExecutionMode,
+    type OrderSupplyMode,
+} from '../lib/orderModes';
 
 interface Client {
     id: number;
@@ -25,6 +35,7 @@ interface Product {
 
 interface OrderPosition {
     товар_id: number;
+    способ_обеспечения: OrderSupplyMode;
     количество: number;
     цена: number;
     ндс_id: number;
@@ -44,6 +55,7 @@ const CreateOrderModal: React.FC<CreateOrderModalProps> = ({ isOpen, onClose, on
     const [selectedClient, setSelectedClient] = useState<number | ''>('');
     const [selectedManager, setSelectedManager] = useState<number | ''>('');
     const [deliveryAddress, setDeliveryAddress] = useState('');
+    const [executionMode, setExecutionMode] = useState<OrderExecutionMode>(DEFAULT_ORDER_EXECUTION_MODE);
     const [positions, setPositions] = useState<OrderPosition[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -74,7 +86,10 @@ const CreateOrderModal: React.FC<CreateOrderModalProps> = ({ isOpen, onClose, on
             loadClients();
             loadManagers();
             loadProducts();
-            void fetchDefaultVatRateId().then((value) => setDefaultVatRateId(value));
+            void fetchOrderDefaults().then(({ defaultVatRateId: vatRateId, defaultOrderExecutionMode }) => {
+                setDefaultVatRateId(vatRateId);
+                setExecutionMode(defaultOrderExecutionMode);
+            });
         }
     }, [isOpen]);
 
@@ -116,10 +131,19 @@ const CreateOrderModal: React.FC<CreateOrderModalProps> = ({ isOpen, onClose, on
 
     const addPosition = () => {
         if (blocked) return;
-        setPositions([...positions, { товар_id: 0, количество: 1, цена: 0, ндс_id: defaultVatRateId }]);
+        setPositions([
+            ...positions,
+            {
+                товар_id: 0,
+                способ_обеспечения: executionMode === 'direct' ? 'purchase' : DEFAULT_ORDER_SUPPLY_MODE,
+                количество: 1,
+                цена: 0,
+                ндс_id: defaultVatRateId,
+            }
+        ]);
     };
 
-    const updatePosition = (index: number, field: keyof OrderPosition, value: number) => {
+    const updatePosition = (index: number, field: keyof OrderPosition, value: number | OrderSupplyMode) => {
         if (blocked) return;
         const updatedPositions = positions.map((pos, i) => {
             if (i === index) {
@@ -186,6 +210,7 @@ const CreateOrderModal: React.FC<CreateOrderModalProps> = ({ isOpen, onClose, on
                 клиент_id: selectedClient,
                 менеджер_id: selectedManager || null,
                 адрес_доставки: deliveryAddress || null,
+                режим_исполнения: executionMode,
                 позиции: positions
             };
 
@@ -204,6 +229,7 @@ const CreateOrderModal: React.FC<CreateOrderModalProps> = ({ isOpen, onClose, on
         setSelectedClient('');
         setSelectedManager('');
         setDeliveryAddress('');
+        setExecutionMode(DEFAULT_ORDER_EXECUTION_MODE);
         setPositions([]);
         setError('');
         onClose();
@@ -217,6 +243,7 @@ const CreateOrderModal: React.FC<CreateOrderModalProps> = ({ isOpen, onClose, on
 
     const clientValue = selectedClient === '' ? '' : String(selectedClient);
     const managerValue = selectedManager === '' ? '' : String(selectedManager);
+    const executionModeValue = executionMode;
 
     const productsById = useMemo(() => {
         const map = new Map<number, Product>();
@@ -232,33 +259,25 @@ const CreateOrderModal: React.FC<CreateOrderModalProps> = ({ isOpen, onClose, on
 
                 <form onSubmit={handleSubmit} className={styles.form}>
                     <Flex direction="column" gap="4">
-                        <Box className={styles.formGroup}>
-                            <Text as="label" size="2" weight="medium">Клиент *</Text>
-                            <Select.Root value={clientValue} onValueChange={(value) => setSelectedClient(value ? Number(value) : '')}>
-                                <Select.Trigger variant="surface" color="gray" className={styles.selectTrigger} />
-                                <Select.Content position="popper" variant="solid" color="gray" highContrast>
-                                    {clients.map((client) => (
-                                        <Select.Item key={client.id} value={String(client.id)}>
-                                            {client.название}
-                                        </Select.Item>
-                                    ))}
-                                </Select.Content>
-                            </Select.Root>
-                        </Box>
+                        <OrderSearchSelect
+                            label="Клиент"
+                            required
+                            value={clientValue}
+                            onValueChange={(value) => setSelectedClient(value ? Number(value) : '')}
+                            options={clients.map((client) => ({ value: String(client.id), label: client.название }))}
+                            placeholder="Поиск клиента"
+                        />
 
-                        <Box className={styles.formGroup}>
-                            <Text as="label" size="2" weight="medium">Менеджер</Text>
-                            <Select.Root value={managerValue} onValueChange={(value) => setSelectedManager(value ? Number(value) : '')}>
-                                <Select.Trigger variant="surface" color="gray" className={styles.selectTrigger} />
-                                <Select.Content position="popper" variant="solid" color="gray" highContrast>
-                                    {managers.map((manager) => (
-                                        <Select.Item key={manager.id} value={String(manager.id)}>
-                                            {manager.фио} {manager.должность && `(${manager.должность})`}
-                                        </Select.Item>
-                                    ))}
-                                </Select.Content>
-                            </Select.Root>
-                        </Box>
+                        <OrderSearchSelect
+                            label="Менеджер"
+                            value={managerValue}
+                            onValueChange={(value) => setSelectedManager(value ? Number(value) : '')}
+                            options={managers.map((manager) => ({
+                                value: String(manager.id),
+                                label: `${manager.фио}${manager.должность ? ` (${manager.должность})` : ''}`,
+                            }))}
+                            placeholder="Поиск менеджера"
+                        />
 
                         <Box className={styles.formGroup}>
                             <Text as="label" size="2" weight="medium">Адрес доставки</Text>
@@ -269,6 +288,34 @@ const CreateOrderModal: React.FC<CreateOrderModalProps> = ({ isOpen, onClose, on
                                 className={styles.textField}
                                 size="2"
                             />
+                        </Box>
+
+                        <Box className={styles.formGroup}>
+                            <Text as="label" size="2" weight="medium">Режим исполнения</Text>
+                            <Select.Root
+                                value={executionModeValue}
+                                onValueChange={(value) => {
+                                    const nextMode = (value === 'direct' ? 'direct' : 'warehouse') as OrderExecutionMode;
+                                    setExecutionMode(nextMode);
+                                    setPositions((prev) => prev.map((position) => ({
+                                        ...position,
+                                        способ_обеспечения: nextMode === 'direct'
+                                            ? (position.способ_обеспечения === 'manual' ? 'manual' : 'purchase')
+                                            : 'auto',
+                                    })));
+                                }}
+                            >
+                                <Select.Trigger variant="surface" color="gray" className={styles.selectTrigger} />
+                                <Select.Content position="popper" variant="solid" color="gray" highContrast>
+                                    <Select.Item value="warehouse">{getOrderExecutionModeLabel('warehouse')}</Select.Item>
+                                    <Select.Item value="direct">{getOrderExecutionModeLabel('direct')}</Select.Item>
+                                </Select.Content>
+                            </Select.Root>
+                            <Text size="1" color="gray" mt="2">
+                                {executionMode === 'direct'
+                                    ? 'Склад и недостачи не участвуют. Для каждой позиции можно выбрать закупку или ручное проведение.'
+                                    : 'Будет использован обычный складской сценарий: склад, недостачи, закупка и сборка.'}
+                            </Text>
                         </Box>
 
                         <Box className={styles.positionsSection}>
@@ -286,6 +333,7 @@ const CreateOrderModal: React.FC<CreateOrderModalProps> = ({ isOpen, onClose, on
                                         <Text as="span" size="1" color="gray" className={styles.positionHeaderCell}>Ед.изм</Text>
                                         <Text as="span" size="1" color="gray" className={styles.positionHeaderCell}>Кол-во</Text>
                                         <Text as="span" size="1" color="gray" className={styles.positionHeaderCell}>Цена, ₽</Text>
+                                        <Text as="span" size="1" color="gray" className={styles.positionHeaderCell}>Обеспечение</Text>
                                         <Text as="span" size="1" color="gray" className={`${styles.positionHeaderCell} ${styles.positionHeaderCellRight}`}>Сумма без НДС, ₽</Text>
                                         <Text as="span" size="1" color="gray" className={styles.positionHeaderCell}>НДС</Text>
                                         <Text as="span" size="1" color="gray" className={`${styles.positionHeaderCell} ${styles.positionHeaderCellRight}`}>Сумма НДС, ₽</Text>
@@ -305,19 +353,19 @@ const CreateOrderModal: React.FC<CreateOrderModalProps> = ({ isOpen, onClose, on
 
                                         return (
                                             <Box key={index} className={styles.positionRow}>
-                                                <Select.Root
+                                                <OrderSearchSelect
                                                     value={position.товар_id ? String(position.товар_id) : ''}
                                                     onValueChange={(value) => updatePosition(index, 'товар_id', value ? Number(value) : 0)}
-                                                >
-                                                    <Select.Trigger variant="surface" color="gray" className={styles.positionSelectTrigger} />
-                                                    <Select.Content position="popper" variant="solid" color="gray" highContrast>
-                                                        {products.map((product) => (
-                                                            <Select.Item key={product.id} value={String(product.id)}>
-                                                                {product.артикул ? `${product.артикул} - ` : ''}{product.название}
-                                                            </Select.Item>
-                                                        ))}
-                                                    </Select.Content>
-                                                </Select.Root>
+                                                    options={products.map((product) => ({
+                                                        value: String(product.id),
+                                                        label: `${product.артикул ? `${product.артикул} - ` : ''}${product.название}`,
+                                                    }))}
+                                                    placeholder="Выберите товар"
+                                                    compact
+                                                    menuPlacement="top"
+                                                    inputClassName={styles.positionSearchSelectInput}
+                                                    menuClassName={styles.positionSearchSelectMenu}
+                                                />
 
                                                 <Text as="span" size="2" className={styles.unitValue}>
                                                     {selectedProduct?.единица_измерения || 'шт'}
@@ -350,6 +398,23 @@ const CreateOrderModal: React.FC<CreateOrderModalProps> = ({ isOpen, onClose, on
                                                         </Text>
                                                     )}
                                                 </Flex>
+
+                                                {executionMode === 'direct' ? (
+                                                    <Select.Root
+                                                        value={position.способ_обеспечения}
+                                                        onValueChange={(value) => updatePosition(index, 'способ_обеспечения', value as OrderSupplyMode)}
+                                                    >
+                                                        <Select.Trigger variant="surface" color="gray" className={styles.vatField} />
+                                                        <Select.Content position="popper" variant="solid" color="gray" highContrast>
+                                                            <Select.Item value="purchase">{getOrderSupplyModeLabel('purchase')}</Select.Item>
+                                                            <Select.Item value="manual">{getOrderSupplyModeLabel('manual')}</Select.Item>
+                                                        </Select.Content>
+                                                    </Select.Root>
+                                                ) : (
+                                                    <Text as="span" size="2" className={styles.unitValue}>
+                                                        {getOrderSupplyModeLabel('auto')}
+                                                    </Text>
+                                                )}
 
                                                 <Text as="span" size="2" weight="medium" className={styles.positionMetric}>
                                                     {vatAmounts.net.toLocaleString('ru-RU', {
@@ -386,7 +451,14 @@ const CreateOrderModal: React.FC<CreateOrderModalProps> = ({ isOpen, onClose, on
                                                     })}
                                                 </Text>
 
-                                                <Button type="button" variant="surface" color="gray" highContrast onClick={() => removePosition(index)}>
+                                                <Button
+                                                    type="button"
+                                                    variant="surface"
+                                                    color="gray"
+                                                    highContrast
+                                                    className={styles.removePositionButton}
+                                                    onClick={() => removePosition(index)}
+                                                >
                                                     ×
                                                 </Button>
                                             </Box>

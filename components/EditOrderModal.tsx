@@ -1,7 +1,16 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import styles from './CreateOrderModal.module.css';
 import { Box, Button, Dialog, Flex, Select, Text, TextField } from '@radix-ui/themes';
-import { calculateVatAmountsFromLine, DEFAULT_VAT_RATE_ID, fetchDefaultVatRateId, getVatRateOption, VAT_RATE_OPTIONS } from '../lib/vat';
+import OrderSearchSelect from './OrderSearchSelect';
+import { calculateVatAmountsFromLine, DEFAULT_VAT_RATE_ID, getVatRateOption, VAT_RATE_OPTIONS } from '../lib/vat';
+import {
+    DEFAULT_ORDER_EXECUTION_MODE,
+    fetchOrderDefaults,
+    getOrderExecutionModeLabel,
+    getOrderSupplyModeLabel,
+    type OrderExecutionMode,
+    type OrderSupplyMode,
+} from '../lib/orderModes';
 
 interface Client {
     id: number;
@@ -26,6 +35,7 @@ interface Product {
 interface OrderPosition {
     id?: number;
     товар_id: number;
+    способ_обеспечения: OrderSupplyMode;
     количество: number;
     цена: number;
     ндс_id: number;
@@ -52,6 +62,7 @@ const arePositionsEqual = (left: OrderPosition[], right: OrderPosition[]) => {
         const compared = right[index];
 
         return Number(position.товар_id) === Number(compared?.товар_id)
+            && String(position.способ_обеспечения || 'auto') === String(compared?.способ_обеспечения || 'auto')
             && Number(position.количество) === Number(compared?.количество)
             && Number(position.цена) === Number(compared?.цена)
             && Number(position.ндс_id ?? UNSET_VAT_RATE_ID) === Number(compared?.ндс_id ?? UNSET_VAT_RATE_ID);
@@ -62,6 +73,7 @@ interface Order {
     id: number;
     клиент_id: number;
     менеджер_id?: number;
+    режим_исполнения?: OrderExecutionMode;
     адрес_доставки?: string;
     статус: string;
     недостающие_товары?: Array<{
@@ -79,6 +91,7 @@ interface EditOrderModalProps {
 }
 
 interface OrderWorkflowGuard {
+    isAssembled: boolean;
     readyForShipment: boolean;
     activeShipmentCount: number;
     deliveredShipmentCount: number;
@@ -92,6 +105,7 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ isOpen, onClose, onSubm
     const [selectedClient, setSelectedClient] = useState<number | ''>('');
     const [selectedManager, setSelectedManager] = useState<number | ''>('');
     const [deliveryAddress, setDeliveryAddress] = useState('');
+    const [executionMode, setExecutionMode] = useState<OrderExecutionMode>(DEFAULT_ORDER_EXECUTION_MODE);
     const [status, setStatus] = useState('');
     const [positions, setPositions] = useState<OrderPosition[]>([]);
     const [initialPositions, setInitialPositions] = useState<OrderPosition[]>([]);
@@ -112,7 +126,7 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ isOpen, onClose, onSubm
             loadProducts();
             loadOrderData();
             void loadWorkflowGuard();
-            void fetchDefaultVatRateId().then((value) => setDefaultVatRateId(value));
+            void fetchOrderDefaults().then(({ defaultVatRateId: vatRateId }) => setDefaultVatRateId(vatRateId));
         }
     }, [isOpen, order]);
 
@@ -128,6 +142,7 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ isOpen, onClose, onSubm
             setSelectedClient(order.клиент_id);
             setSelectedManager(order.менеджер_id || '');
             setDeliveryAddress(order.адрес_доставки || '');
+            setExecutionMode(order.режим_исполнения || DEFAULT_ORDER_EXECUTION_MODE);
             setStatus(normalizeEditableOrderStatus(order.статус));
         }
     }, [isOpen, order?.id]);
@@ -174,6 +189,7 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ isOpen, onClose, onSubm
         setSelectedClient(order.клиент_id);
         setSelectedManager(order.менеджер_id || '');
         setDeliveryAddress(order.адрес_доставки || '');
+        setExecutionMode(order.режим_исполнения || DEFAULT_ORDER_EXECUTION_MODE);
         setStatus(normalizeEditableOrderStatus(order.статус));
 
         // Load order positions
@@ -189,6 +205,7 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ isOpen, onClose, onSubm
                 setPositions(positionsData.map((pos: any) => ({
                     id: pos.id,
                     товар_id: pos.товар_id,
+                    способ_обеспечения: pos.способ_обеспечения || 'auto',
                     количество: pos.количество,
                     цена: pos.цена,
                     ндс_id: pos.ндс_id == null ? UNSET_VAT_RATE_ID : Number(pos.ндс_id)
@@ -196,6 +213,7 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ isOpen, onClose, onSubm
                 setInitialPositions(positionsData.map((pos: any) => ({
                     id: pos.id,
                     товар_id: pos.товар_id,
+                    способ_обеспечения: pos.способ_обеспечения || 'auto',
                     количество: pos.количество,
                     цена: pos.цена,
                     ндс_id: pos.ндс_id == null ? UNSET_VAT_RATE_ID : Number(pos.ндс_id)
@@ -219,6 +237,7 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ isOpen, onClose, onSubm
 
             const data = await response.json();
             setWorkflowGuard({
+                isAssembled: Boolean(data?.isAssembled),
                 readyForShipment: Boolean(data?.readyForShipment),
                 activeShipmentCount: Number(data?.activeShipmentCount || 0),
                 deliveredShipmentCount: Number(data?.deliveredShipmentCount || 0),
@@ -232,10 +251,19 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ isOpen, onClose, onSubm
 
     const addPosition = () => {
         if (blocked) return;
-        setPositions([...positions, { товар_id: 0, количество: 1, цена: 0, ндс_id: defaultVatRateId }]);
+        setPositions([
+            ...positions,
+            {
+                товар_id: 0,
+                способ_обеспечения: executionMode === 'direct' ? 'purchase' : 'auto',
+                количество: 1,
+                цена: 0,
+                ндс_id: defaultVatRateId,
+            }
+        ]);
     };
 
-    const updatePosition = (index: number, field: keyof OrderPosition, value: number) => {
+    const updatePosition = (index: number, field: keyof OrderPosition, value: number | OrderSupplyMode) => {
         if (blocked) return;
         const updatedPositions = positions.map((pos, i) => {
             if (i === index) {
@@ -299,6 +327,7 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ isOpen, onClose, onSubm
                 клиент_id: selectedClient,
                 менеджер_id: selectedManager || null,
                 адрес_доставки: deliveryAddress || null,
+                режим_исполнения: executionMode,
                 статус: nextStatus,
                 ...(positionsChanged ? { позиции: positions } : {})
             };
@@ -316,6 +345,7 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ isOpen, onClose, onSubm
         setSelectedClient('');
         setSelectedManager('');
         setDeliveryAddress('');
+        setExecutionMode(DEFAULT_ORDER_EXECUTION_MODE);
         setStatus('');
         setPositions([]);
         setInitialPositions([]);
@@ -331,6 +361,7 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ isOpen, onClose, onSubm
 
     const clientValue = selectedClient === '' ? '' : String(selectedClient);
     const managerValue = selectedManager === '' ? '' : String(selectedManager);
+    const executionModeValue = executionMode;
 
     const productsById = useMemo(() => {
         const map = new Map<number, Product>();
@@ -349,7 +380,7 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ isOpen, onClose, onSubm
         { value: 'в обработке', label: 'В обработке', disabled: false },
         { value: 'подтверждена', label: 'Подтверждена', disabled: false },
         { value: 'в работе', label: 'В работе', disabled: false },
-        { value: 'собрана', label: 'Собрана', disabled: hasActiveMissingProducts || !workflowGuard?.readyForShipment },
+        { value: 'собрана', label: 'Собрана', disabled: hasActiveMissingProducts || !workflowGuard?.isAssembled },
         { value: 'отгружена', label: 'Отгружена', disabled: hasActiveMissingProducts || !((workflowGuard?.activeShipmentCount || 0) > 0 || (workflowGuard?.deliveredShipmentCount || 0) > 0) },
         { value: 'выполнена', label: 'Выполнена', disabled: hasActiveMissingProducts || !workflowGuard?.canComplete },
         { value: 'отменена', label: 'Отменена', disabled: false },
@@ -363,79 +394,27 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ isOpen, onClose, onSubm
 
                 <form onSubmit={handleSubmit} className={styles.form}>
                     <Flex direction="column" gap="4">
-                        <Box className={styles.formGroup}>
-                            <Text as="label" size="2" weight="medium">
-                                Клиент *
-                            </Text>
-                            {clients.length === 0 ? (
-                                <Select.Root value="">
-                                    <Select.Trigger
-                                        variant="surface"
-                                        color="gray"
-                                        className={styles.selectTrigger}
-                                        disabled
-                                    />
-                                </Select.Root>
-                            ) : (
-                                <Select.Root
-                                    key={`client-${order.id}-${clients.length}`}
-                                    value={clientValue}
-                                    onValueChange={(value) => setSelectedClient(value ? Number(value) : '')}
-                                >
-                                    <Select.Trigger
-                                        variant="surface"
-                                        color="gray"
-                                        className={styles.selectTrigger}
-                                        disabled={initialDataLoading}
-                                        placeholder="Выберите клиента"
-                                    />
-                                    <Select.Content position="popper" variant="solid" color="gray" highContrast>
-                                        {clients.map((client) => (
-                                            <Select.Item key={client.id} value={String(client.id)}>
-                                                {client.название}
-                                            </Select.Item>
-                                        ))}
-                                    </Select.Content>
-                                </Select.Root>
-                            )}
-                        </Box>
+                        <OrderSearchSelect
+                            label="Клиент"
+                            required
+                            value={clientValue}
+                            onValueChange={(value) => setSelectedClient(value ? Number(value) : '')}
+                            options={clients.map((client) => ({ value: String(client.id), label: client.название }))}
+                            placeholder="Поиск клиента"
+                            disabled={initialDataLoading}
+                        />
 
-                        <Box className={styles.formGroup}>
-                            <Text as="label" size="2" weight="medium">
-                                Менеджер
-                            </Text>
-                            {managers.length === 0 ? (
-                                <Select.Root value="">
-                                    <Select.Trigger
-                                        variant="surface"
-                                        color="gray"
-                                        className={styles.selectTrigger}
-                                        disabled
-                                    />
-                                </Select.Root>
-                            ) : (
-                                <Select.Root
-                                    key={`manager-${order.id}-${managers.length}`}
-                                    value={managerValue}
-                                    onValueChange={(value) => setSelectedManager(value ? Number(value) : '')}
-                                >
-                                    <Select.Trigger
-                                        variant="surface"
-                                        color="gray"
-                                        className={styles.selectTrigger}
-                                        disabled={initialDataLoading}
-                                        placeholder="Выберите менеджера"
-                                    />
-                                    <Select.Content position="popper" variant="solid" color="gray" highContrast>
-                                        {managers.map((manager) => (
-                                            <Select.Item key={manager.id} value={String(manager.id)}>
-                                                {manager.фио} {manager.должность && `(${manager.должность})`}
-                                            </Select.Item>
-                                        ))}
-                                    </Select.Content>
-                                </Select.Root>
-                            )}
-                        </Box>
+                        <OrderSearchSelect
+                            label="Менеджер"
+                            value={managerValue}
+                            onValueChange={(value) => setSelectedManager(value ? Number(value) : '')}
+                            options={managers.map((manager) => ({
+                                value: String(manager.id),
+                                label: `${manager.фио}${manager.должность ? ` (${manager.должность})` : ''}`,
+                            }))}
+                            placeholder="Поиск менеджера"
+                            disabled={initialDataLoading}
+                        />
 
                         <Box className={styles.formGroup}>
                             <Text as="label" size="2" weight="medium">
@@ -459,7 +438,7 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ isOpen, onClose, onSubm
                                                 ? 'Заявку уже можно завершать: у нее есть доставленная отгрузка.'
                                                 : workflowGuard?.readyForShipment
                                                     ? 'Заявка собрана и готова к созданию отгрузки.'
-                                                    : 'Поздние статусы откроются автоматически по мере прохождения закупки, склада и отгрузки.'}
+                                                    : 'Поздние статусы откроются автоматически по мере прохождения обеспечения, сборки и отгрузки.'}
                                     </Text>
                                 )}
                         </Box>
@@ -475,6 +454,36 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ isOpen, onClose, onSubm
                                 className={styles.textField}
                                 size="2"
                             />
+                        </Box>
+
+                        <Box className={styles.formGroup}>
+                            <Text as="label" size="2" weight="medium">
+                                Режим исполнения
+                            </Text>
+                            <Select.Root
+                                value={executionModeValue}
+                                onValueChange={(value) => {
+                                    const nextMode = (value === 'direct' ? 'direct' : 'warehouse') as OrderExecutionMode;
+                                    setExecutionMode(nextMode);
+                                    setPositions((prev) => prev.map((position) => ({
+                                        ...position,
+                                        способ_обеспечения: nextMode === 'direct'
+                                            ? (position.способ_обеспечения === 'manual' ? 'manual' : 'purchase')
+                                            : 'auto',
+                                    })));
+                                }}
+                            >
+                                <Select.Trigger variant="surface" color="gray" className={styles.selectTrigger} />
+                                <Select.Content position="popper" variant="solid" color="gray" highContrast>
+                                    <Select.Item value="warehouse">{getOrderExecutionModeLabel('warehouse')}</Select.Item>
+                                    <Select.Item value="direct">{getOrderExecutionModeLabel('direct')}</Select.Item>
+                                </Select.Content>
+                            </Select.Root>
+                            <Text size="1" color="gray" mt="2">
+                                {executionMode === 'direct'
+                                    ? 'Склад и недостачи отключены. Для каждой позиции можно выбрать закупку или ручное проведение.'
+                                    : 'Используется обычный складской сценарий с недостачами, закупкой и сборкой.'}
+                            </Text>
                         </Box>
 
                         <Box className={styles.positionsSection}>
@@ -494,6 +503,7 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ isOpen, onClose, onSubm
                                         <Text as="span" size="1" color="gray" className={styles.positionHeaderCell}>Ед.изм</Text>
                                         <Text as="span" size="1" color="gray" className={styles.positionHeaderCell}>Кол-во</Text>
                                         <Text as="span" size="1" color="gray" className={styles.positionHeaderCell}>Цена, ₽</Text>
+                                        <Text as="span" size="1" color="gray" className={styles.positionHeaderCell}>Обеспечение</Text>
                                         <Text as="span" size="1" color="gray" className={`${styles.positionHeaderCell} ${styles.positionHeaderCellRight}`}>Сумма без НДС, ₽</Text>
                                         <Text as="span" size="1" color="gray" className={styles.positionHeaderCell}>НДС</Text>
                                         <Text as="span" size="1" color="gray" className={`${styles.positionHeaderCell} ${styles.positionHeaderCellRight}`}>Сумма НДС, ₽</Text>
@@ -514,19 +524,19 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ isOpen, onClose, onSubm
 
                                         return (
                                             <Box key={index} className={styles.positionRow}>
-                                                <Select.Root
+                                                <OrderSearchSelect
                                                     value={position.товар_id ? String(position.товар_id) : ''}
                                                     onValueChange={(value) => updatePosition(index, 'товар_id', value ? Number(value) : 0)}
-                                                >
-                                                    <Select.Trigger variant="surface" color="gray" className={styles.positionSelectTrigger} />
-                                                    <Select.Content position="popper" variant="solid" color="gray" highContrast>
-                                                        {products.map((product) => (
-                                                            <Select.Item key={product.id} value={String(product.id)}>
-                                                                {product.артикул ? `${product.артикул} - ` : ''}{product.название}
-                                                            </Select.Item>
-                                                        ))}
-                                                    </Select.Content>
-                                                </Select.Root>
+                                                    options={products.map((product) => ({
+                                                        value: String(product.id),
+                                                        label: `${product.артикул ? `${product.артикул} - ` : ''}${product.название}`,
+                                                    }))}
+                                                    placeholder="Выберите товар"
+                                                    compact
+                                                    menuPlacement="top"
+                                                    inputClassName={styles.positionSearchSelectInput}
+                                                    menuClassName={styles.positionSearchSelectMenu}
+                                                />
 
                                                 <Text as="span" size="2" className={styles.unitValue}>
                                                     {selectedProduct?.единица_измерения || 'шт'}
@@ -559,6 +569,23 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ isOpen, onClose, onSubm
                                                         </Text>
                                                     )}
                                                 </Flex>
+
+                                                {executionMode === 'direct' ? (
+                                                    <Select.Root
+                                                        value={position.способ_обеспечения}
+                                                        onValueChange={(value) => updatePosition(index, 'способ_обеспечения', value as OrderSupplyMode)}
+                                                    >
+                                                        <Select.Trigger variant="surface" color="gray" className={styles.vatField} />
+                                                        <Select.Content position="popper" variant="solid" color="gray" highContrast>
+                                                            <Select.Item value="purchase">{getOrderSupplyModeLabel('purchase')}</Select.Item>
+                                                            <Select.Item value="manual">{getOrderSupplyModeLabel('manual')}</Select.Item>
+                                                        </Select.Content>
+                                                    </Select.Root>
+                                                ) : (
+                                                    <Text as="span" size="2" className={styles.unitValue}>
+                                                        {getOrderSupplyModeLabel('auto')}
+                                                    </Text>
+                                                )}
 
                                                 <Text as="span" size="2" weight="medium" className={styles.positionMetric}>
                                                     {vatAmounts.net.toLocaleString('ru-RU', {

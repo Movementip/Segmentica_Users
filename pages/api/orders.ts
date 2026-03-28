@@ -5,6 +5,7 @@ import { calculateVatAmountsFromLine, DEFAULT_VAT_RATE_ID, getVatRateOption, isV
 import { getOrderWorkflowSummary, syncOrderWorkflowStatus } from '../../lib/orderWorkflow';
 import { checkAndCreateMissingProducts } from '../../lib/missingProductsHelper';
 import { reconcileOrderExecutionsForPositionUpdate, rollbackOrderFulfillment } from '../../lib/orderFulfillment';
+import { normalizeOrderExecutionMode, normalizeOrderSupplyMode, type OrderExecutionMode } from '../../lib/orderModes';
 
 const calculateOrderTotal = (positions: Array<{ количество: number; цена: number; ндс_id?: number }>) => (
     positions.reduce((sum, item) => {
@@ -17,10 +18,13 @@ export interface Order {
     id: number;
     клиент_id: number;
     менеджер_id?: number;
+    режим_исполнения: OrderExecutionMode;
     дата_создания: string;
     дата_выполнения?: string;
     статус: string;
     общая_сумма: number;
+    сумма_товаров?: number;
+    сумма_логистики?: number;
     адрес_доставки?: string;
     клиент_название?: string;
     менеджер_фио?: string;
@@ -31,6 +35,22 @@ export interface Order {
     next_assembly_label?: string | null;
     next_shipment_label?: string | null;
 }
+
+const mapOrderRow = (row: any): Order => ({
+    id: row.id,
+    клиент_id: row.клиент_id,
+    менеджер_id: row.менеджер_id,
+    режим_исполнения: normalizeOrderExecutionMode(row.режим_исполнения),
+    дата_создания: row.дата_создания,
+    дата_выполнения: row.дата_выполнения,
+    статус: row.статус,
+    общая_сумма: parseFloat(row.общая_сумма) || 0,
+    сумма_товаров: row.сумма_товаров == null ? undefined : parseFloat(row.сумма_товаров) || 0,
+    сумма_логистики: row.сумма_логистики == null ? undefined : parseFloat(row.сумма_логистики) || 0,
+    адрес_доставки: row.адрес_доставки,
+    клиент_название: row.клиент_название,
+    менеджер_фио: row.менеджер_фио
+});
 
 export default async function handler(
     req: NextApiRequest,
@@ -52,27 +72,64 @@ export default async function handler(
                 const result = await query(`
           SELECT 
             z.*,
+            COALESCE(order_totals.items_total, 0)::numeric as сумма_товаров,
+            (
+              COALESCE(purchase_logistics.purchase_delivery_total, 0)
+              + COALESCE(shipment_logistics.shipment_delivery_total, 0)
+            )::numeric as сумма_логистики,
+            (
+              COALESCE(order_totals.items_total, 0)
+              + COALESCE(purchase_logistics.purchase_delivery_total, 0)
+              + COALESCE(shipment_logistics.shipment_delivery_total, 0)
+            )::numeric as общая_сумма,
             k."название" as клиент_название,
             s."фио" as менеджер_фио
           FROM "Заявки" z
           LEFT JOIN "Клиенты" k ON z."клиент_id" = k.id
           LEFT JOIN "Сотрудники" s ON z."менеджер_id" = s.id
+          LEFT JOIN (
+            SELECT
+              positions."заявка_id",
+              SUM(
+                COALESCE(positions."количество", 0)
+                * COALESCE(positions."цена", 0)
+                * (1 + COALESCE(vat."ставка", 0) / 100.0)
+              )::numeric as items_total
+            FROM "Позиции_заявки" positions
+            LEFT JOIN "Ставки_НДС" vat ON vat.id = positions."ндс_id"
+            GROUP BY positions."заявка_id"
+          ) order_totals ON order_totals."заявка_id" = z.id
+          LEFT JOIN (
+            SELECT
+              purchases."заявка_id",
+              SUM(
+                CASE
+                  WHEN COALESCE(purchases."использовать_доставку", false)
+                    THEN COALESCE(purchases."стоимость_доставки", 0)
+                  ELSE 0
+                END
+              )::numeric as purchase_delivery_total
+            FROM "Закупки" purchases
+            GROUP BY purchases."заявка_id"
+          ) purchase_logistics ON purchase_logistics."заявка_id" = z.id
+          LEFT JOIN (
+            SELECT
+              shipments."заявка_id",
+              SUM(
+                CASE
+                  WHEN COALESCE(shipments."использовать_доставку", true)
+                    THEN COALESCE(shipments."стоимость_доставки", 0)
+                  ELSE 0
+                END
+              )::numeric as shipment_delivery_total
+            FROM "Отгрузки" shipments
+            GROUP BY shipments."заявка_id"
+          ) shipment_logistics ON shipment_logistics."заявка_id" = z.id
           WHERE z."клиент_id" = $1
           ORDER BY z."дата_создания" DESC
         `, [client_id]);
 
-                const baseOrders: Order[] = result.rows.map((row: any) => ({
-                    id: row.id,
-                    клиент_id: row.клиент_id,
-                    менеджер_id: row.менеджер_id,
-                    дата_создания: row.дата_создания,
-                    дата_выполнения: row.дата_выполнения,
-                    статус: row.статус,
-                    общая_сумма: parseFloat(row.общая_сумма) || 0,
-                    адрес_доставки: row.адрес_доставки,
-                    клиент_название: row.клиент_название,
-                    менеджер_фио: row.менеджер_фио
-                }));
+                const baseOrders: Order[] = result.rows.map(mapOrderRow);
 
                 const orders = await Promise.all(baseOrders.map(async (order) => {
                     const summary = await syncOrderWorkflowStatus(Number(order.id));
@@ -98,27 +155,64 @@ export default async function handler(
             const result = await query(`
         SELECT 
           z.*,
+          COALESCE(order_totals.items_total, 0)::numeric as сумма_товаров,
+          (
+            COALESCE(purchase_logistics.purchase_delivery_total, 0)
+            + COALESCE(shipment_logistics.shipment_delivery_total, 0)
+          )::numeric as сумма_логистики,
+          (
+            COALESCE(order_totals.items_total, 0)
+            + COALESCE(purchase_logistics.purchase_delivery_total, 0)
+            + COALESCE(shipment_logistics.shipment_delivery_total, 0)
+          )::numeric as общая_сумма,
           k."название" as клиент_название,
           s."фио" as менеджер_фио
         FROM "Заявки" z
         LEFT JOIN "Клиенты" k ON z."клиент_id" = k.id
         LEFT JOIN "Сотрудники" s ON z."менеджер_id" = s.id
+        LEFT JOIN (
+          SELECT
+            positions."заявка_id",
+            SUM(
+              COALESCE(positions."количество", 0)
+              * COALESCE(positions."цена", 0)
+              * (1 + COALESCE(vat."ставка", 0) / 100.0)
+            )::numeric as items_total
+          FROM "Позиции_заявки" positions
+          LEFT JOIN "Ставки_НДС" vat ON vat.id = positions."ндс_id"
+          GROUP BY positions."заявка_id"
+        ) order_totals ON order_totals."заявка_id" = z.id
+        LEFT JOIN (
+          SELECT
+            purchases."заявка_id",
+            SUM(
+              CASE
+                WHEN COALESCE(purchases."использовать_доставку", false)
+                  THEN COALESCE(purchases."стоимость_доставки", 0)
+                ELSE 0
+              END
+            )::numeric as purchase_delivery_total
+          FROM "Закупки" purchases
+          GROUP BY purchases."заявка_id"
+        ) purchase_logistics ON purchase_logistics."заявка_id" = z.id
+        LEFT JOIN (
+          SELECT
+            shipments."заявка_id",
+            SUM(
+              CASE
+                WHEN COALESCE(shipments."использовать_доставку", true)
+                  THEN COALESCE(shipments."стоимость_доставки", 0)
+                ELSE 0
+              END
+            )::numeric as shipment_delivery_total
+          FROM "Отгрузки" shipments
+          GROUP BY shipments."заявка_id"
+        ) shipment_logistics ON shipment_logistics."заявка_id" = z.id
         ORDER BY z."дата_создания" DESC 
         LIMIT 50
       `);
 
-            const baseOrders: Order[] = result.rows.map((row: any) => ({
-                id: row.id,
-                клиент_id: row.клиент_id,
-                менеджер_id: row.менеджер_id,
-                дата_создания: row.дата_создания,
-                дата_выполнения: row.дата_выполнения,
-                статус: row.статус,
-                общая_сумма: parseFloat(row.общая_сумма) || 0,
-                адрес_доставки: row.адрес_доставки,
-                клиент_название: row.клиент_название,
-                менеджер_фио: row.менеджер_фио
-            }));
+            const baseOrders: Order[] = result.rows.map(mapOrderRow);
 
             const orders = await Promise.all(baseOrders.map(async (order) => {
                 const summary = await syncOrderWorkflowStatus(Number(order.id));
@@ -149,11 +243,13 @@ export default async function handler(
                 клиент_id,
                 менеджер_id,
                 адрес_доставки,
+                режим_исполнения,
                 позиции
             } = req.body;
             if (!клиент_id || !позиции || позиции.length === 0) {
                 return res.status(400).json({ error: 'Клиент и позиции заявки обязательны' });
             }
+            const normalizedExecutionMode = normalizeOrderExecutionMode(режим_исполнения);
             const общая_сумма = calculateOrderTotal(позиции);
 
             for (const позиция of позиции) {
@@ -167,24 +263,27 @@ export default async function handler(
           "клиент_id", 
           "менеджер_id", 
           "адрес_доставки", 
+          "режим_исполнения",
           "общая_сумма", 
           "статус"
-        ) VALUES ($1, $2, $3, $4, 'новая')
+        ) VALUES ($1, $2, $3, $4, $5, 'новая')
         RETURNING *
-      `, [клиент_id, менеджер_id || null, адрес_доставки || null, общая_сумма]);
+      `, [клиент_id, менеджер_id || null, адрес_доставки || null, normalizedExecutionMode, общая_сумма]);
 
             const newOrder = orderResult.rows[0];
 
             for (const позиция of позиции) {
+                const supplyMode = normalizeOrderSupplyMode(позиция?.способ_обеспечения, normalizedExecutionMode);
                 await query(`
           INSERT INTO "Позиции_заявки" (
             "заявка_id", 
             "товар_id", 
             "количество", 
             "цена",
-            "ндс_id"
-          ) VALUES ($1, $2, $3, $4, $5)
-        `, [newOrder.id, позиция.товар_id, позиция.количество, позиция.цена, normalizeVatRateId(позиция.ндс_id)]);
+            "ндс_id",
+            "способ_обеспечения"
+          ) VALUES ($1, $2, $3, $4, $5, $6)
+        `, [newOrder.id, позиция.товар_id, позиция.количество, позиция.цена, normalizeVatRateId(позиция.ндс_id), supplyMode]);
             }
 
             await checkAndCreateMissingProducts(Number(newOrder.id));
@@ -203,9 +302,10 @@ export default async function handler(
         const actor = await requirePermission(req, res, 'orders.edit');
         if (!actor) return;
         try {
-            const { id, клиент_id, менеджер_id, адрес_доставки, статус, позиции } = req.body;
+            const { id, клиент_id, менеджер_id, адрес_доставки, статус, позиции, режим_исполнения } = req.body;
             const normalizedStatus = typeof статус === 'string' ? статус.trim() : статус;
             const shouldUpdatePositions = Array.isArray(позиции);
+            const hasExecutionMode = режим_исполнения !== undefined && режим_исполнения !== null && String(режим_исполнения).trim() !== '';
 
             if (!shouldUpdatePositions && normalizedStatus !== undefined && normalizedStatus !== '') {
                 const missingBeforeStatusUpdate = await query(`
@@ -235,8 +335,32 @@ export default async function handler(
                 return res.status(400).json({ error: 'ID заявки и клиент обязательны' });
             }
 
+            const existingOrderResult = await query(
+                `
+                    SELECT id, "режим_исполнения"
+                    FROM "Заявки"
+                    WHERE id = $1
+                    LIMIT 1
+                `,
+                [id]
+            );
+
+            if (existingOrderResult.rows.length === 0) {
+                return res.status(404).json({ error: 'Заявка не найдена' });
+            }
+
+            const nextExecutionMode = hasExecutionMode
+                ? normalizeOrderExecutionMode(режим_исполнения)
+                : normalizeOrderExecutionMode(existingOrderResult.rows[0]?.режим_исполнения);
+
             if (shouldUpdatePositions && позиции.length === 0) {
                 return res.status(400).json({ error: 'Заявка должна содержать хотя бы одну позицию' });
+            }
+
+            if (shouldUpdatePositions && normalizedStatus && ['собрана', 'отгружена', 'выполнена'].includes(normalizedStatus)) {
+                return res.status(400).json({
+                    error: 'Нельзя одновременно менять позиции заявки и переводить её в поздний статус. Сначала сохраните позиции.'
+                });
             }
 
             if (shouldUpdatePositions) {
@@ -261,6 +385,8 @@ export default async function handler(
                     if (!isValidVatRateId(vatRateId)) {
                         return res.status(400).json({ error: 'Некорректная ставка НДС в позициях заявки' });
                     }
+
+                    normalizeOrderSupplyMode(позиция?.способ_обеспечения, nextExecutionMode);
                 }
             }
 
@@ -330,6 +456,12 @@ export default async function handler(
                 paramCount++;
             }
 
+            if (hasExecutionMode) {
+                updateFields.push(`"режим_исполнения" = $${paramCount}`);
+                values.push(nextExecutionMode);
+                paramCount++;
+            }
+
             if (normalizedStatus !== undefined && normalizedStatus !== '') {
                 updateFields.push(`"статус" = $${paramCount}`);
                 values.push(normalizedStatus);
@@ -383,15 +515,17 @@ export default async function handler(
                     await client.query('DELETE FROM "Позиции_заявки" WHERE "заявка_id" = $1', [id]);
 
                     for (const позиция of позиции) {
+                        const supplyMode = normalizeOrderSupplyMode(позиция?.способ_обеспечения, nextExecutionMode);
                         await client.query(`
             INSERT INTO "Позиции_заявки" (
               "заявка_id", 
               "товар_id", 
               "количество", 
               "цена",
-              "ндс_id"
-            ) VALUES ($1, $2, $3, $4, $5)
-          `, [id, позиция.товар_id, позиция.количество, позиция.цена, normalizeVatRateId(позиция.ндс_id)]);
+              "ндс_id",
+              "способ_обеспечения"
+            ) VALUES ($1, $2, $3, $4, $5, $6)
+          `, [id, позиция.товар_id, позиция.количество, позиция.цена, normalizeVatRateId(позиция.ндс_id), supplyMode]);
                     }
                 }
 

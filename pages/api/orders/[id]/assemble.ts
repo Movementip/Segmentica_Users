@@ -46,18 +46,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             );
 
             const batchId = Number(batchResult.rows[0]?.id);
+            const useWarehouse = workflow.executionMode !== 'direct';
             for (const position of workflow.positions) {
                 const remainingToTake = Math.max(0, Number(position.осталось_собрать) || 0);
                 if (remainingToTake <= 0) continue;
 
-                const warehouseResult = await client.query(
-                    'SELECT COALESCE("количество", 0)::numeric AS количество FROM "Склад" WHERE "товар_id" = $1 LIMIT 1',
-                    [position.товар_id]
-                );
+                if (useWarehouse) {
+                    const warehouseResult = await client.query(
+                        'SELECT COALESCE("количество", 0)::numeric AS количество FROM "Склад" WHERE "товар_id" = $1 LIMIT 1',
+                        [position.товар_id]
+                    );
 
-                const currentStock = Number(warehouseResult.rows[0]?.количество) || 0;
-                if (currentStock < remainingToTake) {
-                    throw new Error(`Недостаточно товара на складе для сборки: ${position.товар_название}`);
+                    const currentStock = Number(warehouseResult.rows[0]?.количество) || 0;
+                    if (currentStock < remainingToTake) {
+                        throw new Error(`Недостаточно товара на складе для сборки: ${position.товар_название}`);
+                    }
                 }
 
                 await client.query(
@@ -68,28 +71,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     [batchId, position.товар_id, remainingToTake]
                 );
 
-                await client.query(
-                    `
-                        UPDATE "Склад"
-                        SET "количество" = "количество" - $1
-                        WHERE "товар_id" = $2
-                    `,
-                    [remainingToTake, position.товар_id]
-                );
+                if (useWarehouse) {
+                    await client.query(
+                        `
+                            UPDATE "Склад"
+                            SET "количество" = "количество" - $1
+                            WHERE "товар_id" = $2
+                        `,
+                        [remainingToTake, position.товар_id]
+                    );
 
-                await client.query(
-                    `
-                        INSERT INTO "Движения_склада" (
-                            "товар_id",
-                            "тип_операции",
-                            "количество",
-                            "дата_операции",
-                            "заявка_id",
-                            "комментарий"
-                        ) VALUES ($1, 'расход', $2, CURRENT_TIMESTAMP, $3, $4)
-                    `,
-                    [position.товар_id, remainingToTake, orderId, `${batchMeta.batchType} заявки #${orderId} (волна ${batchMeta.branchNo})`]
-                );
+                    await client.query(
+                        `
+                            INSERT INTO "Движения_склада" (
+                                "товар_id",
+                                "тип_операции",
+                                "количество",
+                                "дата_операции",
+                                "заявка_id",
+                                "комментарий"
+                            ) VALUES ($1, 'расход', $2, CURRENT_TIMESTAMP, $3, $4)
+                        `,
+                        [position.товар_id, remainingToTake, orderId, `${batchMeta.batchType} заявки #${orderId} (волна ${batchMeta.branchNo})`]
+                    );
+                }
             }
 
             await client.query('COMMIT');

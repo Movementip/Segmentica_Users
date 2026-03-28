@@ -52,6 +52,30 @@
   min-height: 44px !important;
 }
 
+.selectContent:global(.rt-SelectContent) {
+  border-radius: 14px !important;
+  overflow: hidden !important;
+}
+
+.selectContent :global(.rt-SelectItem) {
+  font-size: 14px !important;
+  color: #262626 !important;
+}
+
+.selectContent :global(.rt-SelectItem[data-highlighted]:not([data-state='checked'])) {
+  background: rgba(17, 17, 17, 0.08) !important;
+  color: #111111 !important;
+}
+
+.selectContent :global(.rt-SelectItem[data-state='checked']) {
+  background: #111111 !important;
+  color: #ffffff !important;
+}
+
+.selectContent :global(.rt-SelectItemIndicator) {
+  color: currentColor !important;
+}
+
 .surfaceButton {
   border-radius: 9999px !important;
   border: 1px solid #e0e0e0 !important;
@@ -106,10 +130,6 @@
   box-shadow: 0 16px 40px rgba(17, 17, 17, 0.04);
 }
 
-.statusBadge {
-  margin-top: 14px;
-}
-
 .scheduleCard:global(.rt-Card),
 .tableCard:global(.rt-Card) {
   border-radius: 24px;
@@ -146,6 +166,14 @@
   margin-bottom: 16px;
 }
 
+.tableToolbarActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .searchInput {
   width: min(100%, 580px);
 }
@@ -160,6 +188,9 @@
 
 .tableWrapper {
   overflow-x: auto;
+  border: none;
+  border-radius: 0;
+  background: transparent;
 }
 
 .table:global(.rt-TableRoot) {
@@ -176,18 +207,27 @@
 
 .table :global(.rt-TableColumnHeaderCell),
 .table :global(.rt-TableCell) {
-  padding: 18px 16px;
+  padding: 10px 12px;
   border-bottom: 1px solid #eef0f4;
+  vertical-align: middle;
 }
 
 .table :global(.rt-TableColumnHeaderCell) {
-  font-size: 18px;
+  font-size: 13px;
   font-weight: 700;
-  color: #444444;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #5f6673;
+  background: #ffffff !important;
 }
 
 .table :global(.rt-TableCell) {
   font-size: 15px;
+  color: #232833;
+}
+
+.table :global(.rt-TableBody .rt-TableRow:hover) {
+  background: #fcfcfd;
 }
 
 .employeeName {
@@ -214,6 +254,61 @@
 
 .actionsCell {
   text-align: right;
+  white-space: nowrap;
+}
+
+.suggestionCell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 220px;
+}
+
+.suggestionAmount {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1b2430;
+}
+
+.suggestionMeta {
+  color: #697386;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.helpText {
+  margin-top: 6px;
+  color: #697386;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.statementMetricCard:global(.rt-Card) {
+  border-radius: 18px;
+  border: 1px solid #ececec;
+  box-shadow: none;
+}
+
+.statementBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.statementActions {
+  min-width: 280px;
+}
+
+.previewDialog:global(.rt-DialogContent) {
+  width: min(1120px, calc(100vw - 24px)) !important;
+}
+
+.previewFrame {
+  width: 100%;
+  height: min(78vh, 920px);
+  border: 1px solid #e7e9ee;
+  border-radius: 14px;
+  background: #fff;
 }
 
 .errorBanner,
@@ -263,6 +358,15 @@
     padding: 14px 12px;
   }
 
+  .tableToolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .tableToolbarActions {
+    justify-content: stretch;
+  }
+
   .rateEditor {
     min-width: 220px;
     flex-direction: column;
@@ -271,5 +375,17 @@
 
   .actionsCell {
     text-align: left;
+  }
+
+  .suggestionCell {
+    min-width: 180px;
+  }
+
+  .statementActions {
+    min-width: 220px;
+  }
+
+  .previewFrame {
+    height: 70vh;
   }
 }

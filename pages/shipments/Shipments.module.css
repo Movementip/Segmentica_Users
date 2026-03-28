@@ -478,6 +478,31 @@
     margin-top: 12px;
 }
 
+.manualPositionSelect:global(.rt-SelectTrigger) {
+    min-width: 280px;
+}
+
+.manualVatSelect:global(.rt-SelectTrigger) {
+    min-width: 130px;
+}
+
+.manualPositionInput:global(.rt-TextFieldRoot) {
+    min-width: 110px;
+}
+
+.manualPositionActions {
+    width: 1%;
+    white-space: nowrap;
+}
+
+.manualPositionRemoveButton:global(.rt-Button) {
+    width: 36px;
+    min-width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: 12px !important;
+}
+
 .textRight {
     text-align: right;
 }

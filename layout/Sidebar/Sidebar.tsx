@@ -21,7 +21,8 @@ import {
     TbRoute,
     TbClipboardList,
     TbUser,
-    TbArchive
+    TbArchive,
+    TbSettings
 } from 'react-icons/tb';
 
 const menuSections = [
@@ -62,6 +63,7 @@ const menuSections = [
         items: [
             { id: 7, name: 'Сотрудники', icon: <TbUser size={16} />, route: '/managers' },
             { id: 13, name: 'Архив', icon: <TbArchive size={16} />, route: '/archive' },
+            { id: 15, name: 'Настройки системы', icon: <TbSettings size={16} />, route: '/admin/settings' },
         ]
     }
 ];
@@ -145,6 +147,7 @@ const SidebarContent = React.memo(function SidebarContent(): JSX.Element {
                                             can('archive.payments.list') ||
                                             can('archive.finance.list')
                                         );
+                                    if (item.route === '/admin/settings') return Boolean(user?.roles?.includes('director'));
                                     return true;
                                 })
                                 .map(item => (

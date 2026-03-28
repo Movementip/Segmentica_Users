@@ -10,13 +10,15 @@ import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
 import { calculateVatAmountsFromLine, getVatRateOption } from '../../lib/vat';
 import modalStyles from '../../components/Modal.module.css';
+import { getShipmentDeliveryLabel } from '../../lib/logisticsDeliveryLabels';
 
 const EMPTY_SELECT_VALUE = '__empty__';
 
 interface ShipmentDetail {
     id: number;
-    заявка_id: number;
-    транспорт_id: number;
+    заявка_id: number | null;
+    использовать_доставку?: boolean;
+    транспорт_id: number | null;
     статус: string;
     номер_отслеживания: string | null;
     дата_отгрузки: string;
@@ -85,6 +87,7 @@ function ShipmentDetailPage(): JSX.Element {
     const [previewAttachment, setPreviewAttachment] = useState<AttachmentItem | null>(null);
     const [formData, setFormData] = useState({
         заявка_id: 0,
+        использовать_доставку: true,
         транспорт_id: 0,
         статус: 'в пути',
         номер_отслеживания: '',
@@ -126,11 +129,22 @@ function ShipmentDetailPage(): JSX.Element {
     const syncFormWithShipment = useCallback((s: ShipmentDetail) => {
         setFormData({
             заявка_id: Number(s.заявка_id) || 0,
+            использовать_доставку: s.использовать_доставку !== false,
             транспорт_id: Number(s.транспорт_id) || 0,
             статус: (s.статус || 'в пути').toLowerCase(),
             номер_отслеживания: s.номер_отслеживания || '',
             стоимость_доставки: Number(s.стоимость_доставки) || 0,
         });
+    }, []);
+
+    const getTransportText = useCallback((item: ShipmentDetail) => {
+        if (item.использовать_доставку === false) return getShipmentDeliveryLabel(false);
+        return item.транспорт_название || (item.транспорт_id ? `ТК #${item.транспорт_id}` : 'Не указана');
+    }, []);
+
+    const getCostText = useCallback((item: ShipmentDetail) => {
+        if (item.использовать_доставку === false) return 'Не используется';
+        return item.стоимость_доставки ? formatCurrency(item.стоимость_доставки) : 'Не указана';
     }, []);
 
     const fetchShipmentPositions = useCallback(async (orderId: number) => {
@@ -363,11 +377,13 @@ function ShipmentDetailPage(): JSX.Element {
     const handlePrintDocumentsWord = useCallback(async (s: ShipmentDetail) => {
         const shipDate = s.дата_отгрузки ? new Date(s.дата_отгрузки).toLocaleDateString('ru-RU') : '-';
         const shipTime = s.дата_отгрузки ? new Date(s.дата_отгрузки).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '';
-        const costText = s.стоимость_доставки ? formatCurrency(s.стоимость_доставки) : 'Не указана';
+        const costText = getCostText(s);
         const statusText = getStatusText((s.статус || '').toLowerCase());
-        const orderText = s.заявка_номер ? `№${s.заявка_номер}` : `#${s.заявка_id}`;
-        const transportText = s.транспорт_название || (s.транспорт_id ? `ТК #${s.транспорт_id}` : '-');
-        const trackText = s.номер_отслеживания || 'Не указан';
+        const orderText = s.заявка_id
+            ? (s.заявка_номер ? `№${s.заявка_номер}` : `#${s.заявка_id}`)
+            : 'Без заявки';
+        const transportText = getTransportText(s);
+        const trackText = s.использовать_доставку === false ? 'Не используется' : (s.номер_отслеживания || 'Не указан');
 
         const htmlContent = `
     <html xmlns:o='urn:schemas-microsoft-com:office:office'
@@ -411,7 +427,7 @@ function ShipmentDetailPage(): JSX.Element {
         </thead>
         <tbody>
           <tr><td>ID отгрузки</td><td>${s.id}</td></tr>
-          <tr><td>ID заявки</td><td>${s.заявка_id}</td></tr>
+          <tr><td>ID заявки</td><td>${s.заявка_id || '—'}</td></tr>
           <tr><td>ID ТК</td><td>${s.транспорт_id}</td></tr>
         </tbody>
       </table>
@@ -439,7 +455,7 @@ function ShipmentDetailPage(): JSX.Element {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-    }, []);
+    }, [getCostText, getTransportText]);
 
     const fetchShipment = useCallback(async () => {
         if (!id) return;
@@ -501,6 +517,10 @@ function ShipmentDetailPage(): JSX.Element {
     const handleSubmitEdit = useCallback(async (e: React.FormEvent) => {
         e.preventDefault();
         if (!shipment) return;
+        if (formData.использовать_доставку && formData.транспорт_id <= 0) {
+            setError('Выберите транспортную компанию для доставки');
+            return;
+        }
 
         try {
             setOperationLoading(true);
@@ -513,11 +533,12 @@ function ShipmentDetailPage(): JSX.Element {
                 },
                 body: JSON.stringify({
                     id: shipment.id,
-                    заявка_id: formData.заявка_id,
-                    транспорт_id: formData.транспорт_id,
+                    заявка_id: formData.заявка_id > 0 ? formData.заявка_id : null,
+                    использовать_доставку: formData.использовать_доставку,
+                    транспорт_id: formData.использовать_доставку ? formData.транспорт_id : null,
                     статус: formData.статус,
-                    номер_отслеживания: formData.номер_отслеживания || null,
-                    стоимость_доставки: formData.стоимость_доставки || null,
+                    номер_отслеживания: formData.использовать_доставку ? (formData.номер_отслеживания || null) : null,
+                    стоимость_доставки: formData.использовать_доставку ? (formData.стоимость_доставки || null) : null,
                 }),
             });
 
@@ -619,6 +640,8 @@ function ShipmentDetailPage(): JSX.Element {
     };
 
     const positionsTotal = positions.reduce((sum, p) => sum + getVatSummary(p).total, 0);
+    const shipmentLogisticsTotal = shipment.использовать_доставку ? Number(shipment.стоимость_доставки || 0) : 0;
+    const shipmentGrandTotal = positionsTotal + shipmentLogisticsTotal;
 
     return (
         <div className={`${styles.container} print-shipment-detail`}>
@@ -757,16 +780,20 @@ function ShipmentDetailPage(): JSX.Element {
                             <Separator size="4" />
                             <Flex direction="column" gap="2">
                                 <Box>
-                                    <Text as="div" size="1" color="gray">Заявка</Text>
-                                    <Text as="div" size="2" weight="medium">{shipment.заявка_номер ? `№${shipment.заявка_номер}` : `#${shipment.заявка_id}`}</Text>
+                                <Text as="div" size="1" color="gray">Заявка</Text>
+                                    <Text as="div" size="2" weight="medium">
+                                        {shipment.заявка_id
+                                            ? (shipment.заявка_номер ? `№${shipment.заявка_номер}` : `#${shipment.заявка_id}`)
+                                            : 'Без заявки'}
+                                    </Text>
                                 </Box>
                                 <Box>
-                                    <Text as="div" size="1" color="gray">Транспортная компания</Text>
-                                    <Text as="div" size="2">{shipment.транспорт_название || `ТК #${shipment.транспорт_id}`}</Text>
+                                    <Text as="div" size="1" color="gray">Способ передачи</Text>
+                                    <Text as="div" size="2">{getTransportText(shipment)}</Text>
                                 </Box>
                                 <Box>
                                     <Text as="div" size="1" color="gray">Номер отслеживания</Text>
-                                    <Text as="div" size="2">{shipment.номер_отслеживания || 'Не указан'}</Text>
+                                    <Text as="div" size="2">{shipment.использовать_доставку === false ? 'Не используется' : (shipment.номер_отслеживания || 'Не указан')}</Text>
                                 </Box>
                             </Flex>
                         </Flex>
@@ -781,7 +808,19 @@ function ShipmentDetailPage(): JSX.Element {
                             <Flex direction="column" gap="2">
                                 <Box>
                                     <Text as="div" size="1" color="gray">Стоимость доставки</Text>
-                                    <Text as="div" size="2" weight="medium">{shipment.стоимость_доставки ? formatCurrency(shipment.стоимость_доставки) : 'Не указана'}</Text>
+                                    <Text as="div" size="2" weight="medium">{getCostText(shipment)}</Text>
+                                </Box>
+                                <Box>
+                                    <Text as="div" size="1" color="gray">Сумма товаров</Text>
+                                    <Text as="div" size="2">{formatCurrency(positionsTotal)}</Text>
+                                </Box>
+                                <Box>
+                                    <Text as="div" size="1" color="gray">Логистика</Text>
+                                    <Text as="div" size="2">{formatCurrency(shipmentLogisticsTotal)}</Text>
+                                </Box>
+                                <Box>
+                                    <Text as="div" size="1" color="gray">Итого по отгрузке</Text>
+                                    <Text as="div" size="2" weight="medium">{formatCurrency(shipmentGrandTotal)}</Text>
                                 </Box>
                                 <Box>
                                     <Text as="div" size="1" color="gray">Статус</Text>
@@ -1033,14 +1072,32 @@ function ShipmentDetailPage(): JSX.Element {
                                 )}
 
                                 {positions.length > 0 ? (
-                                    <Table.Row className={styles.totalRow as any}>
-                                        <Table.Cell className={styles.textRight} colSpan={7}>
-                                            Итого:
-                                        </Table.Cell>
-                                        <Table.Cell className={styles.textRight} style={{ fontWeight: 600, textAlign: 'right' }}>
-                                            {formatCurrency(positionsTotal)}
-                                        </Table.Cell>
-                                    </Table.Row>
+                                    <>
+                                        <Table.Row className={styles.totalRow as any}>
+                                            <Table.Cell className={styles.textRight} colSpan={7}>
+                                                Сумма товаров:
+                                            </Table.Cell>
+                                            <Table.Cell className={styles.textRight} style={{ fontWeight: 600, textAlign: 'right' }}>
+                                                {formatCurrency(positionsTotal)}
+                                            </Table.Cell>
+                                        </Table.Row>
+                                        <Table.Row className={styles.totalRow as any}>
+                                            <Table.Cell className={styles.textRight} colSpan={7}>
+                                                Логистика:
+                                            </Table.Cell>
+                                            <Table.Cell className={styles.textRight} style={{ fontWeight: 600, textAlign: 'right' }}>
+                                                {formatCurrency(shipmentLogisticsTotal)}
+                                            </Table.Cell>
+                                        </Table.Row>
+                                        <Table.Row className={styles.totalRow as any}>
+                                            <Table.Cell className={styles.textRight} colSpan={7}>
+                                                Итого по отгрузке:
+                                            </Table.Cell>
+                                            <Table.Cell className={styles.textRight} style={{ fontWeight: 700, textAlign: 'right' }}>
+                                                {formatCurrency(shipmentGrandTotal)}
+                                            </Table.Cell>
+                                        </Table.Row>
+                                    </>
                                 ) : null}
                             </Table.Body>
                         </Table.Root>
@@ -1061,8 +1118,10 @@ function ShipmentDetailPage(): JSX.Element {
                             <Box className={deleteConfirmationStyles.positionsSection}>
                                 <Flex direction="column" gap="1">
                                     <Text as="div" weight="bold">Отгрузка #{shipment.id}</Text>
-                                    <Text as="div" size="2" color="gray">Заявка: #{shipment.заявка_id}</Text>
-                                    <Text as="div" size="2" color="gray">ТК: {shipment.транспорт_название || `#${shipment.транспорт_id}`}</Text>
+                                    <Text as="div" size="2" color="gray">
+                                        {shipment.заявка_id ? `Заявка: #${shipment.заявка_id}` : 'Самостоятельная отгрузка без заявки'}
+                                    </Text>
+                                    <Text as="div" size="2" color="gray">Способ: {getTransportText(shipment)}</Text>
                                 </Flex>
                             </Box>
 
@@ -1104,6 +1163,27 @@ function ShipmentDetailPage(): JSX.Element {
                     <form onSubmit={handleSubmitEdit} className={styles.modalForm}>
                         <Flex direction="column" gap="4">
                             <Box className={styles.formGroup}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 40 }}>
+                                    <input
+                                        type="checkbox"
+                                        style={{ accentColor: '#111111', width: 16, height: 16 }}
+                                        checked={formData.использовать_доставку}
+                                        onChange={(e) => setFormData((p) => ({
+                                            ...p,
+                                            использовать_доставку: e.target.checked,
+                                            транспорт_id: e.target.checked ? p.транспорт_id : 0,
+                                            номер_отслеживания: e.target.checked ? p.номер_отслеживания : '',
+                                            стоимость_доставки: e.target.checked ? p.стоимость_доставки : 0,
+                                        }))}
+                                    />
+                                    <Text as="span" size="2" weight="medium">Использовать доставку</Text>
+                                </label>
+                                <Text as="div" size="1" color="gray">
+                                    Если выключено, отгрузка будет оформлена как передача без доставки.
+                                </Text>
+                            </Box>
+
+                            <Box className={styles.formGroup}>
                                 <Text as="label" size="2" weight="medium">Заявка</Text>
                                 <Select.Root
                                     value={formData.заявка_id ? String(formData.заявка_id) : EMPTY_SELECT_VALUE}
@@ -1111,8 +1191,8 @@ function ShipmentDetailPage(): JSX.Element {
                                 >
                                     <Select.Trigger variant="surface" color="gray" className={styles.selectTrigger} placeholder="Выберите заявку" />
                                     <Select.Content position="popper" variant="solid" color="gray" highContrast>
-                                        <Select.Item value={EMPTY_SELECT_VALUE} disabled>
-                                            Выберите заявку
+                                        <Select.Item value={EMPTY_SELECT_VALUE}>
+                                            Без заявки
                                         </Select.Item>
                                         {orders.map((o) => (
                                             <Select.Item key={o.id} value={String(o.id)}>
@@ -1121,6 +1201,11 @@ function ShipmentDetailPage(): JSX.Element {
                                         ))}
                                     </Select.Content>
                                 </Select.Root>
+                                {!formData.заявка_id ? (
+                                    <Text as="div" size="1" color="gray">
+                                        Если заявку не выбирать, отгрузка станет самостоятельной складской отгрузкой без автоподбора позиций.
+                                    </Text>
+                                ) : null}
                             </Box>
 
                             <Box className={styles.formGroup}>
@@ -1128,6 +1213,7 @@ function ShipmentDetailPage(): JSX.Element {
                                 <Select.Root
                                     value={formData.транспорт_id ? String(formData.транспорт_id) : EMPTY_SELECT_VALUE}
                                     onValueChange={(v) => setFormData((p) => ({ ...p, транспорт_id: v === EMPTY_SELECT_VALUE ? 0 : Number(v) || 0 }))}
+                                    disabled={!formData.использовать_доставку}
                                 >
                                     <Select.Trigger variant="surface" color="gray" className={styles.selectTrigger} placeholder="Выберите ТК" />
                                     <Select.Content position="popper" variant="solid" color="gray" highContrast>
@@ -1163,6 +1249,7 @@ function ShipmentDetailPage(): JSX.Element {
                                     placeholder="TRACK-001"
                                     className={styles.textField}
                                     size="2"
+                                    disabled={!formData.использовать_доставку}
                                 />
                             </Box>
 
@@ -1178,6 +1265,7 @@ function ShipmentDetailPage(): JSX.Element {
                                     placeholder="0"
                                     className={styles.textField}
                                     size="2"
+                                    disabled={!formData.использовать_доставку}
                                 />
                             </Box>
 
@@ -1193,7 +1281,7 @@ function ShipmentDetailPage(): JSX.Element {
 
                                 {!formData.заявка_id ? (
                                     <Text as="div" size="2" color="gray" className={styles.modalPreviewHint}>
-                                        Выберите заявку, чтобы увидеть состав отгрузки.
+                                        Без заявки состав отгрузки не подтягивается автоматически.
                                     </Text>
                                 ) : null}
 

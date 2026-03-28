@@ -18,10 +18,17 @@ import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
 import { calculateVatAmountsFromLine, getVatRateOption } from '../../lib/vat';
 import type { OrderWorkflowModalSummary } from '../../components/OrderWorkflowModal';
+import {
+    getOrderExecutionModeLabel,
+    getOrderSupplyModeLabel,
+    type OrderExecutionMode,
+    type OrderSupplyMode,
+} from '../../lib/orderModes';
 
 interface OrderPosition {
     id: number;
     товар_id: number;
+    способ_обеспечения?: OrderSupplyMode;
     количество: number;
     цена: number;
     сумма: number;
@@ -52,10 +59,13 @@ interface OrderDetail {
     id: number;
     клиент_id: number;
     менеджер_id?: number;
+    режим_исполнения?: OrderExecutionMode;
     дата_создания: string;
     дата_выполнения?: string;
     статус: string;
     общая_сумма: number;
+    сумма_товаров: number;
+    сумма_логистики: number;
     адрес_доставки?: string;
     клиент_название?: string;
     клиент_телефон?: string;
@@ -101,8 +111,13 @@ function OrderDetailPage(): JSX.Element {
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
     const [previewAttachment, setPreviewAttachment] = useState<AttachmentItem | null>(null);
 
-    const activeMissingProducts = (order?.недостающие_товары || []).filter((item) => item.статус !== 'получено' && item.недостающее_количество > 0);
-    const closedMissingProducts = (order?.недостающие_товары || []).filter((item) => item.статус === 'получено' || item.недостающее_количество <= 0);
+    const isDirectOrder = order?.режим_исполнения === 'direct';
+    const activeMissingProducts = isDirectOrder
+        ? []
+        : (order?.недостающие_товары || []).filter((item) => item.статус !== 'получено' && item.недостающее_количество > 0);
+    const closedMissingProducts = isDirectOrder
+        ? []
+        : (order?.недостающие_товары || []).filter((item) => item.статус === 'получено' || item.недостающее_количество <= 0);
 
     const canView = Boolean(user?.permissions?.includes('orders.view'));
     const canEdit = Boolean(user?.permissions?.includes('orders.edit'));
@@ -261,18 +276,38 @@ function OrderDetailPage(): JSX.Element {
 
     const openCreatePurchaseFromOrder = () => {
         if (!order) return;
-        const positions = activeMissingProducts.map((missing) => {
-            const orderPosition = order.позиции?.find((position) => position.товар_id === missing.товар_id);
-            return {
-                товар_id: Number(missing.товар_id) || 0,
-                количество: Number(missing.недостающее_количество) || 0,
-                ндс_id: orderPosition?.ндс_id == null ? undefined : Number(orderPosition.ндс_id),
-                цена: Number(orderPosition?.цена) || 0,
-            };
-        }).filter((position) => position.товар_id > 0 && position.количество > 0);
+        const remainingDirectPurchaseByProductId = new Map<number, number>(
+            (workflow?.positions || []).map((position) => [
+                Number(position.товар_id) || 0,
+                Number(position.осталось_закупить) || 0,
+            ])
+        );
+        const positions = isDirectOrder
+            ? (order.позиции || [])
+                .filter((position) => position.способ_обеспечения === 'purchase')
+                .map((position) => ({
+                    товар_id: Number(position.товар_id) || 0,
+                    количество: remainingDirectPurchaseByProductId.get(Number(position.товар_id) || 0) || 0,
+                    ндс_id: position.ндс_id == null ? undefined : Number(position.ндс_id),
+                    цена: Number(position.цена) || 0,
+                }))
+                .filter((position) => position.товар_id > 0 && position.количество > 0)
+            : activeMissingProducts.map((missing) => {
+                const orderPosition = order.позиции?.find((position) => position.товар_id === missing.товар_id);
+                return {
+                    товар_id: Number(missing.товар_id) || 0,
+                    количество: Number(missing.недостающее_количество) || 0,
+                    ндс_id: orderPosition?.ндс_id == null ? undefined : Number(orderPosition.ндс_id),
+                    цена: Number(orderPosition?.цена) || 0,
+                };
+            }).filter((position) => position.товар_id > 0 && position.количество > 0);
 
         if (positions.length === 0) {
-            setError('По этой заявке нет активных недостающих позиций для закупки');
+            setError(
+                isDirectOrder
+                    ? 'По этой заявке больше нет необеспеченных позиций для закупки'
+                    : 'По этой заявке нет активных недостающих позиций для закупки'
+            );
             return;
         }
 
@@ -392,6 +427,22 @@ function OrderDetailPage(): JSX.Element {
             currency: 'RUB'
         }).format(amount);
     };
+
+    const purchaseDeliveryTotal = (workflow?.purchases || []).reduce(
+        (sum, purchase) => sum + (purchase.использовать_доставку ? Number(purchase.стоимость_доставки || 0) : 0),
+        0
+    );
+    const shipmentDeliveryTotal = (workflow?.shipments || []).reduce(
+        (sum, shipment) => sum + Number(shipment.стоимость_доставки || 0),
+        0
+    );
+    const purchasesTotal = (workflow?.purchases || []).reduce(
+        (sum, purchase) => sum + Number(purchase.общая_сумма || 0),
+        0
+    );
+    const logisticsTotal = purchaseDeliveryTotal + shipmentDeliveryTotal;
+    const orderItemsTotal = Number(order?.сумма_товаров || 0);
+    const orderGrandTotal = Number(order?.общая_сумма || 0);
 
     const getStatusColor = (status: string) => {
         switch (status.toLowerCase()) {
@@ -1012,6 +1063,10 @@ function OrderDetailPage(): JSX.Element {
                                     </Badge>
                                 </Flex>
                                 <Box>
+                                    <Text as="div" size="1" color="gray">Режим исполнения</Text>
+                                    <Text as="div" size="2">{getOrderExecutionModeLabel(order.режим_исполнения)}</Text>
+                                </Box>
+                                <Box>
                                     <Text as="div" size="1" color="gray">Менеджер</Text>
                                     <Text as="div" size="2">{order.менеджер_фио || 'Не назначен'}</Text>
                                 </Box>
@@ -1022,6 +1077,30 @@ function OrderDetailPage(): JSX.Element {
                                 <Box>
                                     <Text as="div" size="1" color="gray">Дата создания</Text>
                                     <Text as="div" size="2">{formatDate(order.дата_создания)}</Text>
+                                </Box>
+                                <Box>
+                                    <Text as="div" size="1" color="gray">Сумма товаров</Text>
+                                    <Text as="div" size="2">{formatCurrency(orderItemsTotal)}</Text>
+                                </Box>
+                                <Box>
+                                    <Text as="div" size="1" color="gray">Сумма закупок</Text>
+                                    <Text as="div" size="2">{formatCurrency(purchasesTotal)}</Text>
+                                </Box>
+                                <Box>
+                                    <Text as="div" size="1" color="gray">Доставка закупок</Text>
+                                    <Text as="div" size="2">{formatCurrency(purchaseDeliveryTotal)}</Text>
+                                </Box>
+                                <Box>
+                                    <Text as="div" size="1" color="gray">Доставка отгрузок</Text>
+                                    <Text as="div" size="2">{formatCurrency(shipmentDeliveryTotal)}</Text>
+                                </Box>
+                                <Box>
+                                    <Text as="div" size="1" color="gray">Логистика всего</Text>
+                                    <Text as="div" size="2">{formatCurrency(logisticsTotal)}</Text>
+                                </Box>
+                                <Box>
+                                    <Text as="div" size="1" color="gray">Итого по заявке</Text>
+                                    <Text as="div" size="2" weight="medium">{formatCurrency(orderGrandTotal)}</Text>
                                 </Box>
                                 {order.дата_выполнения && (
                                     <Box>
@@ -1222,6 +1301,7 @@ function OrderDetailPage(): JSX.Element {
                             <Table.Header>
                                 <Table.Row>
                                     <Table.ColumnHeaderCell>Название</Table.ColumnHeaderCell>
+                                    <Table.ColumnHeaderCell>Обеспечение</Table.ColumnHeaderCell>
                                     <Table.ColumnHeaderCell className={styles.textRight}>Ед.изм</Table.ColumnHeaderCell>
                                     <Table.ColumnHeaderCell className={styles.textRight}>Количество</Table.ColumnHeaderCell>
                                     <Table.ColumnHeaderCell className={styles.textRight}>Цена, ₽</Table.ColumnHeaderCell>
@@ -1243,6 +1323,11 @@ function OrderDetailPage(): JSX.Element {
                                                     {position.товар_артикул} • {position.товар_категория || 'Без категории'}
                                                 </div>
                                             </Table.Cell>
+                                            <Table.Cell>
+                                                {isDirectOrder
+                                                    ? getOrderSupplyModeLabel(position.способ_обеспечения || 'purchase')
+                                                    : getOrderSupplyModeLabel('auto')}
+                                            </Table.Cell>
                                             <Table.Cell className={styles.textRight}>
                                                 {position.товар_единица_измерения || 'шт'}
                                             </Table.Cell>
@@ -1260,11 +1345,27 @@ function OrderDetailPage(): JSX.Element {
                                     );
                                 })}
                                 <Table.Row className={styles.totalRow as any}>
-                                    <Table.Cell className={styles.textRight} colSpan={7}>
-                                        Итого:
+                                    <Table.Cell className={styles.textRight} colSpan={8}>
+                                        Сумма товаров:
                                     </Table.Cell>
                                     <Table.Cell className={styles.textRight} style={{ fontWeight: 600, textAlign: 'right' }}>
-                                        {formatCurrency(order.общая_сумма)}
+                                        {formatCurrency(orderItemsTotal)}
+                                    </Table.Cell>
+                                </Table.Row>
+                                <Table.Row className={styles.totalRow as any}>
+                                    <Table.Cell className={styles.textRight} colSpan={8}>
+                                        Логистика:
+                                    </Table.Cell>
+                                    <Table.Cell className={styles.textRight} style={{ fontWeight: 600, textAlign: 'right' }}>
+                                        {formatCurrency(Number(order?.сумма_логистики || 0))}
+                                    </Table.Cell>
+                                </Table.Row>
+                                <Table.Row className={styles.totalRow as any}>
+                                    <Table.Cell className={styles.textRight} colSpan={8}>
+                                        Итого по заявке:
+                                    </Table.Cell>
+                                    <Table.Cell className={styles.textRight} style={{ fontWeight: 700, textAlign: 'right' }}>
+                                        {formatCurrency(orderGrandTotal)}
                                     </Table.Cell>
                                 </Table.Row>
                             </Table.Body>
@@ -1273,7 +1374,7 @@ function OrderDetailPage(): JSX.Element {
                 </div>
 
                 {/* Missing Products Section */}
-                {order.недостающие_товары && order.недостающие_товары.length > 0 && (
+                {!isDirectOrder && order.недостающие_товары && order.недостающие_товары.length > 0 && (
                     <div className={styles.missingProducts}>
                         <div className={styles.sectionHeaderRow}>
                             <Text as="div" size="2" weight="bold" className={styles.sectionTitle} style={{ color: '#dc3545' }}>
@@ -1416,6 +1517,7 @@ function OrderDetailPage(): JSX.Element {
                 поставщик_id={0}
                 поставщик_название=""
                 заявка_id={order?.id}
+                lockOrderId
                 initialOrderPositions={createPurchaseOrderPositions}
             />
 

@@ -1,5 +1,6 @@
 import { query } from './db';
 import { syncOrderWorkflowStatus } from './orderWorkflow';
+import { normalizeOrderExecutionMode } from './orderModes';
 
 const normalizeStatus = (value?: string | null) => (value || '').trim().toLowerCase();
 
@@ -119,6 +120,20 @@ async function downgradeOrderToInProgressIfNeeded(orderId: number) {
     `, [orderId]);
 }
 
+export async function deactivateMissingProductsForOrder(orderId: number) {
+    await query(`
+      UPDATE "Недостающие_товары"
+      SET "недостающее_количество" = 0,
+          "активна" = false,
+          "статус" = CASE
+              WHEN COALESCE("статус", '') = '' THEN 'не требуется'
+              ELSE "статус"
+          END
+      WHERE "заявка_id" = $1
+        AND COALESCE("активна", true) = true
+    `, [orderId]);
+}
+
 /**
  * Check for missing products when creating or updating an order
  * This function compares the required quantities with available stock
@@ -126,6 +141,23 @@ async function downgradeOrderToInProgressIfNeeded(orderId: number) {
  */
 export async function checkAndCreateMissingProducts(orderId: number) {
     try {
+        const orderModeResult = await query(
+            `
+                SELECT "режим_исполнения"
+                FROM "Заявки"
+                WHERE id = $1
+                LIMIT 1
+            `,
+            [orderId]
+        );
+        const executionMode = normalizeOrderExecutionMode(orderModeResult.rows[0]?.режим_исполнения);
+
+        if (executionMode === 'direct') {
+            await deactivateMissingProductsForOrder(orderId);
+            await syncOrderWorkflowStatus(orderId);
+            return;
+        }
+
         await normalizeMissingProductsForOrder(orderId);
         // Get order positions
         const positionsResult = await query(`

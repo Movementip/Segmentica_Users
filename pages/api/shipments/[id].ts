@@ -2,9 +2,11 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { query } from '../../../lib/db';
 import { requirePermission } from '../../../lib/auth';
 import { getShipmentPositions } from '../../../lib/orderFulfillment';
+import { ensureLogisticsDeliverySchema } from '../../../lib/logisticsDelivery';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     const { id } = req.query;
+    await ensureLogisticsDeliverySchema();
 
     if (req.method !== 'GET') {
         res.setHeader('Allow', ['GET']);

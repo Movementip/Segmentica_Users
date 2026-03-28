@@ -14,6 +14,7 @@ import { Badge, Box, Button, Card, Dialog, DropdownMenu, Flex, Grid, Separator, 
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
 import { calculateVatAmountsFromLine, getVatRateOption } from '../../lib/vat';
+import { getPurchaseDeliveryLabel } from '../../lib/logisticsDeliveryLabels';
 
 interface PurchasePosition {
     id: number;
@@ -43,6 +44,10 @@ interface Purchase {
     дата_поступления?: string;
     статус: string;
     общая_сумма: number;
+    использовать_доставку?: boolean;
+    транспорт_id?: number | null;
+    стоимость_доставки?: number | null;
+    транспорт_название?: string;
     позиции: PurchasePosition[];
 }
 
@@ -443,6 +448,17 @@ function PurchaseDetailPage(): JSX.Element {
                 ? styles.statusPillGreen
                 : styles.statusPillBlue;
 
+    const purchaseItemsTotal = purchase.позиции.reduce((sum, position) => {
+        const vatSummary = getVatSummary(position);
+        return sum + vatSummary.total;
+    }, 0);
+
+    const purchaseLogisticsTotal = purchase.использовать_доставку
+        ? Number(purchase.стоимость_доставки || 0)
+        : 0;
+
+    const purchaseGrandTotal = purchaseItemsTotal + purchaseLogisticsTotal;
+
     return (
         <div className={styles.container}>
             <div className={styles.header}>
@@ -618,8 +634,36 @@ function PurchaseDetailPage(): JSX.Element {
                                     <Text as="div" size="2">{purchase.дата_поступления ? formatDate(purchase.дата_поступления) : 'Не указана'}</Text>
                                 </Box>
                                 <Box>
-                                    <Text as="div" size="1" color="gray">Общая сумма</Text>
-                                    <Text as="div" size="2" weight="medium">{formatCurrency(purchase.общая_сумма)}</Text>
+                                    <Text as="div" size="1" color="gray">Способ получения</Text>
+                                    <Text as="div" size="2">{getPurchaseDeliveryLabel(purchase.использовать_доставку)}</Text>
+                                </Box>
+                                <Box>
+                                    <Text as="div" size="1" color="gray">Кто доставляет</Text>
+                                    <Text as="div" size="2">
+                                        {purchase.использовать_доставку
+                                            ? (purchase.транспорт_название || (purchase.транспорт_id ? `ТК #${purchase.транспорт_id}` : 'Не указана'))
+                                            : 'Не используется'}
+                                    </Text>
+                                </Box>
+                                <Box>
+                                    <Text as="div" size="1" color="gray">Стоимость доставки</Text>
+                                    <Text as="div" size="2">
+                                        {purchase.использовать_доставку
+                                            ? (purchase.стоимость_доставки ? formatCurrency(purchase.стоимость_доставки) : 'Не указана')
+                                            : 'Не используется'}
+                                    </Text>
+                                </Box>
+                                <Box>
+                                    <Text as="div" size="1" color="gray">Сумма товаров</Text>
+                                    <Text as="div" size="2">{formatCurrency(purchaseItemsTotal)}</Text>
+                                </Box>
+                                <Box>
+                                    <Text as="div" size="1" color="gray">Логистика</Text>
+                                    <Text as="div" size="2">{formatCurrency(purchaseLogisticsTotal)}</Text>
+                                </Box>
+                                <Box>
+                                    <Text as="div" size="1" color="gray">Итого по закупке</Text>
+                                    <Text as="div" size="2" weight="medium">{formatCurrency(purchaseGrandTotal)}</Text>
                                 </Box>
                             </Flex>
                         </Flex>
@@ -852,10 +896,26 @@ function PurchaseDetailPage(): JSX.Element {
                                 })}
                                 <Table.Row className={styles.totalRow as any}>
                                     <Table.Cell className={styles.textRight} colSpan={7}>
-                                        Итого:
+                                        Сумма товаров:
                                     </Table.Cell>
                                     <Table.Cell className={styles.textRight} style={{ fontWeight: 600, textAlign: 'right' }}>
-                                        {formatCurrency(purchase.общая_сумма)}
+                                        {formatCurrency(purchaseItemsTotal)}
+                                    </Table.Cell>
+                                </Table.Row>
+                                <Table.Row className={styles.totalRow as any}>
+                                    <Table.Cell className={styles.textRight} colSpan={7}>
+                                        Логистика:
+                                    </Table.Cell>
+                                    <Table.Cell className={styles.textRight} style={{ fontWeight: 600, textAlign: 'right' }}>
+                                        {formatCurrency(purchaseLogisticsTotal)}
+                                    </Table.Cell>
+                                </Table.Row>
+                                <Table.Row className={styles.totalRow as any}>
+                                    <Table.Cell className={styles.textRight} colSpan={7}>
+                                        Итого по закупке:
+                                    </Table.Cell>
+                                    <Table.Cell className={styles.textRight} style={{ fontWeight: 700, textAlign: 'right' }}>
+                                        {formatCurrency(purchaseGrandTotal)}
                                     </Table.Cell>
                                 </Table.Row>
                             </Table.Body>

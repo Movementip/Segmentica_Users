@@ -27,7 +27,8 @@ const pageTitles: Record<string, string> = {
     '/settings': 'Настройки',
     '/admin': 'Администрирование',
     '/admin/audit': 'Аудит-лог',
-    '/admin/finance': 'Финансы'
+    '/admin/finance': 'Финансы',
+    '/admin/settings': 'Настройки системы'
 };
 
 const detailTitleByPathname: Record<string, (id: string) => string> = {

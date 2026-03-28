@@ -36,6 +36,7 @@ interface Movement {
     комментарий: string | null;
     заявка_номер: number | null;
     закупка_номер: number | null;
+    отгрузка_номер: number | null;
     клиент_название: string | null;
     поставщик_название: string | null;
 }
@@ -108,6 +109,7 @@ export default function WarehouseDetail() {
     const canPendingPurchasesView = Boolean(user?.permissions?.includes('warehouse.pending_purchases.view'));
     const canOrdersView = Boolean(user?.permissions?.includes('orders.view'));
     const canPurchasesView = Boolean(user?.permissions?.includes('purchases.view'));
+    const canShipmentsView = Boolean(user?.permissions?.includes('shipments.view'));
     const canWarehouseProductAttachmentsView =
         Boolean(user?.permissions?.includes('warehouse-products.attachments.view'));
     const canWarehouseProductAttachmentsUpload =
@@ -813,6 +815,17 @@ export default function WarehouseDetail() {
                                                                         onClick={() => router.push(`/purchases/${movement.закупка_номер}`)}
                                                                     >
                                                                         Закупка #{movement.закупка_номер}
+                                                                    </Button>
+                                                                ) : movement.отгрузка_номер && canShipmentsView ? (
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="surface"
+                                                                        color="gray"
+                                                                        highContrast
+                                                                        className={styles.linkPill}
+                                                                        onClick={() => router.push(`/shipments/${movement.отгрузка_номер}`)}
+                                                                    >
+                                                                        Отгрузка #{movement.отгрузка_номер}
                                                                     </Button>
                                                                 ) : (
                                                                     <span className={styles.muted}>—</span>

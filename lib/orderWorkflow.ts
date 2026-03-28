@@ -1,13 +1,22 @@
 import { query } from './db';
 import { normalizeFulfillmentStatus } from './orderFulfillment';
+import {
+    normalizeOrderExecutionMode,
+    normalizeOrderSupplyMode,
+    type OrderExecutionMode,
+    type OrderSupplyMode,
+} from './orderModes';
 
 export interface OrderWorkflowPositionSummary {
     товар_id: number;
     товар_название: string;
     товар_артикул?: string;
+    способ_обеспечения: OrderSupplyMode;
     необходимое_количество: number;
     склад_количество: number;
     активная_недостача: number;
+    закуплено_количество: number;
+    осталось_закупить: number;
     покрыто_со_склада: number;
     собранное_количество: number;
     отгруженное_количество: number;
@@ -29,6 +38,8 @@ export interface OrderWorkflowPurchaseSummary {
     статус: string;
     дата_заказа?: string;
     общая_сумма?: number;
+    использовать_доставку?: boolean;
+    стоимость_доставки?: number;
 }
 
 export interface OrderWorkflowShipmentSummary {
@@ -58,6 +69,7 @@ export interface OrderWorkflowAssemblyBatchSummary {
 
 export interface OrderWorkflowSummary {
     orderId: number;
+    executionMode: OrderExecutionMode;
     currentStatus: string;
     derivedStatus: string;
     positionCount: number;
@@ -151,13 +163,15 @@ export function deriveOrderWorkflowStatus(summary: Pick<OrderWorkflowSummary, 'c
 
 export async function getOrderWorkflowSummary(orderId: number): Promise<OrderWorkflowSummary> {
     const orderResult = await query(
-        'SELECT id, "статус" FROM "Заявки" WHERE id = $1 LIMIT 1',
+        'SELECT id, "статус", "режим_исполнения" FROM "Заявки" WHERE id = $1 LIMIT 1',
         [orderId]
     );
 
     if (orderResult.rows.length === 0) {
         throw new Error('Заявка не найдена');
     }
+
+    const executionMode = normalizeOrderExecutionMode(orderResult.rows[0]?.режим_исполнения);
 
     const [
         positionsResult,
@@ -174,9 +188,11 @@ export async function getOrderWorkflowSummary(orderId: number): Promise<OrderWor
                     order_positions."товар_id",
                     COALESCE(products."название", CONCAT('Товар #', order_positions."товар_id")) AS товар_название,
                     products."артикул" AS товар_артикул,
+                    COALESCE(order_positions."способ_обеспечения", 'auto') AS способ_обеспечения,
                     COALESCE(order_positions."количество", 0)::numeric AS необходимое_количество,
                     COALESCE(stock."количество", 0)::numeric AS склад_количество,
                     COALESCE(missing.active_missing_qty, 0)::numeric AS активная_недостача,
+                    COALESCE(purchases.purchased_qty, 0)::numeric AS закуплено_количество,
                     COALESCE(assembled.assembled_qty, 0)::numeric AS собранное_количество,
                     COALESCE(shipped.shipped_qty, 0)::numeric AS отгруженное_количество,
                     COALESCE(shipped.delivered_qty, 0)::numeric AS доставленное_количество
@@ -199,6 +215,18 @@ export async function getOrderWorkflowSummary(orderId: number): Promise<OrderWor
                 ) missing
                     ON missing."заявка_id" = order_positions."заявка_id"
                    AND missing."товар_id" = order_positions."товар_id"
+                LEFT JOIN (
+                    SELECT
+                        purchase_positions."товар_id",
+                        SUM(COALESCE(purchase_positions."количество", 0))::numeric AS purchased_qty
+                    FROM "Закупки" purchases
+                    INNER JOIN "Позиции_закупки" purchase_positions
+                        ON purchase_positions."закупка_id" = purchases.id
+                    WHERE purchases."заявка_id" = $1
+                      AND COALESCE(purchases."статус", 'заказано') != 'отменено'
+                    GROUP BY purchase_positions."товар_id"
+                ) purchases
+                    ON purchases."товар_id" = order_positions."товар_id"
                 LEFT JOIN (
                     SELECT
                         positions.product_id,
@@ -251,13 +279,36 @@ export async function getOrderWorkflowSummary(orderId: number): Promise<OrderWor
         query(
             `
                 SELECT
-                    id,
-                    COALESCE("статус", 'заказано') AS статус,
-                    "дата_заказа",
-                    "общая_сумма"
-                FROM "Закупки"
-                WHERE "заявка_id" = $1
-                ORDER BY "дата_заказа" DESC, id DESC
+                    purchases.id,
+                    COALESCE(purchases."статус", 'заказано') AS статус,
+                    purchases."дата_заказа",
+                    COALESCE(purchases."использовать_доставку", false) AS использовать_доставку,
+                    purchases."стоимость_доставки",
+                    (
+                        COALESCE(totals.total_amount, 0)
+                        + CASE
+                            WHEN COALESCE(purchases."использовать_доставку", false)
+                                THEN COALESCE(purchases."стоимость_доставки", 0)
+                            ELSE 0
+                        END
+                    )::numeric AS "общая_сумма"
+                FROM "Закупки" purchases
+                LEFT JOIN (
+                    SELECT
+                        purchase_positions."закупка_id",
+                        SUM(
+                            COALESCE(purchase_positions."количество", 0)
+                            * COALESCE(purchase_positions."цена", 0)
+                            * (1 + COALESCE(vat."ставка", 0) / 100.0)
+                        )::numeric AS total_amount
+                    FROM "Позиции_закупки" purchase_positions
+                    LEFT JOIN "Ставки_НДС" vat
+                        ON vat.id = purchase_positions."ндс_id"
+                    GROUP BY purchase_positions."закупка_id"
+                ) totals
+                    ON totals."закупка_id" = purchases.id
+                WHERE purchases."заявка_id" = $1
+                ORDER BY purchases."дата_заказа" DESC, purchases.id DESC
             `,
             [orderId]
         ),
@@ -326,12 +377,17 @@ export async function getOrderWorkflowSummary(orderId: number): Promise<OrderWor
     ]);
 
     const positions = positionsResult.rows.map((row: any) => {
+        const supplyMode = normalizeOrderSupplyMode(row.способ_обеспечения, executionMode);
         const requiredQty = Number(row.необходимое_количество) || 0;
         const stockQty = Number(row.склад_количество) || 0;
         const activeMissingQty = Number(row.активная_недостача) || 0;
+        const purchasedQty = Number(row.закуплено_количество) || 0;
         const assembledQty = Number(row.собранное_количество) || 0;
         const shippedQty = Number(row.отгруженное_количество) || 0;
         const deliveredQty = Number(row.доставленное_количество) || 0;
+        const remainingToPurchase = executionMode === 'direct' && supplyMode === 'purchase'
+            ? Math.max(0, requiredQty - purchasedQty)
+            : 0;
         const remainingToAssemble = Math.max(0, requiredQty - assembledQty);
         const remainingToShip = Math.max(0, Math.min(requiredQty, assembledQty) - shippedQty);
 
@@ -339,10 +395,13 @@ export async function getOrderWorkflowSummary(orderId: number): Promise<OrderWor
             товар_id: Number(row.товар_id),
             товар_название: row.товар_название || `Товар #${row.товар_id}`,
             товар_артикул: row.товар_артикул || '',
+            способ_обеспечения: supplyMode,
             необходимое_количество: requiredQty,
             склад_количество: stockQty,
             активная_недостача: activeMissingQty,
-            покрыто_со_склада: Math.max(0, requiredQty - activeMissingQty),
+            закуплено_количество: purchasedQty,
+            осталось_закупить: remainingToPurchase,
+            покрыто_со_склада: executionMode === 'direct' ? 0 : Math.max(0, requiredQty - activeMissingQty),
             собранное_количество: assembledQty,
             отгруженное_количество: shippedQty,
             доставленное_количество: deliveredQty,
@@ -364,6 +423,8 @@ export async function getOrderWorkflowSummary(orderId: number): Promise<OrderWor
         статус: row.статус || 'заказано',
         дата_заказа: row.дата_заказа,
         общая_сумма: row.общая_сумма == null ? undefined : Number(row.общая_сумма),
+        использовать_доставку: Boolean(row.использовать_доставку),
+        стоимость_доставки: row.стоимость_доставки == null ? undefined : Number(row.стоимость_доставки),
     })) satisfies OrderWorkflowPurchaseSummary[];
 
     const shipments = shipmentsResult.rows.map((row: any) => ({
@@ -409,14 +470,26 @@ export async function getOrderWorkflowSummary(orderId: number): Promise<OrderWor
     const activePurchases = purchases.filter((purchase) => !['получено', 'отменено'].includes(normalizeStatus(purchase.статус)));
     const activeShipments = shipments.filter((shipment) => !['доставлено', 'отменено'].includes(normalizeStatus(shipment.статус)));
     const deliveredShipments = shipments.filter((shipment) => normalizeStatus(shipment.статус) === 'доставлено');
+    const directPurchasePositions = executionMode === 'direct'
+        ? positions.filter((position) => position.способ_обеспечения === 'purchase')
+        : [];
+    const directUncoveredPurchasePositions = directPurchasePositions.filter(
+        (position) => Number(position.осталось_закупить || 0) > 0
+    );
 
-    const isAssembled = positions.length > 0 && positions.every((position) => position.осталось_собрать <= 0);
+    const isAssembled = positions.length > 0
+        && positions.every((position) => position.осталось_собрать <= 0);
     const readyForAssembly = positions.length > 0
         && positions.some((position) => position.осталось_собрать > 0)
         && activeMissingProducts.length === 0
         && activePurchases.length === 0
-        && positions.every((position) => Number(position.склад_количество) >= Number(position.осталось_собрать));
-    const canAssemble = readyForAssembly && !['отменена', 'выполнена'].includes(normalizeStatus(orderResult.rows[0].статус));
+        && (executionMode !== 'direct' || directUncoveredPurchasePositions.length === 0)
+        && (
+            executionMode === 'direct'
+            || positions.every((position) => Number(position.склад_количество) >= Number(position.осталось_собрать))
+        );
+    const canAssemble = readyForAssembly
+        && !['отменена', 'выполнена'].includes(normalizeStatus(orderResult.rows[0].статус));
 
     const remainingShipmentUnits = positions.reduce((sum, position) => sum + Number(position.осталось_отгрузить || 0), 0);
     const remainingAssemblyUnits = positions.reduce((sum, position) => sum + Number(position.осталось_собрать || 0), 0);
@@ -424,10 +497,16 @@ export async function getOrderWorkflowSummary(orderId: number): Promise<OrderWor
     const shippedUnits = positions.reduce((sum, position) => sum + Number(position.отгруженное_количество || 0), 0);
     const deliveredUnits = positions.reduce((sum, position) => sum + Number(position.доставленное_количество || 0), 0);
 
-    const canCreateShipment = remainingShipmentUnits > 0
+    const readyForShipment = remainingShipmentUnits > 0;
+    const canCreateShipment = readyForShipment
+        && isAssembled
         && !['отменена', 'выполнена'].includes(normalizeStatus(orderResult.rows[0].статус));
-    const canCreatePurchase = activeMissingProducts.length > 0
-        && !['отменена', 'выполнена'].includes(normalizeStatus(orderResult.rows[0].статус));
+    const canCreatePurchase = executionMode === 'direct'
+        ? directUncoveredPurchasePositions.length > 0
+            && activePurchases.length === 0
+            && !['отменена', 'выполнена'].includes(normalizeStatus(orderResult.rows[0].статус))
+        : activeMissingProducts.length > 0
+            && !['отменена', 'выполнена'].includes(normalizeStatus(orderResult.rows[0].статус));
     const canComplete = positions.length > 0
         && positions.every((position) => Number(position.доставленное_количество) >= Number(position.необходимое_количество))
         && activeMissingProducts.length === 0
@@ -454,6 +533,7 @@ export async function getOrderWorkflowSummary(orderId: number): Promise<OrderWor
 
     return {
         orderId,
+        executionMode,
         currentStatus: summaryBase.currentStatus,
         derivedStatus,
         positionCount: positions.length,
@@ -475,7 +555,7 @@ export async function getOrderWorkflowSummary(orderId: number): Promise<OrderWor
         isAssembled,
         readyForAssembly,
         canAssemble,
-        readyForShipment: remainingShipmentUnits > 0,
+        readyForShipment,
         canCreateShipment,
         canCreatePurchase,
         canComplete,

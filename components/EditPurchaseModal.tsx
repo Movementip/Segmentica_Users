@@ -17,6 +17,11 @@ interface Supplier {
     название: string;
 }
 
+interface TransportOption {
+    id: number;
+    название: string;
+}
+
 interface PurchasePosition {
     id?: number;
     товар_id: number;
@@ -37,6 +42,10 @@ interface Purchase {
     заявка_id?: number;
     статус: string;
     дата_поступления?: string;
+    использовать_доставку?: boolean;
+    транспорт_id?: number | null;
+    стоимость_доставки?: number | null;
+    транспорт_название?: string;
     позиции?: PurchasePosition[];
 }
 
@@ -53,6 +62,7 @@ const EditPurchaseModal: React.FC<EditPurchaseModalProps> = ({ isOpen, onClose, 
 
     const [products, setProducts] = useState<Product[]>([]);
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+    const [transports, setTransports] = useState<TransportOption[]>([]);
 
     const [selectedSupplierId, setSelectedSupplierId] = useState<number | null>(null);
     const [selectedSupplierName, setSelectedSupplierName] = useState<string>('');
@@ -61,6 +71,9 @@ const EditPurchaseModal: React.FC<EditPurchaseModalProps> = ({ isOpen, onClose, 
         статус: 'заказано',
         дата_поступления: '',
         заявка_id: '',
+        использовать_доставку: false,
+        транспорт_id: 0,
+        стоимость_доставки: '',
     });
     const [defaultVatRateId, setDefaultVatRateId] = useState(DEFAULT_VAT_RATE_ID);
 
@@ -91,9 +104,10 @@ const EditPurchaseModal: React.FC<EditPurchaseModalProps> = ({ isOpen, onClose, 
 
         const init = async () => {
             try {
-                const [productsRes, suppliersRes, purchaseRes] = await Promise.all([
+                const [productsRes, suppliersRes, transportsRes, purchaseRes] = await Promise.all([
                     fetch('/api/products'),
                     fetch('/api/suppliers'),
+                    fetch('/api/transport'),
                     fetch(`/api/purchases?id=${purchase.id}`),
                 ]);
 
@@ -107,12 +121,25 @@ const EditPurchaseModal: React.FC<EditPurchaseModalProps> = ({ isOpen, onClose, 
                     setSuppliers(Array.isArray(data) ? data : []);
                 }
 
+                if (transportsRes.ok) {
+                    const transportData = await transportsRes.json().catch(() => []);
+                    const transportList = Array.isArray(transportData)
+                        ? transportData
+                        : Array.isArray(transportData?.transport)
+                            ? transportData.transport
+                            : [];
+                    setTransports(
+                        transportList
+                            .map((item: any) => ({ id: Number(item?.id), название: String(item?.название || '') }))
+                            .filter((item: TransportOption) => Number.isFinite(item.id) && item.id > 0)
+                    );
+                }
+
                 let purchaseFull: Purchase = purchase;
                 if (purchaseRes.ok) {
                     purchaseFull = await purchaseRes.json();
                 }
 
-                const supplierId = Number(purchaseFull.поставщик_id) || 0;
                 setSelectedSupplierId(purchaseFull.поставщик_id || null);
                 setSelectedSupplierName(purchaseFull.поставщик_название || '');
 
@@ -120,6 +147,9 @@ const EditPurchaseModal: React.FC<EditPurchaseModalProps> = ({ isOpen, onClose, 
                     статус: normalizePurchaseStatus(purchaseFull.статус || 'заказано'),
                     дата_поступления: purchaseFull.дата_поступления ? String(purchaseFull.дата_поступления).slice(0, 16) : '',
                     заявка_id: purchaseFull.заявка_id ? String(purchaseFull.заявка_id) : '',
+                    использовать_доставку: Boolean(purchaseFull.использовать_доставку),
+                    транспорт_id: purchaseFull.транспорт_id == null ? 0 : Number(purchaseFull.транспорт_id),
+                    стоимость_доставки: purchaseFull.стоимость_доставки == null ? '' : String(Number(purchaseFull.стоимость_доставки)),
                 });
 
                 const nextPositions = Array.isArray(purchaseFull.позиции) && purchaseFull.позиции.length
@@ -176,6 +206,11 @@ const EditPurchaseModal: React.FC<EditPurchaseModalProps> = ({ isOpen, onClose, 
         ), 0);
     };
 
+    const deliveryAmount = формаДанные.использовать_доставку
+        ? Number(формаДанные.стоимость_доставки || 0)
+        : 0;
+    const grandTotalAmount = getTotalAmount() + deliveryAmount;
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!purchase) return;
@@ -191,12 +226,20 @@ const EditPurchaseModal: React.FC<EditPurchaseModalProps> = ({ isOpen, onClose, 
             if (validPositions.some((pos) => !Number(pos.ндс_id))) {
                 throw new Error('У некоторых позиций не задан НДС. Выберите ставку перед сохранением.');
             }
+            if (формаДанные.использовать_доставку && !формаДанные.транспорт_id) {
+                throw new Error('Выберите транспортную компанию для доставки закупки');
+            }
 
             const payload = {
                 поставщик_id: selectedSupplierId,
                 заявка_id: формаДанные.заявка_id.trim() ? Number(формаДанные.заявка_id) : null,
                 статус: normalizePurchaseStatus(формаДанные.статус),
                 дата_поступления: формаДанные.дата_поступления || null,
+                использовать_доставку: формаДанные.использовать_доставку,
+                транспорт_id: формаДанные.использовать_доставку ? Number(формаДанные.транспорт_id) : null,
+                стоимость_доставки: формаДанные.использовать_доставку && формаДанные.стоимость_доставки.trim()
+                    ? Number(формаДанные.стоимость_доставки)
+                    : null,
                 позиции: validPositions,
             };
 
@@ -261,6 +304,11 @@ const EditPurchaseModal: React.FC<EditPurchaseModalProps> = ({ isOpen, onClose, 
                                     className={styles.textField}
                                     size="2"
                                 />
+                                {!формаДанные.заявка_id.trim() ? (
+                                    <Text as="span" size="1" color="gray">
+                                        Если оставить поле пустым, закупка будет считаться поступлением на склад без привязки к заявке.
+                                    </Text>
+                                ) : null}
                             </Box>
 
                             <Box className={styles.formGroup}>
@@ -292,6 +340,58 @@ const EditPurchaseModal: React.FC<EditPurchaseModalProps> = ({ isOpen, onClose, 
                                     />
                                 </Flex>
                             </Box>
+
+                            <Box className={styles.formGroup}>
+                                <label className={styles.checkboxRow}>
+                                    <input
+                                        type="checkbox"
+                                        checked={формаДанные.использовать_доставку}
+                                        onChange={(e) => setФормаДанные((p) => ({
+                                            ...p,
+                                            использовать_доставку: e.target.checked,
+                                            транспорт_id: e.target.checked ? p.транспорт_id : 0,
+                                            стоимость_доставки: e.target.checked ? p.стоимость_доставки : '',
+                                        }))}
+                                        className={styles.includeCheckbox}
+                                    />
+                                    <span>Использовать доставку</span>
+                                </label>
+                                <Text as="span" size="1" color="gray">
+                                    Если выключено, закупку забрали сами без отдельной доставки.
+                                </Text>
+                            </Box>
+
+                            {формаДанные.использовать_доставку ? (
+                                <>
+                                    <Box className={styles.formGroup}>
+                                        <Text as="label" size="2" weight="medium">Кто доставляет</Text>
+                                        <Select.Root
+                                            value={формаДанные.транспорт_id ? String(формаДанные.транспорт_id) : ''}
+                                            onValueChange={(value) => setФормаДанные((p) => ({ ...p, транспорт_id: value ? Number(value) : 0 }))}
+                                        >
+                                            <Select.Trigger variant="surface" color="gray" className={styles.selectTrigger} placeholder="Выберите ТК" />
+                                            <Select.Content position="popper" variant="solid" color="gray" highContrast>
+                                                {transports.map((transport) => (
+                                                    <Select.Item key={transport.id} value={String(transport.id)}>
+                                                        {transport.название}
+                                                    </Select.Item>
+                                                ))}
+                                            </Select.Content>
+                                        </Select.Root>
+                                    </Box>
+
+                                    <Box className={styles.formGroup}>
+                                        <Text as="label" size="2" weight="medium">Стоимость доставки (опционально)</Text>
+                                        <TextField.Root
+                                            value={формаДанные.стоимость_доставки}
+                                            onChange={(e) => setФормаДанные((p) => ({ ...p, стоимость_доставки: e.target.value }))}
+                                            placeholder="400.00"
+                                            className={styles.textField}
+                                            size="2"
+                                        />
+                                    </Box>
+                                </>
+                            ) : null}
                         </div>
 
                         <Box className={styles.positionsSection}>
@@ -311,7 +411,7 @@ const EditPurchaseModal: React.FC<EditPurchaseModalProps> = ({ isOpen, onClose, 
 
                             <Box className={styles.positionsTable}>
                                 {позиции.length > 0 && (
-                                    <Box className={styles.positionHeaderRow}>
+                                    <Box className={`${styles.positionHeaderRow} ${styles.positionHeaderRowCompact}`}>
                                         <Text as="span" size="1" color="gray" className={styles.positionHeaderCell}>Товар</Text>
                                         <Text as="span" size="1" color="gray" className={styles.positionHeaderCell}>Ед.изм</Text>
                                         <Text as="span" size="1" color="gray" className={styles.positionHeaderCell}>Кол-во</Text>
@@ -331,7 +431,7 @@ const EditPurchaseModal: React.FC<EditPurchaseModalProps> = ({ isOpen, onClose, 
                                         const vatAmounts = calculateVatAmountsFromLine(position.количество, position.цена, vatOption.rate);
 
                                         return (
-                                            <Box key={position.id ?? index} className={styles.positionRow}>
+                                            <Box key={position.id ?? index} className={`${styles.positionRow} ${styles.positionRowCompact}`}>
                                                 <Select.Root
                                                     value={position.товар_id ? String(position.товар_id) : ''}
                                                     onValueChange={(value) => handlePositionChange(index, 'товар_id', value ? Number(value) : 0)}
@@ -403,6 +503,7 @@ const EditPurchaseModal: React.FC<EditPurchaseModalProps> = ({ isOpen, onClose, 
                                                     highContrast
                                                     onClick={() => removePosition(index)}
                                                     disabled={позиции.length === 1}
+                                                    className={styles.removePositionButton}
                                                 >
                                                     ×
                                                 </Button>
@@ -413,9 +514,17 @@ const EditPurchaseModal: React.FC<EditPurchaseModalProps> = ({ isOpen, onClose, 
                             </Box>
 
                             <Box className={styles.totalAmount}>
-                                <Text weight="bold">
-                                    Общая сумма:{' '}
+                                <Text size="2" className={styles.totalRowSecondary}>
+                                    Сумма товаров:{' '}
                                     {getTotalAmount().toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' })}
+                                </Text>
+                                <Text size="2" className={styles.totalRowSecondary}>
+                                    Стоимость доставки:{' '}
+                                    {deliveryAmount.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' })}
+                                </Text>
+                                <Text weight="bold" className={styles.totalRowPrimary}>
+                                    Общая сумма:{' '}
+                                    {grandTotalAmount.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' })}
                                 </Text>
                             </Box>
                         </Box>

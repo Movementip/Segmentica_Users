@@ -10,7 +10,8 @@ import * as XLSX from 'xlsx';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
-import { calculateVatAmountsFromLine, getVatRateOption } from '../../lib/vat';
+import { calculateVatAmountsFromLine, DEFAULT_VAT_RATE_ID, getVatRateOption, VAT_RATE_OPTIONS } from '../../lib/vat';
+import { getShipmentDeliveryLabel } from '../../lib/logisticsDeliveryLabels';
 
 const EMPTY_SELECT_VALUE = '__empty__';
 
@@ -18,8 +19,10 @@ const MotionTableRow = motion(Table.Row);
 
 interface Shipment {
     id: number;
-    заявка_id: number;
-    транспорт_id: number;
+    заявка_id: number | null;
+    использовать_доставку?: boolean;
+    без_учета_склада?: boolean;
+    транспорт_id: number | null;
     статус: string;
     номер_отслеживания: string | null;
     дата_отгрузки: string;
@@ -30,6 +33,19 @@ interface Shipment {
 
 interface Order {
     id: number;
+}
+
+interface Product {
+    id: number;
+    название: string;
+    артикул: string;
+    единица_измерения: string;
+    цена_продажи: number;
+}
+
+interface WarehouseStockItem {
+    товар_id: number;
+    количество: number;
 }
 
 interface OrderPositionPreview {
@@ -54,10 +70,25 @@ interface Transport {
     название: string;
 }
 
+interface ManualShipmentPosition {
+    id?: number;
+    товар_id: number;
+    количество: number;
+    цена: number;
+    ндс_id: number;
+}
+
 type AttachmentSummaryItem = {
     entity_id: number;
     types: string[];
 };
+
+const createEmptyManualShipmentPosition = (): ManualShipmentPosition => ({
+    товар_id: 0,
+    количество: 1,
+    цена: 0,
+    ндс_id: DEFAULT_VAT_RATE_ID,
+});
 
 type ShipmentsTab = 'all' | 'in_transit' | 'delivered' | 'canceled';
 type StatusFilter = 'all' | 'в пути' | 'доставлено' | 'отменено';
@@ -73,6 +104,8 @@ function ShipmentsPage(): JSX.Element {
     const [shipments, setShipments] = useState<Shipment[]>([]);
     const [orders, setOrders] = useState<Order[]>([]);
     const [transports, setTransports] = useState<Transport[]>([]);
+    const [products, setProducts] = useState<Product[]>([]);
+    const [warehouseStock, setWarehouseStock] = useState<WarehouseStockItem[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [showAddModal, setShowAddModal] = useState(false);
@@ -95,6 +128,8 @@ function ShipmentsPage(): JSX.Element {
     const [isTabsIndicatorReady, setIsTabsIndicatorReady] = useState(false);
     const [formData, setFormData] = useState({
         заявка_id: 0,
+        использовать_доставку: true,
+        без_учета_склада: false,
         транспорт_id: 0,
         статус: 'в пути',
         номер_отслеживания: '',
@@ -103,6 +138,8 @@ function ShipmentsPage(): JSX.Element {
     const [editingId, setEditingId] = useState<number | null>(null);
     const [selectedOrderPositions, setSelectedOrderPositions] = useState<OrderPositionPreview[]>([]);
     const [selectedOrderPositionsLoading, setSelectedOrderPositionsLoading] = useState(false);
+    const [manualPositions, setManualPositions] = useState<ManualShipmentPosition[]>([createEmptyManualShipmentPosition()]);
+    const [manualPositionsLoading, setManualPositionsLoading] = useState(false);
 
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [deletingShipment, setDeletingShipment] = useState<Shipment | null>(null);
@@ -129,10 +166,136 @@ function ShipmentsPage(): JSX.Element {
     const canGoToOrder = canOrdersView && canShipmentOrderView;
     const canOpenCreateModal = canCreate && canEdit;
 
+    const productsById = useMemo(() => {
+        const map = new Map<number, Product>();
+        for (const product of products) {
+            map.set(product.id, product);
+        }
+        return map;
+    }, [products]);
+
+    const warehouseStockByProductId = useMemo(() => {
+        const map = new Map<number, number>();
+        for (const item of warehouseStock) {
+            map.set(Number(item.товар_id), Number(item.количество) || 0);
+        }
+        return map;
+    }, [warehouseStock]);
+
+    const selectedManualProductIds = useMemo(() => (
+        new Set(
+            manualPositions
+                .map((position) => Number(position.товар_id) || 0)
+                .filter((productId) => productId > 0)
+        )
+    ), [manualPositions]);
+
+    const availableManualProducts = useMemo(() => {
+        if (formData.без_учета_склада) return products;
+        return products.filter((product) => (
+            (warehouseStockByProductId.get(product.id) || 0) > 0
+            || selectedManualProductIds.has(product.id)
+        ));
+    }, [formData.без_учета_склада, products, selectedManualProductIds, warehouseStockByProductId]);
+
+    const normalizedManualPositions = useMemo(() => (
+        manualPositions.filter((position) => (
+            Number(position.товар_id) > 0
+            && Number(position.количество) > 0
+            && Number(position.цена) > 0
+        ))
+    ), [manualPositions]);
+
+    const manualPositionsTotal = useMemo(() => (
+        normalizedManualPositions.reduce((sum, position) => (
+            sum + calculateVatAmountsFromLine(
+                position.количество,
+                position.цена,
+                getVatRateOption(position.ндс_id).rate
+            ).total
+        ), 0)
+    ), [normalizedManualPositions]);
+
+    const shipmentDeliveryAmount = useMemo(() => (
+        formData.использовать_доставку ? Number(formData.стоимость_доставки || 0) : 0
+    ), [formData.использовать_доставку, formData.стоимость_доставки]);
+
     const canSubmitShipment = useMemo(() => {
-        if (isSubmitting) return false;
-        return formData.заявка_id > 0 && formData.транспорт_id > 0;
-    }, [formData.заявка_id, formData.транспорт_id, isSubmitting]);
+        if (isSubmitting || manualPositionsLoading) return false;
+        if (formData.использовать_доставку && formData.транспорт_id <= 0) return false;
+        if (formData.заявка_id > 0) return true;
+        return normalizedManualPositions.length > 0;
+    }, [
+        formData.использовать_доставку,
+        formData.транспорт_id,
+        formData.заявка_id,
+        isSubmitting,
+        manualPositionsLoading,
+        normalizedManualPositions.length,
+    ]);
+
+    const getTransportText = useCallback((shipment: Shipment) => {
+        if (shipment.использовать_доставку === false) return getShipmentDeliveryLabel(false);
+        return shipment.транспорт_название || (shipment.транспорт_id ? `ТК #${shipment.транспорт_id}` : 'Не указана');
+    }, []);
+
+    const getCostText = useCallback((shipment: Shipment) => {
+        if (shipment.использовать_доставку === false) return 'Не используется';
+        return shipment.стоимость_доставки ? formatCurrency(shipment.стоимость_доставки) : 'Не указана';
+    }, []);
+
+    const getProductSalePrice = useCallback((product?: Product | null) => Number(product?.цена_продажи ?? 0), []);
+
+    const resetShipmentEditor = useCallback(() => {
+        setEditingId(null);
+        setFormData({
+            заявка_id: 0,
+            использовать_доставку: true,
+            без_учета_склада: false,
+            транспорт_id: 0,
+            статус: 'в пути',
+            номер_отслеживания: '',
+            стоимость_доставки: 0,
+        });
+        setSelectedOrderPositions([]);
+        setSelectedOrderPositionsLoading(false);
+        setManualPositions([createEmptyManualShipmentPosition()]);
+        setManualPositionsLoading(false);
+    }, []);
+
+    const handleManualPositionChange = useCallback((index: number, field: keyof ManualShipmentPosition, value: string | number) => {
+        setManualPositions((prev) => {
+            const next = [...prev];
+            const parsedValue = typeof value === 'string' ? (Number(value) || 0) : value;
+            next[index] = {
+                ...next[index],
+                [field]: parsedValue,
+            };
+
+            if (field === 'товар_id') {
+                const product = productsById.get(Number(parsedValue));
+                const price = getProductSalePrice(product);
+                if (price > 0) {
+                    next[index].цена = price;
+                }
+                if (!next[index].ндс_id) {
+                    next[index].ндс_id = DEFAULT_VAT_RATE_ID;
+                }
+            }
+
+            return next;
+        });
+    }, [getProductSalePrice, productsById]);
+
+    const addManualPosition = useCallback(() => {
+        setManualPositions((prev) => [...prev, createEmptyManualShipmentPosition()]);
+    }, []);
+
+    const removeManualPosition = useCallback((index: number) => {
+        setManualPositions((prev) => (
+            prev.length > 1 ? prev.filter((_, currentIndex) => currentIndex !== index) : prev
+        ));
+    }, []);
 
     const fetchOrderPositionsPreview = useCallback(async (orderId: number) => {
         if (!orderId || !canOrdersView) {
@@ -290,10 +453,12 @@ function ShipmentsPage(): JSX.Element {
     const handlePrintDocumentsWord = useCallback(async (shipment: Shipment) => {
         const shipDate = shipment.дата_отгрузки ? new Date(shipment.дата_отгрузки).toLocaleDateString('ru-RU') : '-';
         const shipTime = shipment.дата_отгрузки ? new Date(shipment.дата_отгрузки).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '';
-        const costText = shipment.стоимость_доставки ? formatCurrency(shipment.стоимость_доставки) : 'Не указана';
+        const costText = getCostText(shipment);
         const statusText = getStatusText((shipment.статус || '').toLowerCase());
-        const orderText = shipment.заявка_номер ? `№${shipment.заявка_номер}` : `#${shipment.заявка_id}`;
-        const transportText = shipment.транспорт_название || (shipment.транспорт_id ? `ТК #${shipment.транспорт_id}` : '-');
+        const orderText = shipment.заявка_id
+            ? (shipment.заявка_номер ? `№${shipment.заявка_номер}` : `#${shipment.заявка_id}`)
+            : 'Без заявки';
+        const transportText = getTransportText(shipment);
         const trackText = shipment.номер_отслеживания || 'Не указан';
 
         const htmlContent = `
@@ -338,7 +503,7 @@ function ShipmentsPage(): JSX.Element {
         </thead>
         <tbody>
           <tr><td>ID отгрузки</td><td>${shipment.id}</td></tr>
-          <tr><td>ID заявки</td><td>${shipment.заявка_id}</td></tr>
+          <tr><td>ID заявки</td><td>${shipment.заявка_id || '—'}</td></tr>
           <tr><td>ID ТК</td><td>${shipment.транспорт_id}</td></tr>
         </tbody>
       </table>
@@ -366,7 +531,7 @@ function ShipmentsPage(): JSX.Element {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-    }, []);
+    }, [getCostText, getTransportText]);
 
     const fetchShipments = useCallback(async () => {
         try {
@@ -486,6 +651,71 @@ function ShipmentsPage(): JSX.Element {
             console.error('Error fetching transports:', err);
         }
     }, []);
+
+    const fetchProducts = useCallback(async () => {
+        try {
+            const response = await fetch('/api/products');
+            if (!response.ok) {
+                throw new Error('Ошибка загрузки товаров');
+            }
+
+            const data = await response.json();
+            setProducts(Array.isArray(data) ? data : []);
+        } catch (productsError) {
+            console.error('Error fetching products for shipment editor:', productsError);
+            setProducts([]);
+        }
+    }, []);
+
+    const fetchWarehouseStock = useCallback(async () => {
+        try {
+            const response = await fetch('/api/warehouse');
+            if (!response.ok) {
+                throw new Error('Ошибка загрузки остатков склада');
+            }
+
+            const data = await response.json();
+            setWarehouseStock(Array.isArray(data?.warehouse) ? data.warehouse : []);
+        } catch (warehouseError) {
+            console.error('Error fetching warehouse stock for shipment editor:', warehouseError);
+            setWarehouseStock([]);
+        }
+    }, []);
+
+    const loadDirectShipmentPositions = useCallback(async (shipmentId: number) => {
+        try {
+            setManualPositionsLoading(true);
+            const response = await fetch(`/api/shipments/${encodeURIComponent(String(shipmentId))}`);
+            if (!response.ok) {
+                throw new Error('Не удалось загрузить состав отгрузки');
+            }
+
+            const data = await response.json();
+            const positions = Array.isArray(data?.позиции)
+                ? data.позиции.map((position: any) => ({
+                    id: Number(position?.id) || undefined,
+                    товар_id: Number(position?.товар_id) || 0,
+                    количество: Number(position?.количество) || 1,
+                    цена: Number(position?.цена) || 0,
+                    ндс_id: Number(position?.ндс_id) || DEFAULT_VAT_RATE_ID,
+                }))
+                : [];
+
+            setManualPositions(positions.length > 0 ? positions : [createEmptyManualShipmentPosition()]);
+        } catch (shipmentPositionsError) {
+            console.error('Error loading standalone shipment positions:', shipmentPositionsError);
+            setManualPositions([createEmptyManualShipmentPosition()]);
+            alert(shipmentPositionsError instanceof Error ? shipmentPositionsError.message : 'Не удалось загрузить состав отгрузки');
+        } finally {
+            setManualPositionsLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (!showAddModal) return;
+        fetchProducts();
+        fetchWarehouseStock();
+    }, [showAddModal, fetchProducts, fetchWarehouseStock]);
 
     useEffect(() => {
         if (authLoading) return;
@@ -626,7 +856,8 @@ function ShipmentsPage(): JSX.Element {
         const rows = filteredShipments.map((s) => ({
             id: s.id,
             заявка_id: s.заявка_id,
-            транспорт_id: s.транспорт_id,
+            использовать_доставку: s.использовать_доставку !== false ? 'Да' : 'Нет',
+            транспорт_id: s.транспорт_id ?? '',
             статус: s.статус || 'в пути',
             номер_отслеживания: s.номер_отслеживания || '',
             дата_отгрузки: s.дата_отгрузки,
@@ -793,19 +1024,38 @@ function ShipmentsPage(): JSX.Element {
             if (!canOpenCreateModal) return;
         }
 
-        if (formData.заявка_id <= 0 || formData.транспорт_id <= 0) {
-            alert('Пожалуйста, выберите заявку и транспортную компанию');
+        if (formData.использовать_доставку && formData.транспорт_id <= 0) {
+            alert(formData.использовать_доставку
+                ? 'Пожалуйста, выберите транспортную компанию'
+                : 'Проверьте данные формы');
+            return;
+        }
+
+        if (!formData.заявка_id && normalizedManualPositions.length === 0) {
+            alert('Для самостоятельной отгрузки добавьте хотя бы одну позицию');
             return;
         }
 
         try {
             setIsSubmitting(true);
+            if (!formData.заявка_id && !formData.без_учета_склада) {
+                const hasUnavailableProduct = normalizedManualPositions.some((position) => (
+                    (warehouseStockByProductId.get(Number(position.товар_id)) || 0) <= 0
+                ));
+                if (hasUnavailableProduct) {
+                    throw new Error('Для отгрузки со склада выберите только товары, которые есть в наличии');
+                }
+            }
+
             const payload = {
-                заявка_id: Number(formData.заявка_id),
-                транспорт_id: Number(formData.транспорт_id),
+                заявка_id: formData.заявка_id > 0 ? Number(formData.заявка_id) : null,
+                использовать_доставку: formData.использовать_доставку,
+                без_учета_склада: formData.заявка_id > 0 ? false : formData.без_учета_склада,
+                транспорт_id: formData.использовать_доставку ? Number(formData.транспорт_id) : null,
                 статус: formData.статус,
-                номер_отслеживания: formData.номер_отслеживания.trim() ? formData.номер_отслеживания.trim() : null,
-                стоимость_доставки: formData.стоимость_доставки ? Number(formData.стоимость_доставки) : null,
+                номер_отслеживания: formData.использовать_доставку && formData.номер_отслеживания.trim() ? formData.номер_отслеживания.trim() : null,
+                стоимость_доставки: formData.использовать_доставку && formData.стоимость_доставки ? Number(formData.стоимость_доставки) : null,
+                позиции: formData.заявка_id > 0 ? undefined : normalizedManualPositions,
             };
 
             const response = await fetch('/api/shipments', {
@@ -824,15 +1074,7 @@ function ShipmentsPage(): JSX.Element {
             // Refresh the list
             fetchShipments();
             setShowAddModal(false);
-            setEditingId(null);
-            // Reset form
-            setFormData({
-                заявка_id: 0,
-                транспорт_id: 0,
-                статус: 'в пути',
-                номер_отслеживания: '',
-                стоимость_доставки: 0
-            });
+            resetShipmentEditor();
 
             alert(editingId ? 'Отгрузка успешно обновлена' : 'Отгрузка успешно добавлена');
         } catch (error) {
@@ -954,8 +1196,7 @@ function ShipmentsPage(): JSX.Element {
                                 color="gray"
                                 highContrast
                                 onClick={() => {
-                                    setEditingId(null);
-                                    setFormData({ заявка_id: 0, транспорт_id: 0, статус: 'в пути', номер_отслеживания: '', стоимость_доставки: 0 });
+                                    resetShipmentEditor();
                                     setShowAddModal(true);
                                 }}
                                 className={styles.addShipmentButton}
@@ -1139,10 +1380,14 @@ function ShipmentsPage(): JSX.Element {
                                                             </div>
                                                         </Table.Cell>
                                                         <Table.Cell>
-                                                            <div className={styles.itemTitle}>{shipment.заявка_номер || `Заявка #${shipment.заявка_id}`}</div>
+                                                            <div className={styles.itemTitle}>
+                                                                {shipment.заявка_id
+                                                                    ? (shipment.заявка_номер || `Заявка #${shipment.заявка_id}`)
+                                                                    : 'Без заявки'}
+                                                            </div>
                                                         </Table.Cell>
                                                         <Table.Cell>
-                                                            <div className={styles.itemTitle}>{shipment.транспорт_название || `ТК #${shipment.транспорт_id}`}</div>
+                                                            <div className={styles.itemTitle}>{getTransportText(shipment)}</div>
                                                         </Table.Cell>
                                                         <Table.Cell>
                                                             <div className={styles.itemTitle}>{formatDateTime(shipment.дата_отгрузки)}</div>
@@ -1152,7 +1397,7 @@ function ShipmentsPage(): JSX.Element {
                                                         </Table.Cell>
                                                         <Table.Cell className={styles.textRight}>
                                                             <span className={styles.moneyValue}>
-                                                                {shipment.стоимость_доставки ? formatCurrency(shipment.стоимость_доставки) : 'Не указана'}
+                                                                {getCostText(shipment)}
                                                             </span>
                                                         </Table.Cell>
                                                         <Table.Cell>
@@ -1232,17 +1477,25 @@ function ShipmentsPage(): JSX.Element {
                                                                                 {(canEditThis || canPrintThis || canDeleteThis) ? <DropdownMenu.Separator /> : null}
                                                                                 {canEditThis ? (
                                                                                     <DropdownMenu.Item
-                                                                                        onSelect={(e) => {
+                                                                                        onSelect={async (e) => {
                                                                                             e?.preventDefault?.();
+                                                                                            setError(null);
                                                                                             setEditingId(shipment.id);
                                                                                             setFormData({
-                                                                                                заявка_id: Number(shipment.заявка_id) || 0,
+                                                                                                заявка_id: shipment.заявка_id == null ? 0 : Number(shipment.заявка_id) || 0,
+                                                                                                использовать_доставку: shipment.использовать_доставку !== false,
+                                                                                                без_учета_склада: shipment.без_учета_склада === true,
                                                                                                 транспорт_id: Number(shipment.транспорт_id) || 0,
                                                                                                 статус: shipment.статус || 'в пути',
                                                                                                 номер_отслеживания: shipment.номер_отслеживания || '',
                                                                                                 стоимость_доставки: Number(shipment.стоимость_доставки) || 0,
                                                                                             });
+                                                                                            setSelectedOrderPositions([]);
+                                                                                            setManualPositions([createEmptyManualShipmentPosition()]);
                                                                                             setShowAddModal(true);
+                                                                                            if (shipment.заявка_id == null) {
+                                                                                                await loadDirectShipmentPositions(shipment.id);
+                                                                                            }
                                                                                         }}
                                                                                     >
                                                                                         <FiEdit2 className={styles.rowMenuIcon} />
@@ -1305,7 +1558,7 @@ function ShipmentsPage(): JSX.Element {
                 onOpenChange={(open) => {
                     if (!open) {
                         setShowAddModal(false);
-                        setEditingId(null);
+                        resetShipmentEditor();
                     }
                 }}
             >
@@ -1318,16 +1571,41 @@ function ShipmentsPage(): JSX.Element {
                     <form onSubmit={handleSubmitShipment} className={modalStyles.radixForm}>
                         <Flex direction="column" gap="4">
                             <Box className={modalStyles.radixField}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 40 }}>
+                                    <input
+                                        type="checkbox"
+                                        style={{ accentColor: '#111111', width: 16, height: 16 }}
+                                        checked={formData.использовать_доставку}
+                                        onChange={(e) => setFormData((p) => ({
+                                            ...p,
+                                            использовать_доставку: e.target.checked,
+                                            транспорт_id: e.target.checked ? p.транспорт_id : 0,
+                                            номер_отслеживания: e.target.checked ? p.номер_отслеживания : '',
+                                            стоимость_доставки: e.target.checked ? p.стоимость_доставки : 0,
+                                        }))}
+                                    />
+                                    <Text as="span" size="2" weight="medium">Использовать доставку</Text>
+                                </label>
+                                <Text as="div" size="1" color="gray">
+                                    Если выключено, отгрузка оформляется как передача без доставки.
+                                </Text>
+                            </Box>
+
+                            <Box className={modalStyles.radixField}>
                                 <Text as="label" size="2" weight="medium">Заявка</Text>
                                 <Select.Root
                                     value={formData.заявка_id ? String(formData.заявка_id) : EMPTY_SELECT_VALUE}
-                                    onValueChange={(v) => setFormData((p) => ({ ...p, заявка_id: v === EMPTY_SELECT_VALUE ? 0 : Number(v) || 0 }))}
+                                    onValueChange={(v) => setFormData((p) => ({
+                                        ...p,
+                                        заявка_id: v === EMPTY_SELECT_VALUE ? 0 : Number(v) || 0,
+                                        без_учета_склада: v === EMPTY_SELECT_VALUE ? p.без_учета_склада : false,
+                                    }))}
                                     disabled={!canOrdersList}
                                 >
                                     <Select.Trigger variant="surface" color="gray" className={modalStyles.radixSelectTrigger} placeholder="Выберите заявку" />
                                     <Select.Content position="popper" className={modalStyles.radixSelectContent}>
-                                        <Select.Item value={EMPTY_SELECT_VALUE} disabled>
-                                            Выберите заявку
+                                        <Select.Item value={EMPTY_SELECT_VALUE}>
+                                            Без заявки
                                         </Select.Item>
                                         {orders.map((o) => (
                                             <Select.Item key={o.id} value={String(o.id)}>
@@ -1336,27 +1614,29 @@ function ShipmentsPage(): JSX.Element {
                                         ))}
                                     </Select.Content>
                                 </Select.Root>
+                                {!formData.заявка_id ? (
+                                    <Text as="div" size="1" color="gray">
+                                        Если заявку не выбирать, отгрузка будет оформлена как самостоятельная отгрузка со склада.
+                                    </Text>
+                                ) : null}
                             </Box>
 
-                            <Box className={modalStyles.radixField}>
-                                <Text as="label" size="2" weight="medium">Транспортная компания</Text>
-                                <Select.Root
-                                    value={formData.транспорт_id ? String(formData.транспорт_id) : EMPTY_SELECT_VALUE}
-                                    onValueChange={(v) => setFormData((p) => ({ ...p, транспорт_id: v === EMPTY_SELECT_VALUE ? 0 : Number(v) || 0 }))}
-                                >
-                                    <Select.Trigger variant="surface" color="gray" className={modalStyles.radixSelectTrigger} placeholder="Выберите ТК" />
-                                    <Select.Content position="popper" className={modalStyles.radixSelectContent}>
-                                        <Select.Item value={EMPTY_SELECT_VALUE} disabled>
-                                            Выберите ТК
-                                        </Select.Item>
-                                        {transports.map((t) => (
-                                            <Select.Item key={t.id} value={String(t.id)}>
-                                                {t.название}
-                                            </Select.Item>
-                                        ))}
-                                    </Select.Content>
-                                </Select.Root>
-                            </Box>
+                            {!formData.заявка_id ? (
+                                <Box className={modalStyles.radixField}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 40 }}>
+                                        <input
+                                            type="checkbox"
+                                            style={{ accentColor: '#111111', width: 16, height: 16 }}
+                                            checked={formData.без_учета_склада}
+                                            onChange={(e) => setFormData((p) => ({ ...p, без_учета_склада: e.target.checked }))}
+                                        />
+                                        <Text as="span" size="2" weight="medium">Без учета склада</Text>
+                                    </label>
+                                    <Text as="div" size="1" color="gray">
+                                        Доступно только для самостоятельной отгрузки. Документ будет создан без проверки остатков и без списания со склада.
+                                    </Text>
+                                </Box>
+                            ) : null}
 
                             <Box className={modalStyles.radixField}>
                                 <Text as="label" size="2" weight="medium">Статус</Text>
@@ -1370,41 +1650,86 @@ function ShipmentsPage(): JSX.Element {
                                 </Select.Root>
                             </Box>
 
-                            <Box className={modalStyles.radixField}>
-                                <Text as="label" size="2" weight="medium">Номер отслеживания (опц.)</Text>
-                                <TextField.Root
-                                    value={formData.номер_отслеживания}
-                                    name="номер_отслеживания"
-                                    onChange={handleInputChange}
-                                    placeholder="TRACK-001"
-                                    size="2"
-                                />
-                            </Box>
+                            {formData.использовать_доставку ? (
+                                <>
+                                    <Box className={modalStyles.radixField}>
+                                        <Text as="label" size="2" weight="medium">Транспортная компания</Text>
+                                        <Select.Root
+                                            value={formData.транспорт_id ? String(formData.транспорт_id) : EMPTY_SELECT_VALUE}
+                                            onValueChange={(v) => setFormData((p) => ({ ...p, транспорт_id: v === EMPTY_SELECT_VALUE ? 0 : Number(v) || 0 }))}
+                                        >
+                                            <Select.Trigger variant="surface" color="gray" className={modalStyles.radixSelectTrigger} placeholder="Выберите ТК" />
+                                            <Select.Content position="popper" className={modalStyles.radixSelectContent}>
+                                                <Select.Item value={EMPTY_SELECT_VALUE} disabled>
+                                                    Выберите ТК
+                                                </Select.Item>
+                                                {transports.map((t) => (
+                                                    <Select.Item key={t.id} value={String(t.id)}>
+                                                        {t.название}
+                                                    </Select.Item>
+                                                ))}
+                                            </Select.Content>
+                                        </Select.Root>
+                                    </Box>
 
-                            <Box className={modalStyles.radixField}>
-                                <Text as="label" size="2" weight="medium">Стоимость доставки (опц.)</Text>
-                                <TextField.Root
-                                    value={String(formData.стоимость_доставки ?? '')}
-                                    name="стоимость_доставки"
-                                    onChange={handleInputChange}
-                                    placeholder="400.00"
-                                    size="2"
-                                />
-                            </Box>
+                                    <Box className={modalStyles.radixField}>
+                                        <Text as="label" size="2" weight="medium">Номер отслеживания (опц.)</Text>
+                                        <TextField.Root
+                                            value={formData.номер_отслеживания}
+                                            name="номер_отслеживания"
+                                            onChange={handleInputChange}
+                                            placeholder="TRACK-001"
+                                            size="2"
+                                        />
+                                    </Box>
+
+                                    <Box className={modalStyles.radixField}>
+                                        <Text as="label" size="2" weight="medium">Стоимость доставки (опц.)</Text>
+                                        <TextField.Root
+                                            value={String(formData.стоимость_доставки ?? '')}
+                                            name="стоимость_доставки"
+                                            onChange={handleInputChange}
+                                            placeholder="400.00"
+                                            size="2"
+                                        />
+                                    </Box>
+                                </>
+                            ) : null}
 
                             <Box className={styles.modalPreviewSection}>
                                 <Flex align="center" justify="between" gap="3" wrap="wrap">
                                     <Text as="div" size="3" weight="medium" className={styles.modalPreviewTitle}>
-                                        Позиции заявки
+                                        {formData.заявка_id ? 'Позиции заявки' : 'Позиции отгрузки'}
                                     </Text>
-                                    {selectedOrderPositionsLoading ? (
+                                    {formData.заявка_id && selectedOrderPositionsLoading ? (
                                         <Text size="2" color="gray">Загружаем состав заявки...</Text>
+                                    ) : null}
+                                    {!formData.заявка_id ? (
+                                        <Button
+                                            type="button"
+                                            variant="surface"
+                                            color="gray"
+                                            highContrast
+                                            onClick={addManualPosition}
+                                            className={styles.surfaceButton}
+                                            disabled={manualPositionsLoading}
+                                        >
+                                            <FiPlus size={14} /> Добавить позицию
+                                        </Button>
                                     ) : null}
                                 </Flex>
 
                                 {!formData.заявка_id ? (
                                     <Text as="div" size="2" color="gray" className={styles.modalPreviewHint}>
-                                        Выберите заявку, чтобы увидеть состав отгрузки.
+                                        {formData.без_учета_склада
+                                            ? 'Без заявки выберите товары вручную: это будет самостоятельная отгрузка без учета склада.'
+                                            : 'Без заявки выберите товары вручную: в списке доступны только товары, которые есть на складе.'}
+                                    </Text>
+                                ) : null}
+
+                                {!formData.заявка_id && !formData.без_учета_склада && availableManualProducts.length === 0 ? (
+                                    <Text as="div" size="2" color="gray" className={styles.modalPreviewHint}>
+                                        На складе нет товаров, доступных для самостоятельной отгрузки.
                                     </Text>
                                 ) : null}
 
@@ -1414,7 +1739,142 @@ function ShipmentsPage(): JSX.Element {
                                     </Text>
                                 ) : null}
 
-                                {selectedOrderPositions.length > 0 ? (
+                                {!formData.заявка_id ? (
+                                    <>
+                                        {manualPositionsLoading ? (
+                                            <Text as="div" size="2" color="gray" className={styles.modalPreviewHint}>
+                                                Загружаем состав самостоятельной отгрузки...
+                                            </Text>
+                                        ) : null}
+
+                                        {!manualPositionsLoading ? (
+                                            <>
+                                                <div className={styles.modalPreviewTableWrap}>
+                                                    <Table.Root variant="surface" className={styles.modalPreviewTable}>
+                                                        <Table.Header>
+                                                            <Table.Row>
+                                                                <Table.ColumnHeaderCell>Товар</Table.ColumnHeaderCell>
+                                                                <Table.ColumnHeaderCell>Ед.изм</Table.ColumnHeaderCell>
+                                                                <Table.ColumnHeaderCell>Кол-во</Table.ColumnHeaderCell>
+                                                                <Table.ColumnHeaderCell className={styles.textRight}>Цена, ₽</Table.ColumnHeaderCell>
+                                                                <Table.ColumnHeaderCell>НДС</Table.ColumnHeaderCell>
+                                                                <Table.ColumnHeaderCell className={styles.textRight}>Всего, ₽</Table.ColumnHeaderCell>
+                                                                <Table.ColumnHeaderCell />
+                                                            </Table.Row>
+                                                        </Table.Header>
+                                                        <Table.Body>
+                                                            {manualPositions.map((position, index) => {
+                                                                const selectedProduct = productsById.get(position.товар_id);
+                                                                const total = calculateVatAmountsFromLine(
+                                                                    position.количество,
+                                                                    position.цена,
+                                                                    getVatRateOption(position.ндс_id).rate
+                                                                ).total;
+
+                                                                return (
+                                                                    <Table.Row key={position.id ?? `manual-${index}`}>
+                                                                        <Table.Cell>
+                                                                            <Select.Root
+                                                                                value={position.товар_id ? String(position.товар_id) : EMPTY_SELECT_VALUE}
+                                                                                onValueChange={(value) => handleManualPositionChange(index, 'товар_id', value === EMPTY_SELECT_VALUE ? 0 : Number(value) || 0)}
+                                                                            >
+                                                                                <Select.Trigger
+                                                                                    variant="surface"
+                                                                                    color="gray"
+                                                                                    className={`${modalStyles.radixSelectTrigger} ${styles.manualPositionSelect}`}
+                                                                                    placeholder="Выберите товар"
+                                                                                />
+                                                                                <Select.Content position="popper" className={modalStyles.radixSelectContent}>
+                                                                                    <Select.Item value={EMPTY_SELECT_VALUE}>Выберите товар</Select.Item>
+                                                                                    {availableManualProducts.map((product) => (
+                                                                                        <Select.Item key={product.id} value={String(product.id)}>
+                                                                                            {product.артикул} - {product.название}{!formData.без_учета_склада ? ` · в наличии: ${warehouseStockByProductId.get(product.id) || 0}` : ''}
+                                                                                        </Select.Item>
+                                                                                    ))}
+                                                                                </Select.Content>
+                                                                            </Select.Root>
+                                                                        </Table.Cell>
+                                                                        <Table.Cell>{selectedProduct?.единица_измерения || 'шт'}</Table.Cell>
+                                                                        <Table.Cell>
+                                                                            <TextField.Root
+                                                                                type="number"
+                                                                                min={1}
+                                                                                step={1}
+                                                                                value={String(position.количество)}
+                                                                                onChange={(event) => handleManualPositionChange(index, 'количество', event.target.value)}
+                                                                                size="2"
+                                                                                className={styles.manualPositionInput}
+                                                                            />
+                                                                        </Table.Cell>
+                                                                        <Table.Cell className={styles.textRight}>
+                                                                            <TextField.Root
+                                                                                type="number"
+                                                                                min={0}
+                                                                                step={0.01}
+                                                                                value={String(position.цена)}
+                                                                                onChange={(event) => handleManualPositionChange(index, 'цена', event.target.value)}
+                                                                                size="2"
+                                                                                className={styles.manualPositionInput}
+                                                                            />
+                                                                        </Table.Cell>
+                                                                        <Table.Cell>
+                                                                            <Select.Root
+                                                                                value={String(position.ндс_id || DEFAULT_VAT_RATE_ID)}
+                                                                                onValueChange={(value) => handleManualPositionChange(index, 'ндс_id', Number(value) || DEFAULT_VAT_RATE_ID)}
+                                                                            >
+                                                                                <Select.Trigger
+                                                                                    variant="surface"
+                                                                                    color="gray"
+                                                                                    className={`${modalStyles.radixSelectTrigger} ${styles.manualVatSelect}`}
+                                                                                />
+                                                                                <Select.Content position="popper" className={modalStyles.radixSelectContent}>
+                                                                                    {VAT_RATE_OPTIONS.map((option) => (
+                                                                                        <Select.Item key={option.id} value={String(option.id)}>
+                                                                                            {option.label}
+                                                                                        </Select.Item>
+                                                                                    ))}
+                                                                                </Select.Content>
+                                                                            </Select.Root>
+                                                                        </Table.Cell>
+                                                                        <Table.Cell className={styles.textRight}>
+                                                                            {total.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' })}
+                                                                        </Table.Cell>
+                                                                        <Table.Cell className={styles.manualPositionActions}>
+                                                                            <Button
+                                                                                type="button"
+                                                                                variant="surface"
+                                                                                color="gray"
+                                                                                highContrast
+                                                                                onClick={() => removeManualPosition(index)}
+                                                                                disabled={manualPositions.length === 1}
+                                                                                className={styles.manualPositionRemoveButton}
+                                                                            >
+                                                                                ×
+                                                                            </Button>
+                                                                        </Table.Cell>
+                                                                    </Table.Row>
+                                                                );
+                                                            })}
+                                                        </Table.Body>
+                                                    </Table.Root>
+                                                </div>
+
+                                                <Flex justify="end" className={styles.modalPreviewTotal}>
+                                                    <Flex direction="column" align="end" gap="1">
+                                                        <Text size="2" color="gray">
+                                                            Стоимость доставки: {shipmentDeliveryAmount.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' })}
+                                                        </Text>
+                                                        <Text weight="bold">
+                                                            Итого: {(manualPositionsTotal + shipmentDeliveryAmount).toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' })}
+                                                        </Text>
+                                                    </Flex>
+                                                </Flex>
+                                            </>
+                                        ) : null}
+                                    </>
+                                ) : null}
+
+                                {formData.заявка_id && selectedOrderPositions.length > 0 ? (
                                     <>
                                         <div className={styles.modalPreviewTableWrap}>
                                             <Table.Root variant="surface" className={styles.modalPreviewTable}>
@@ -1458,9 +1918,14 @@ function ShipmentsPage(): JSX.Element {
                                         </div>
 
                                         <Flex justify="end" className={styles.modalPreviewTotal}>
-                                            <Text weight="bold">
-                                                Итого: {positionsPreviewTotal.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' })}
-                                            </Text>
+                                            <Flex direction="column" align="end" gap="1">
+                                                <Text size="2" color="gray">
+                                                    Стоимость доставки: {shipmentDeliveryAmount.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' })}
+                                                </Text>
+                                                <Text weight="bold">
+                                                    Итого: {(positionsPreviewTotal + shipmentDeliveryAmount).toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' })}
+                                                </Text>
+                                            </Flex>
                                         </Flex>
                                     </>
                                 ) : null}
@@ -1479,7 +1944,7 @@ function ShipmentsPage(): JSX.Element {
                                         if (!canGoToOrder) return;
                                         if (!formData.заявка_id) return;
                                         setShowAddModal(false);
-                                        setEditingId(null);
+                                        resetShipmentEditor();
                                         router.push(`/orders/${encodeURIComponent(String(formData.заявка_id))}`);
                                     }}
                                 >
@@ -1494,7 +1959,7 @@ function ShipmentsPage(): JSX.Element {
                                     disabled={isSubmitting}
                                     onClick={() => {
                                         setShowAddModal(false);
-                                        setEditingId(null);
+                                        resetShipmentEditor();
                                     }}
                                 >
                                     Отмена
@@ -1538,8 +2003,10 @@ function ShipmentsPage(): JSX.Element {
                                 <Box className={deleteConfirmStyles.positionsSection}>
                                     <Flex direction="column" gap="1">
                                         <Text as="div" weight="bold">Отгрузка #{deletingShipment.id}</Text>
-                                        <Text as="div" size="2" color="gray">Заявка: #{deletingShipment.заявка_id}</Text>
-                                        <Text as="div" size="2" color="gray">ТК: {deletingShipment.транспорт_название || `#${deletingShipment.транспорт_id}`}</Text>
+                                        <Text as="div" size="2" color="gray">
+                                            {deletingShipment.заявка_id ? `Заявка: #${deletingShipment.заявка_id}` : 'Самостоятельная отгрузка без заявки'}
+                                        </Text>
+                                        <Text as="div" size="2" color="gray">Способ: {getTransportText(deletingShipment)}</Text>
                                     </Flex>
                                 </Box>
                             ) : null}

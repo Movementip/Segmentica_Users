@@ -29,6 +29,7 @@ export interface Movement {
     товар_артикул: string;
     заявка_номер: number | null;
     закупка_номер: number | null;
+    отгрузка_номер: number | null;
 }
 
 export interface WarehouseData {

@@ -42,6 +42,8 @@ export interface OrderWorkflowModalSummary {
         необходимое_количество: number;
         склад_количество: number;
         активная_недостача: number;
+        закуплено_количество: number;
+        осталось_закупить: number;
         покрыто_со_склада: number;
         собранное_количество: number;
         отгруженное_количество: number;
@@ -56,8 +58,8 @@ export interface OrderWorkflowModalSummary {
         недостающее_количество: number;
         статус: string;
     }>;
-    purchases: Array<{ id: number; статус: string; дата_заказа?: string; общая_сумма?: number }>;
-    shipments: Array<{ id: number; branchNo: number; shipmentKind: string; статус: string; дата_отгрузки?: string; транспорт_название?: string; номер_отслеживания?: string; totalUnits: number }>;
+    purchases: Array<{ id: number; статус: string; дата_заказа?: string; общая_сумма?: number; использовать_доставку?: boolean; стоимость_доставки?: number }>;
+    shipments: Array<{ id: number; branchNo: number; shipmentKind: string; статус: string; дата_отгрузки?: string; транспорт_название?: string; номер_отслеживания?: string; стоимость_доставки?: number; totalUnits: number }>;
     assemblyBatches: Array<{
         id: number;
         branchNo: number;

@@ -4,6 +4,9 @@ import { requirePermission } from '../../../lib/auth';
 import { calculateVatAmountsFromLine, getVatRateOption } from '../../../lib/vat';
 import { syncOrderWorkflowStatus } from '../../../lib/orderWorkflow';
 import { checkAndCreateMissingProducts, syncMissingProductsFromPurchases } from '../../../lib/missingProductsHelper';
+import { normalizeOrderExecutionMode } from '../../../lib/orderModes';
+import { ensureLogisticsDeliverySchema } from '../../../lib/logisticsDelivery';
+import { syncPurchaseWarehouseState } from '../../../lib/purchaseWarehouse';
 
 export interface PurchaseDetail {
     id: number;
@@ -13,6 +16,10 @@ export interface PurchaseDetail {
     дата_поступления?: string;
     статус: string;
     общая_сумма: number;
+    использовать_доставку?: boolean;
+    транспорт_id?: number | null;
+    стоимость_доставки?: number | null;
+    транспорт_название?: string;
     поставщик_название: string;
     поставщик_телефон?: string;
     поставщик_email?: string;
@@ -43,6 +50,7 @@ export default async function handler(
     res: NextApiResponse<PurchaseDetail | { error: string } | { message: string }>
 ) {
     const { id } = req.query;
+    await ensureLogisticsDeliverySchema();
 
     if (req.method === 'GET') {
         const actor = await requirePermission(req, res, 'purchases.view');
@@ -52,15 +60,24 @@ export default async function handler(
             const purchaseResult = await query(`
         SELECT 
           з.*,
-          COALESCE(NULLIF(з."общая_сумма", 0), totals.total_amount, 0) as "общая_сумма",
+          (
+            COALESCE(totals.total_amount, 0)
+            + CASE
+              WHEN COALESCE(з."использовать_доставку", false)
+                THEN COALESCE(з."стоимость_доставки", 0)
+              ELSE 0
+            END
+          )::numeric as "общая_сумма",
           п."название" as поставщик_название,
           п."телефон" as поставщик_телефон,
           п."email" as поставщик_email,
-          к."название" as заявка_клиент
+          к."название" as заявка_клиент,
+          тк."название" as транспорт_название
         FROM "Закупки" з
         LEFT JOIN "Поставщики" п ON з."поставщик_id" = п.id
         LEFT JOIN "Заявки" заяв ON з."заявка_id" = заяв.id
         LEFT JOIN "Клиенты" к ON заяв."клиент_id" = к.id
+        LEFT JOIN "Транспортные_компании" тк ON з."транспорт_id" = тк.id
         LEFT JOIN (
           SELECT
             пз."закупка_id",
@@ -134,6 +151,10 @@ export default async function handler(
                 дата_поступления: purchase.дата_поступления,
                 статус: purchase.статус,
                 общая_сумма: parseFloat(purchase.общая_сумма) || 0,
+                использовать_доставку: Boolean(purchase.использовать_доставку),
+                транспорт_id: purchase.транспорт_id == null ? null : Number(purchase.транспорт_id),
+                стоимость_доставки: purchase.стоимость_доставки == null ? null : Number(purchase.стоимость_доставки),
+                транспорт_название: purchase.транспорт_название || undefined,
                 поставщик_название: purchase.поставщик_название,
                 поставщик_телефон: purchase.поставщик_телефон,
                 поставщик_email: purchase.поставщик_email,
@@ -178,8 +199,16 @@ export default async function handler(
             }
 
             const existingPurchase = purchaseCheck.rows[0];
-            const wasReceived = existingPurchase.статус === 'получено';
             const willBeReceived = статус === 'получено';
+            let orderExecutionMode = 'warehouse';
+
+            if (existingPurchase.заявка_id != null) {
+                const orderModeResult = await query(
+                    'SELECT "режим_исполнения" FROM "Заявки" WHERE id = $1 LIMIT 1',
+                    [existingPurchase.заявка_id]
+                );
+                orderExecutionMode = normalizeOrderExecutionMode(orderModeResult.rows[0]?.режим_исполнения);
+            }
 
             // Start transaction
             await query('BEGIN');
@@ -200,78 +229,11 @@ export default async function handler(
 
                 await query(updateQuery, updateData);
 
-                // Handle warehouse updates when status changes to/from 'получено'
-                if (!wasReceived && willBeReceived) {
-                    // Purchase is being marked as received - add to warehouse
-                    const positions = await query(
-                        'SELECT * FROM "Позиции_закупки" WHERE "закупка_id" = $1',
-                        [id]
-                    );
-
-                    for (const position of positions.rows) {
-                        // Check if product exists in warehouse
-                        const warehouseCheck = await query(
-                            'SELECT * FROM "Склад" WHERE "товар_id" = $1',
-                            [position.товар_id]
-                        );
-
-                        if (warehouseCheck.rows.length > 0) {
-                            // Update existing warehouse record
-                            await query(`
-                UPDATE "Склад" 
-                SET "количество" = "количество" + $1,
-                    "дата_последнего_поступления" = CURRENT_TIMESTAMP
-                WHERE "товар_id" = $2
-              `, [position.количество, position.товар_id]);
-                        } else {
-                            // Create new warehouse record
-                            await query(`
-                INSERT INTO "Склад" ("товар_id", "количество", "дата_последнего_поступления")
-                VALUES ($1, $2, CURRENT_TIMESTAMP)
-              `, [position.товар_id, position.количество]);
-                        }
-
-                        // Create warehouse movement record
-                        await query(`
-              INSERT INTO "Движения_склада" (
-                "товар_id", "тип_операции", "количество", "дата_операции", "закупка_id"
-              ) VALUES ($1, 'приход', $2, CURRENT_TIMESTAMP, $3)
-            `, [position.товар_id, position.количество, id]);
-                    }
-                } else if (wasReceived && !willBeReceived) {
-                    // Purchase is being changed from received - remove from warehouse
-                    const positions = await query(
-                        'SELECT * FROM "Позиции_закупки" WHERE "закупка_id" = $1',
-                        [id]
-                    );
-
-                    for (const position of positions.rows) {
-                        // Check current warehouse quantity
-                        const warehouseCheck = await query(
-                            'SELECT * FROM "Склад" WHERE "товар_id" = $1',
-                            [position.товар_id]
-                        );
-
-                        if (warehouseCheck.rows.length > 0) {
-                            const currentQuantity = warehouseCheck.rows[0].количество;
-                            if (currentQuantity >= position.количество) {
-                                // Update warehouse quantity
-                                await query(`
-                  UPDATE "Склад" 
-                  SET "количество" = "количество" - $1
-                  WHERE "товар_id" = $2
-                `, [position.количество, position.товар_id]);
-
-                                // Create warehouse movement record
-                                await query(`
-                  INSERT INTO "Движения_склада" (
-                    "товар_id", "тип_операции", "количество", "дата_операции", "закупка_id"
-                  ) VALUES ($1, 'расход', $2, CURRENT_TIMESTAMP, $3)
-                `, [position.товар_id, position.количество, id]);
-                            }
-                        }
-                    }
-                }
+                await syncPurchaseWarehouseState(
+                    { query },
+                    Number(id),
+                    orderExecutionMode !== 'direct' && willBeReceived
+                );
 
                 // Commit transaction
                 await query('COMMIT');

@@ -17,6 +17,16 @@ interface Supplier {
     название: string;
 }
 
+interface TransportOption {
+    id: number;
+    название: string;
+}
+
+interface OrderOption {
+    id: number;
+    клиент_название?: string;
+}
+
 interface PurchasePosition {
     товар_id: number;
     количество: number;
@@ -31,6 +41,8 @@ export interface OrderPositionSnapshot {
     ндс_id?: number;
     цена?: number;
 }
+
+const EMPTY_SELECT_VALUE = '__empty__';
 
 const normalizeOrderPositionSnapshot = (
     snapshot: OrderPositionSnapshot,
@@ -57,6 +69,7 @@ interface CreatePurchaseModalProps {
     поставщик_id?: number;
     поставщик_название?: string;
     заявка_id?: number;
+    lockOrderId?: boolean;
     initialOrderPositions?: OrderPositionSnapshot[];
 }
 
@@ -67,6 +80,7 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
     поставщик_id = 0,
     поставщик_название = '',
     заявка_id,
+    lockOrderId = false,
     initialOrderPositions
 }) => {
     const submitLockRef = useRef(false);
@@ -74,12 +88,18 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
     const [error, setError] = useState<string | null>(null);
     const [products, setProducts] = useState<Product[]>([]);
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+    const [transports, setTransports] = useState<TransportOption[]>([]);
+    const [orders, setOrders] = useState<OrderOption[]>([]);
     const [createToken, setCreateToken] = useState('');
     const [selectedSupplierId, setSelectedSupplierId] = useState<number>(поставщик_id);
     const [selectedSupplierName, setSelectedSupplierName] = useState<string>(поставщик_название);
+    const [selectedOrderId, setSelectedOrderId] = useState<number>(заявка_id || 0);
     const [формаДанные, setФормаДанные] = useState({
         статус: 'заказано',
-        дата_поступления: ''
+        дата_поступления: '',
+        использовать_доставку: false,
+        транспорт_id: 0,
+        стоимость_доставки: '',
     });
     const [позиции, setПозиции] = useState<PurchasePosition[]>([
         { товар_id: 0, количество: 1, цена: 0, ндс_id: DEFAULT_VAT_RATE_ID, включена: true }
@@ -105,9 +125,13 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
         setCreateToken('');
         setSelectedSupplierId(Number(поставщик_id) || 0);
         setSelectedSupplierName(поставщик_название || '');
+        setSelectedOrderId(Number(заявка_id) || 0);
         setФормаДанные({
             статус: 'заказано',
             дата_поступления: value,
+            использовать_доставку: false,
+            транспорт_id: 0,
+            стоимость_доставки: '',
         });
         setПозиции(buildInitialPositions(vatRateId));
     };
@@ -116,10 +140,11 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
         if (loading) return false;
         if (!createToken) return false;
         if (!selectedSupplierId) return false;
+        if (формаДанные.использовать_доставку && !формаДанные.транспорт_id) return false;
 
         const validPositions = позиции.filter((pos) => pos.включена && pos.товар_id > 0 && pos.количество > 0 && pos.цена > 0);
         return validPositions.length > 0;
-    }, [createToken, loading, selectedSupplierId, позиции]);
+    }, [createToken, loading, selectedSupplierId, формаДанные.использовать_доставку, формаДанные.транспорт_id, позиции]);
 
     const productsById = useMemo(() => {
         const map = new Map<number, Product>();
@@ -140,6 +165,8 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
         resetModalState(nextVatRateId);
         fetchProducts();
         fetchSuppliers();
+        void fetchOrders();
+        void fetchTransports();
         void fetchCreateToken();
         void fetchDefaultVatRateId().then((value) => {
             setDefaultVatRateId(value);
@@ -198,6 +225,25 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
         }
     };
 
+    const fetchOrders = async () => {
+        try {
+            const response = await fetch('/api/orders');
+            const data = await response.json().catch(() => []);
+            const list = Array.isArray(data) ? data : [];
+            setOrders(
+                list
+                    .map((item: any) => ({
+                        id: Number(item?.id),
+                        клиент_название: String(item?.клиент_название || ''),
+                    }))
+                    .filter((item: OrderOption) => Number.isFinite(item.id) && item.id > 0)
+            );
+        } catch (fetchOrdersError) {
+            console.error('Error fetching orders:', fetchOrdersError);
+            setOrders([]);
+        }
+    };
+
     const fetchCreateToken = async () => {
         try {
             const response = await fetch('/api/purchases/create-token');
@@ -212,6 +258,26 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
             console.error('Error fetching purchase create token:', tokenError);
             setCreateToken('');
             setError(tokenError instanceof Error ? tokenError.message : 'Не удалось подготовить создание закупки');
+        }
+    };
+
+    const fetchTransports = async () => {
+        try {
+            const response = await fetch('/api/transport');
+            const data = await response.json().catch(() => []);
+            const list = Array.isArray(data)
+                ? data
+                : Array.isArray(data?.transport)
+                    ? data.transport
+                    : [];
+            setTransports(
+                list
+                    .map((item: any) => ({ id: Number(item?.id), название: String(item?.название || '') }))
+                    .filter((item: TransportOption) => Number.isFinite(item.id) && item.id > 0)
+            );
+        } catch (transportError) {
+            console.error('Error fetching transports:', transportError);
+            setTransports([]);
         }
     };
 
@@ -266,6 +332,10 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
                 throw new Error('Добавьте хотя бы одну позицию с корректными данными');
             }
 
+            if (формаДанные.использовать_доставку && !формаДанные.транспорт_id) {
+                throw new Error('Выберите транспортную компанию для доставки закупки');
+            }
+
             const response = await fetch('/api/purchases', {
                 method: 'POST',
                 headers: {
@@ -275,9 +345,14 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
                 body: JSON.stringify({
                     create_token: createToken,
                     поставщик_id: selectedSupplierId,
-                    заявка_id: заявка_id || null,
+                    заявка_id: selectedOrderId || null,
                     статус: формаДанные.статус,
                     дата_поступления: формаДанные.дата_поступления || null,
+                    использовать_доставку: формаДанные.использовать_доставку,
+                    транспорт_id: формаДанные.использовать_доставку ? Number(формаДанные.транспорт_id) : null,
+                    стоимость_доставки: формаДанные.использовать_доставку && формаДанные.стоимость_доставки.trim()
+                        ? Number(формаДанные.стоимость_доставки)
+                        : null,
                     позиции: validPositions
                 }),
             });
@@ -290,7 +365,7 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
             onPurchaseCreated();
             onClose();
             // Reset form
-            setФормаДанные({ статус: 'заказано', дата_поступления: '' });
+            setФормаДанные({ статус: 'заказано', дата_поступления: '', использовать_доставку: false, транспорт_id: 0, стоимость_доставки: '' });
             setПозиции([{ товар_id: 0, количество: 1, цена: 0, ндс_id: defaultVatRateId, включена: true }]);
         } catch (error) {
             setError(error instanceof Error ? error.message : 'Неизвестная ошибка');
@@ -305,6 +380,11 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
             sum + calculateVatAmountsFromLine(pos.количество, pos.цена, getVatRateOption(pos.ндс_id).rate).total
         ), 0);
     };
+
+    const deliveryAmount = формаДанные.использовать_доставку
+        ? Number(формаДанные.стоимость_доставки || 0)
+        : 0;
+    const grandTotalAmount = getTotalAmount() + deliveryAmount;
 
     if (!isOpen) return null;
 
@@ -365,6 +445,42 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
                             </Box>
 
                             <Box className={styles.formGroup}>
+                                <Text as="label" size="2" weight="medium">Заявка</Text>
+                                {lockOrderId ? (
+                                    <TextField.Root
+                                        value={
+                                            selectedOrderId
+                                                ? `#${selectedOrderId}${orders.find((item) => item.id === selectedOrderId)?.клиент_название ? ` — ${orders.find((item) => item.id === selectedOrderId)?.клиент_название}` : ''}`
+                                                : ''
+                                        }
+                                        readOnly
+                                        className={styles.textField}
+                                        size="2"
+                                    />
+                                ) : (
+                                    <Select.Root
+                                        value={selectedOrderId ? String(selectedOrderId) : EMPTY_SELECT_VALUE}
+                                        onValueChange={(value) => setSelectedOrderId(value === EMPTY_SELECT_VALUE ? 0 : Number(value) || 0)}
+                                    >
+                                        <Select.Trigger variant="surface" color="gray" className={styles.selectTrigger} placeholder="Без заявки" />
+                                        <Select.Content position="popper" variant="solid" color="gray" highContrast>
+                                            <Select.Item value={EMPTY_SELECT_VALUE}>Без заявки</Select.Item>
+                                            {orders.map((order) => (
+                                                <Select.Item key={order.id} value={String(order.id)}>
+                                                    #{order.id}{order.клиент_название ? ` — ${order.клиент_название}` : ''}
+                                                </Select.Item>
+                                            ))}
+                                        </Select.Content>
+                                    </Select.Root>
+                                )}
+                                {!selectedOrderId ? (
+                                    <Text as="span" size="1" color="gray">
+                                        Если заявку не выбирать, закупка будет оформлена как поступление сразу на склад.
+                                    </Text>
+                                ) : null}
+                            </Box>
+
+                            <Box className={styles.formGroup}>
                                 <Text as="label" size="2" weight="medium">Дата поступления (опционально)</Text>
                                 <Flex gap="2" wrap="wrap">
                                     <TextField.Root
@@ -381,6 +497,58 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
 
                                 </Flex>
                             </Box>
+
+                            <Box className={styles.formGroup}>
+                                <label className={styles.checkboxRow}>
+                                    <input
+                                        type="checkbox"
+                                        checked={формаДанные.использовать_доставку}
+                                        onChange={(e) => setФормаДанные((p) => ({
+                                            ...p,
+                                            использовать_доставку: e.target.checked,
+                                            транспорт_id: e.target.checked ? p.транспорт_id : 0,
+                                            стоимость_доставки: e.target.checked ? p.стоимость_доставки : '',
+                                        }))}
+                                        className={styles.includeCheckbox}
+                                    />
+                                    <span>Использовать доставку</span>
+                                </label>
+                                <Text as="span" size="1" color="gray">
+                                    Если выключено, считаем, что закупку забрали сами.
+                                </Text>
+                            </Box>
+
+                            {формаДанные.использовать_доставку ? (
+                                <>
+                                    <Box className={styles.formGroup}>
+                                        <Text as="label" size="2" weight="medium">Кто доставляет</Text>
+                                        <Select.Root
+                                            value={формаДанные.транспорт_id ? String(формаДанные.транспорт_id) : ''}
+                                            onValueChange={(value) => setФормаДанные((p) => ({ ...p, транспорт_id: value ? Number(value) : 0 }))}
+                                        >
+                                            <Select.Trigger variant="surface" color="gray" className={styles.selectTrigger} placeholder="Выберите ТК" />
+                                            <Select.Content position="popper" variant="solid" color="gray" highContrast>
+                                                {transports.map((transport) => (
+                                                    <Select.Item key={transport.id} value={String(transport.id)}>
+                                                        {transport.название}
+                                                    </Select.Item>
+                                                ))}
+                                            </Select.Content>
+                                        </Select.Root>
+                                    </Box>
+
+                                    <Box className={styles.formGroup}>
+                                        <Text as="label" size="2" weight="medium">Стоимость доставки (опционально)</Text>
+                                        <TextField.Root
+                                            value={формаДанные.стоимость_доставки}
+                                            onChange={(e) => setФормаДанные((p) => ({ ...p, стоимость_доставки: e.target.value }))}
+                                            placeholder="400.00"
+                                            className={styles.textField}
+                                            size="2"
+                                        />
+                                    </Box>
+                                </>
+                            ) : null}
                         </div>
 
                         <Box className={styles.positionsSection}>
@@ -531,6 +699,7 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
                                                     highContrast
                                                     onClick={() => removePosition(index)}
                                                     disabled={позиции.length === 1}
+                                                    className={styles.removePositionButton}
                                                 >
                                                     ×
                                                 </Button>
@@ -541,9 +710,17 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
                             </Box>
 
                             <Box className={styles.totalAmount}>
-                                <Text weight="bold">
-                                    Общая сумма:{' '}
+                                <Text size="2" className={styles.totalRowSecondary}>
+                                    Сумма товаров:{' '}
                                     {getTotalAmount().toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' })}
+                                </Text>
+                                <Text size="2" className={styles.totalRowSecondary}>
+                                    Стоимость доставки:{' '}
+                                    {deliveryAmount.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' })}
+                                </Text>
+                                <Text weight="bold" className={styles.totalRowPrimary}>
+                                    Общая сумма:{' '}
+                                    {grandTotalAmount.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' })}
                                 </Text>
                             </Box>
                         </Box>

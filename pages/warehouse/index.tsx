@@ -987,6 +987,10 @@ export default function Warehouse() {
                                                                     <Link href={`/purchases/${m.закупка_номер}`} className={styles.movementLink}>
                                                                         Закупка #{m.закупка_номер}
                                                                     </Link>
+                                                                ) : m.отгрузка_номер ? (
+                                                                    <Link href={`/shipments/${m.отгрузка_номер}`} className={styles.movementLink}>
+                                                                        Отгрузка #{m.отгрузка_номер}
+                                                                    </Link>
                                                                 ) : (
                                                                     <span className={styles.muted}>—</span>
                                                                 )}

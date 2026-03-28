@@ -40,6 +40,91 @@
   margin-bottom: 20px;
 }
 
+.searchSelect {
+  position: relative;
+  min-width: 0;
+}
+
+.searchSelectInput:global(.rt-TextFieldRoot) {
+  width: 100%;
+}
+
+.searchSelectMenu {
+  position: fixed;
+  max-height: 240px;
+  overflow-y: auto;
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 16px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+  z-index: 2147483647;
+  padding: 8px;
+  pointer-events: auto;
+  box-sizing: border-box;
+}
+
+.searchSelectOption {
+  width: 100%;
+  border: none;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: #1f2937;
+  cursor: pointer !important;
+  font-size: 14px;
+}
+
+.searchSelectOption:hover {
+  background: #1f2328 !important;
+  color: #ffffff !important;
+}
+
+.searchSelectOptionActive {
+  background: #1f2328 !important;
+  color: #ffffff !important;
+  font-weight: 600;
+}
+
+.searchSelectOptionSelected {
+  font-weight: 500;
+}
+
+.searchSelectOptionLabel {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.searchSelectOptionCheck {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+}
+
+.searchSelectOptionCheckSpacer {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+}
+
+.searchSelectEmpty {
+  padding: 10px 12px;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.positionSearchSelectInput:global(.rt-TextFieldRoot) {
+  width: 100%;
+}
+
+.positionSearchSelectMenu {
+  min-width: 0;
+  width: auto;
+}
+
 .formGroup :global(.rt-Text),
 .formGroup :global(label) {
   display: block;
@@ -114,7 +199,7 @@
 
 .positionsSection {
   margin-top: 6px;
-  --positions-grid: minmax(220px, 2.2fr) 72px 92px 124px 156px 108px 138px 138px 40px;
+  --positions-grid: minmax(220px, 2.2fr) 72px 92px 124px 144px 156px 108px 138px 138px 40px;
 }
 
 .positionsTable {
@@ -316,7 +401,7 @@ box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
   grid-template-columns: var(--positions-grid);
   gap: 10px;
   padding: 12px;
-  min-width: 1160px;
+  min-width: 1300px;
 }
 
 .positionHeaderCell {
@@ -342,7 +427,7 @@ box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
   background: #ffffff;
   border-radius: 12px;
   border: 1px solid #e0e0e0;
-  min-width: 1160px;
+  min-width: 1300px;
   box-sizing: border-box;
 }
 
@@ -390,6 +475,25 @@ box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
   padding: 0;
   justify-self: end;
   align-self: start;
+  border-radius: 12px !important;
+  border: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  color: #6b7280 !important;
+}
+
+.removePositionButton:global(.rt-BaseButton):hover,
+.removePositionButton:global(.rt-Button):hover {
+  background: #f3f4f6 !important;
+  color: #111827 !important;
+}
+
+.removePositionButton:global(.rt-BaseButton):focus-visible,
+.removePositionButton:global(.rt-Button):focus-visible,
+.removePositionButton:global(.rt-BaseButton):focus-within,
+.removePositionButton:global(.rt-Button):focus-within {
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 

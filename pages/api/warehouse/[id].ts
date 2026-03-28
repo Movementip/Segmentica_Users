@@ -21,8 +21,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           т."цена_закупки" as товар_цена_закупки,
           т."цена_продажи" as товар_цена_продажи,
           CASE 
-            WHEN с."количество" <= т."минимальный_остаток" THEN 'critical'
-            WHEN с."количество" <= т."минимальный_остаток" * 2 THEN 'low' 
+            WHEN т."минимальный_остаток" > 0 AND с."количество" <= т."минимальный_остаток" THEN 'critical'
+            WHEN т."минимальный_остаток" > 0 AND с."количество" <= т."минимальный_остаток" * 2 THEN 'low' 
             ELSE 'normal'
           END as stock_status
         FROM "Склад" с
@@ -44,12 +44,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           з."id" as заявка_номер,
           к."название" as клиент_название,
           зак."id" as закупка_номер,
-          п."название" as поставщик_название
+          п."название" as поставщик_название,
+          отг."id" as отгрузка_номер
         FROM "Движения_склада" дс
         LEFT JOIN "Заявки" з ON дс."заявка_id" = з.id
         LEFT JOIN "Клиенты" к ON з."клиент_id" = к.id
         LEFT JOIN "Закупки" зак ON дс."закупка_id" = зак.id
         LEFT JOIN "Поставщики" п ON зак."поставщик_id" = п.id
+        LEFT JOIN "Отгрузки" отг ON дс."отгрузка_id" = отг.id
         WHERE дс."товар_id" = $1
         ORDER BY дс."дата_операции" DESC
         LIMIT 100

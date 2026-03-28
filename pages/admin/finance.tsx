@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { withLayout } from '../../layout';
-import { Badge, Box, Button, Card, Dialog, Flex, Grid, Select, Table, Text, TextArea, TextField } from '@radix-ui/themes';
-import { FiDollarSign, FiRefreshCw, FiSave, FiSearch } from 'react-icons/fi';
+import { Box, Button, Card, Dialog, Flex, Grid, Select, Table, Text, TextArea, TextField } from '@radix-ui/themes';
+import { FiDownload, FiFileText, FiPrinter, FiRefreshCw, FiSave, FiSearch } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
 import styles from './AdminFinance.module.css';
@@ -21,6 +21,12 @@ type FinanceEmployee = {
     totalPaid: number;
     paymentCount: number;
     lastPaymentDate: string | null;
+    currentAccrued: number;
+    currentWithheld: number;
+    currentPaid: number;
+    currentPayable: number;
+    suggestedPayments: FinanceSuggestedPayment[];
+    paymentHistory: FinancePayment[];
 };
 
 type FinancePayment = {
@@ -32,6 +38,31 @@ type FinancePayment = {
     type: string | null;
     status: string | null;
     comment: string | null;
+    accruedAmount: number;
+    withheldAmount: number;
+    paidAmount: number;
+    payableAmount: number;
+    paymentKind: string | null;
+    periodFrom: string | null;
+    periodTo: string | null;
+    calculation: Record<string, any> | null;
+};
+
+type FinanceSuggestedPayment = {
+    key: string;
+    type: 'advance' | 'salary_cycle' | 'vacation' | 'bonus';
+    encodedType: string;
+    label: string;
+    amount: number;
+    accruedAmount: number;
+    withheldAmount: number;
+    paidAmount: number;
+    payableAmount: number;
+    recommendedDate: string;
+    periodFrom: string | null;
+    periodTo: string | null;
+    note: string | null;
+    sourceSummary: string | null;
 };
 
 type FinancePayload = {
@@ -46,6 +77,11 @@ type FinancePayload = {
     };
 };
 
+type StatementPreviewState = {
+    title: string;
+    url: string;
+};
+
 function formatDate(value: string | null | undefined): string {
     if (!value) return '—';
     const parsed = new Date(value);
@@ -55,6 +91,51 @@ function formatDate(value: string | null | undefined): string {
 
 function formatCurrency(value: number | null | undefined): string {
     return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(Number(value) || 0);
+}
+
+function formatSuggestedPaymentLabel(value: FinanceSuggestedPayment | null | undefined): string {
+    if (!value) return 'Ручная выплата';
+    return value.label;
+}
+
+function getPrimarySuggestion(items: FinanceSuggestedPayment[]): FinanceSuggestedPayment | null {
+    if (!items.length) return null;
+
+    return items.reduce<FinanceSuggestedPayment | null>((best, item) => {
+        if (!best) return item;
+
+        const bestTime = new Date(best.recommendedDate).getTime();
+        const itemTime = new Date(item.recommendedDate).getTime();
+        if (itemTime !== bestTime) return itemTime > bestTime ? item : best;
+
+        const bestRank = best.type === 'salary_cycle' ? 3 : best.type === 'advance' ? 2 : best.type === 'vacation' ? 1 : 0;
+        const itemRank = item.type === 'salary_cycle' ? 3 : item.type === 'advance' ? 2 : item.type === 'vacation' ? 1 : 0;
+        return itemRank > bestRank ? item : best;
+    }, null);
+}
+
+function formatPeriod(dateFrom: string | null | undefined, dateTo: string | null | undefined): string {
+    if (!dateFrom && !dateTo) return '—';
+    if (dateFrom && dateTo) return `${formatDate(dateFrom)} - ${formatDate(dateTo)}`;
+    return formatDate(dateFrom || dateTo || '');
+}
+
+function buildStatementUrl(params: {
+    employeeId: number;
+    sourceType: 'current' | 'history';
+    format: 'html' | 'excel';
+    sourceKey?: string | null;
+    paymentId?: string | null;
+    disposition?: 'inline' | 'attachment';
+}): string {
+    const search = new URLSearchParams();
+    search.set('employeeId', String(params.employeeId));
+    search.set('sourceType', params.sourceType);
+    search.set('format', params.format);
+    search.set('disposition', params.disposition || 'attachment');
+    if (params.sourceKey) search.set('sourceKey', params.sourceKey);
+    if (params.paymentId) search.set('paymentId', params.paymentId);
+    return `/api/admin/finance/statement?${search.toString()}`;
 }
 
 function AdminFinancePage(): JSX.Element {
@@ -71,13 +152,22 @@ function AdminFinancePage(): JSX.Element {
     const [settings, setSettings] = useState<FinanceSettings>({ paymentsPerMonth: 2, firstDay: 10, secondDay: 25 });
     const [rateDrafts, setRateDrafts] = useState<Record<number, string>>({});
     const [paymentDialogEmployee, setPaymentDialogEmployee] = useState<FinanceEmployee | null>(null);
-    const [paymentForm, setPaymentForm] = useState({ amount: '', date: new Date().toISOString().slice(0, 10), comment: '' });
+    const [statementEmployee, setStatementEmployee] = useState<FinanceEmployee | null>(null);
+    const [statementPreview, setStatementPreview] = useState<StatementPreviewState | null>(null);
+    const [paymentForm, setPaymentForm] = useState({
+        suggestionKey: 'manual',
+        paymentType: 'зарплата',
+        amount: '',
+        date: new Date().toISOString().slice(0, 10),
+        comment: '',
+    });
     const [paymentError, setPaymentError] = useState<string | null>(null);
     const [totals, setTotals] = useState<FinancePayload['totals']>({ activeEmployees: 0, totalPaid: 0, paymentCount: 0 });
+    const previewFrameRef = useRef<HTMLIFrameElement | null>(null);
 
     const isDirector = Boolean(user?.roles?.includes('director'));
 
-    const loadData = async () => {
+    const loadData = useCallback(async () => {
         try {
             setLoading(true);
             setError(null);
@@ -101,13 +191,13 @@ function AdminFinancePage(): JSX.Element {
         } finally {
             setLoading(false);
         }
-    };
+    }, [months]);
 
     useEffect(() => {
         if (authLoading) return;
         if (!isDirector) return;
         void loadData();
-    }, [authLoading, isDirector, months]);
+    }, [authLoading, isDirector, loadData]);
 
     const filteredEmployees = useMemo(() => {
         const q = search.trim().toLowerCase();
@@ -118,6 +208,11 @@ function AdminFinancePage(): JSX.Element {
             String(employee.position || '').toLowerCase().includes(q)
         );
     }, [employees, search]);
+
+    const getSuggestionByKey = (employee: FinanceEmployee | null, key: string): FinanceSuggestedPayment | null => {
+        if (!employee) return null;
+        return employee.suggestedPayments.find((item) => item.key === key) || null;
+    };
 
     const handleSaveSettings = async () => {
         try {
@@ -176,12 +271,37 @@ function AdminFinancePage(): JSX.Element {
     };
 
     const openPaymentDialog = (employee: FinanceEmployee) => {
+        const firstSuggestion = getPrimarySuggestion(employee.suggestedPayments);
         setPaymentDialogEmployee(employee);
         setPaymentError(null);
         setPaymentForm({
-            amount: employee.rate == null ? '' : String(employee.rate),
-            date: new Date().toISOString().slice(0, 10),
-            comment: '',
+            suggestionKey: firstSuggestion?.key || 'manual',
+            paymentType: firstSuggestion?.encodedType || 'зарплата',
+            amount: firstSuggestion ? String(firstSuggestion.amount) : (employee.rate == null ? '' : String(employee.rate)),
+            date: firstSuggestion?.recommendedDate || new Date().toISOString().slice(0, 10),
+            comment: firstSuggestion?.note || '',
+        });
+    };
+
+    const handleSuggestionChange = (value: string) => {
+        setPaymentForm((prev) => {
+            const suggestion = getSuggestionByKey(paymentDialogEmployee, value);
+            if (!suggestion) {
+                return {
+                    ...prev,
+                    suggestionKey: 'manual',
+                    paymentType: 'зарплата',
+                };
+            }
+
+            return {
+                ...prev,
+                suggestionKey: suggestion.key,
+                paymentType: suggestion.encodedType,
+                amount: String(suggestion.amount),
+                date: suggestion.recommendedDate,
+                comment: suggestion.note || '',
+            };
         });
     };
 
@@ -201,6 +321,7 @@ function AdminFinancePage(): JSX.Element {
                     employeeId: paymentDialogEmployee.id,
                     amount: Number(paymentForm.amount),
                     date: paymentForm.date,
+                    paymentType: paymentForm.paymentType,
                     comment: paymentForm.comment,
                 }),
             });
@@ -218,6 +339,92 @@ function AdminFinancePage(): JSX.Element {
         } finally {
             setSaving(false);
         }
+    };
+
+    const handleBulkPayrollToday = async () => {
+        try {
+            setSaving(true);
+            setError(null);
+            setNotice(null);
+
+            const response = await fetch('/api/admin/finance', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    action: 'bulk-payroll-today',
+                }),
+            });
+            const data = (await response.json().catch(() => ({}))) as { error?: string };
+            if (!response.ok) {
+                throw new Error(data?.error || 'Ошибка массовой выплаты по графику');
+            }
+
+            setNotice('Все начисления, которые по графику нужно выплатить сегодня, проведены текущей датой.');
+            await loadData();
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Ошибка массовой выплаты по графику');
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const openStatementPreviewForSuggestion = (employee: FinanceEmployee, suggestion: FinanceSuggestedPayment) => {
+        setStatementPreview({
+            title: `${employee.fio} · ${suggestion.type === 'advance' ? 'Аванс' : suggestion.type === 'vacation' ? 'Отпускные' : suggestion.type === 'bonus' ? 'Премия' : 'Зарплата'}`,
+            url: buildStatementUrl({
+                employeeId: employee.id,
+                sourceType: 'current',
+                sourceKey: suggestion.key,
+                format: 'html',
+                disposition: 'inline',
+            }),
+        });
+    };
+
+    const openStatementPreviewForPayment = (employee: FinanceEmployee, payment: FinancePayment) => {
+        setStatementPreview({
+            title: `${employee.fio} · ${payment.paymentKind || payment.type || 'Выплата'}`,
+            url: buildStatementUrl({
+                employeeId: employee.id,
+                sourceType: 'history',
+                paymentId: payment.id,
+                format: 'html',
+                disposition: 'inline',
+            }),
+        });
+    };
+
+    const downloadStatementForSuggestion = (employee: FinanceEmployee, suggestion: FinanceSuggestedPayment, format: 'excel') => {
+        window.open(
+            buildStatementUrl({
+                employeeId: employee.id,
+                sourceType: 'current',
+                sourceKey: suggestion.key,
+                format,
+                disposition: 'attachment',
+            }),
+            '_blank',
+            'noopener,noreferrer'
+        );
+    };
+
+    const downloadStatementForPayment = (employee: FinanceEmployee, payment: FinancePayment, format: 'excel') => {
+        window.open(
+            buildStatementUrl({
+                employeeId: employee.id,
+                sourceType: 'history',
+                paymentId: payment.id,
+                format,
+                disposition: 'attachment',
+            }),
+            '_blank',
+            'noopener,noreferrer'
+        );
+    };
+
+    const handlePrintStatementPreview = () => {
+        previewFrameRef.current?.contentWindow?.focus();
+        previewFrameRef.current?.contentWindow?.print();
     };
 
     if (authLoading || loading) {
@@ -242,7 +449,7 @@ function AdminFinancePage(): JSX.Element {
                 <div className={styles.actions}>
                     <Select.Root value={months} onValueChange={setMonths}>
                         <Select.Trigger className={styles.periodSelect} />
-                        <Select.Content>
+                        <Select.Content className={styles.selectContent}>
                             <Select.Item value="1">1 месяц</Select.Item>
                             <Select.Item value="3">3 месяца</Select.Item>
                             <Select.Item value="6">6 месяцев</Select.Item>
@@ -257,7 +464,7 @@ function AdminFinancePage(): JSX.Element {
                 </div>
             </div>
 
-            <Grid columns={{ initial: '1', sm: '2', lg: '4' }} gap="4" className={styles.metricsGrid}>
+            <Grid columns={{ initial: '1', sm: '2', lg: '3' }} gap="4" className={styles.metricsGrid}>
                 <Card className={styles.metricCard}>
                     <Text size="2" color="gray">Активных сотрудников</Text>
                     <Text as="div" size="7" weight="bold">{totals.activeEmployees}</Text>
@@ -269,12 +476,6 @@ function AdminFinancePage(): JSX.Element {
                 <Card className={styles.metricCard}>
                     <Text size="2" color="gray">Всего выплат за период</Text>
                     <Text as="div" size="7" weight="bold">{totals.paymentCount}</Text>
-                </Card>
-                <Card className={styles.metricCard}>
-                    <Text size="2" color="gray">Статус модуля выплат</Text>
-                    <Badge variant="soft" color={paymentTableAvailable ? 'green' : 'orange'} highContrast className={styles.statusBadge}>
-                        {paymentTableAvailable ? 'ГОТОВ К РАБОТЕ' : 'ТРЕБУЕТ ПРОВЕРКИ'}
-                    </Badge>
                 </Card>
             </Grid>
 
@@ -304,7 +505,7 @@ function AdminFinancePage(): JSX.Element {
                             }))}
                         >
                             <Select.Trigger className={styles.fieldSelect} />
-                            <Select.Content>
+                            <Select.Content className={styles.selectContent}>
                                 <Select.Item value="1">1 раз в месяц</Select.Item>
                                 <Select.Item value="2">2 раза в месяц</Select.Item>
                             </Select.Content>
@@ -315,7 +516,7 @@ function AdminFinancePage(): JSX.Element {
                         <Text as="label" size="2" weight="medium">Первая дата начисления</Text>
                         <Select.Root value={String(settings.firstDay)} onValueChange={(value) => setSettings((prev) => ({ ...prev, firstDay: Number(value) }))}>
                             <Select.Trigger className={styles.fieldSelect} />
-                            <Select.Content>
+                            <Select.Content className={styles.selectContent}>
                                 {Array.from({ length: 31 }, (_, index) => index + 1).map((day) => (
                                     <Select.Item key={day} value={String(day)}>{day}</Select.Item>
                                 ))}
@@ -331,7 +532,7 @@ function AdminFinancePage(): JSX.Element {
                             disabled={settings.paymentsPerMonth !== 2}
                         >
                             <Select.Trigger className={styles.fieldSelect} />
-                            <Select.Content>
+                            <Select.Content className={styles.selectContent}>
                                 {Array.from({ length: 31 }, (_, index) => index + 1).map((day) => (
                                     <Select.Item key={day} value={String(day)}>{day}</Select.Item>
                                 ))}
@@ -353,6 +554,18 @@ function AdminFinancePage(): JSX.Element {
                             </TextField.Slot>
                         </TextField.Root>
                     </div>
+                    <div className={styles.tableToolbarActions}>
+                        <Button
+                            variant="surface"
+                            color="gray"
+                            highContrast
+                            className={`${styles.actionButton} ${styles.surfaceButton}`}
+                            onClick={() => void handleBulkPayrollToday()}
+                            disabled={!paymentTableAvailable || saving}
+                        >
+                            Провести выплаты сегодня
+                        </Button>
+                    </div>
                 </div>
 
                 <div className={styles.tableWrapper}>
@@ -363,13 +576,18 @@ function AdminFinancePage(): JSX.Element {
                                 <Table.ColumnHeaderCell>Сотрудник</Table.ColumnHeaderCell>
                                 <Table.ColumnHeaderCell>Должность</Table.ColumnHeaderCell>
                                 <Table.ColumnHeaderCell>Ставка</Table.ColumnHeaderCell>
+                                <Table.ColumnHeaderCell>Начислено</Table.ColumnHeaderCell>
+                                <Table.ColumnHeaderCell>Удержано</Table.ColumnHeaderCell>
                                 <Table.ColumnHeaderCell>Выплачено</Table.ColumnHeaderCell>
+                                <Table.ColumnHeaderCell>К выплате</Table.ColumnHeaderCell>
                                 <Table.ColumnHeaderCell>Последняя выплата</Table.ColumnHeaderCell>
                                 <Table.ColumnHeaderCell className={styles.actionsCell}>Действия</Table.ColumnHeaderCell>
                             </Table.Row>
                         </Table.Header>
                         <Table.Body>
-                            {filteredEmployees.map((employee) => (
+                            {filteredEmployees.map((employee) => {
+                                const primarySuggestion = getPrimarySuggestion(employee.suggestedPayments);
+                                return (
                                 <Table.Row key={employee.id}>
                                     <Table.Cell>#{employee.id}</Table.Cell>
                                     <Table.Cell>
@@ -400,23 +618,53 @@ function AdminFinancePage(): JSX.Element {
                                             </Button>
                                         </div>
                                     </Table.Cell>
-                                    <Table.Cell>{formatCurrency(employee.totalPaid)}</Table.Cell>
+                                    <Table.Cell>
+                                        {employee.suggestedPayments.length ? (
+                                            <div className={styles.suggestionCell}>
+                                                <div className={styles.suggestionAmount}>{formatCurrency(employee.currentAccrued)}</div>
+                                                <div className={styles.suggestionMeta}>{formatSuggestedPaymentLabel(primarySuggestion)}</div>
+                                                {employee.suggestedPayments.length > 1 ? (
+                                                    <div className={styles.employeeMeta}>Ещё оснований: {employee.suggestedPayments.length - 1}</div>
+                                                ) : null}
+                                            </div>
+                                        ) : (
+                                            <div className={styles.suggestionCell}>
+                                                <div className={styles.suggestionAmount}>—</div>
+                                                <div className={styles.suggestionMeta}>Нет начислений к выплате</div>
+                                            </div>
+                                        )}
+                                    </Table.Cell>
+                                    <Table.Cell>{formatCurrency(employee.currentWithheld)}</Table.Cell>
+                                    <Table.Cell>{formatCurrency(employee.currentPaid)}</Table.Cell>
+                                    <Table.Cell>{formatCurrency(employee.currentPayable)}</Table.Cell>
                                     <Table.Cell>{formatDate(employee.lastPaymentDate)}</Table.Cell>
                                     <Table.Cell className={styles.actionsCell}>
-                                        <Button
-                                            variant="solid"
-                                            color="gray"
-                                            highContrast
-                                            className={styles.payButton}
-                                            onClick={() => openPaymentDialog(employee)}
-                                            disabled={!paymentTableAvailable || saving}
-                                        >
-                                            <FiDollarSign className={styles.icon} />
-                                            Выплатить сейчас
-                                        </Button>
+                                        <Flex gap="2" justify="end" wrap="wrap">
+                                            <Button
+                                                variant="surface"
+                                                color="gray"
+                                                highContrast
+                                                className={`${styles.inlineButton} ${styles.surfaceButton}`}
+                                                onClick={() => setStatementEmployee(employee)}
+                                            >
+                                                <FiFileText className={styles.icon} />
+                                                Расчетка
+                                            </Button>
+                                            <Button
+                                                variant="solid"
+                                                color="gray"
+                                                highContrast
+                                                className={styles.payButton}
+                                                onClick={() => openPaymentDialog(employee)}
+                                                disabled={!paymentTableAvailable || saving}
+                                            >
+                                                Выплатить сейчас
+                                            </Button>
+                                        </Flex>
                                     </Table.Cell>
                                 </Table.Row>
-                            ))}
+                                );
+                            })}
                         </Table.Body>
                     </Table.Root>
                 </div>
@@ -447,8 +695,8 @@ function AdminFinancePage(): JSX.Element {
                                     <Table.Cell>{formatDate(payment.date)}</Table.Cell>
                                     <Table.Cell>{payment.employeeName || '—'}</Table.Cell>
                                     <Table.Cell>{payment.type || '—'}</Table.Cell>
-                                    <Table.Cell>{payment.status || '—'}</Table.Cell>
-                                    <Table.Cell>{payment.comment || '—'}</Table.Cell>
+                                    <Table.Cell>{payment.status?.trim() || 'Выплачено'}</Table.Cell>
+                                    <Table.Cell>{payment.comment?.trim() || payment.calculation?.note || '—'}</Table.Cell>
                                     <Table.Cell className={styles.actionsCell}>{formatCurrency(payment.amount)}</Table.Cell>
                                 </Table.Row>
                             )) : (
@@ -471,6 +719,42 @@ function AdminFinancePage(): JSX.Element {
                     </Dialog.Description>
 
                     <div className={styles.dialogForm}>
+                        {paymentDialogEmployee?.suggestedPayments?.length ? (
+                            <div className={styles.field}>
+                                <Text as="label" size="2" weight="medium">Основание выплаты</Text>
+                                <Select.Root value={paymentForm.suggestionKey} onValueChange={handleSuggestionChange}>
+                                    <Select.Trigger className={styles.fieldSelect} />
+                                    <Select.Content className={styles.selectContent}>
+                                        {paymentDialogEmployee.suggestedPayments.map((suggestion) => (
+                                            <Select.Item key={suggestion.key} value={suggestion.key}>
+                                                {suggestion.type === 'vacation' ? 'Отпускные' : suggestion.type === 'advance' ? 'Аванс' : 'Зарплата'} · {formatCurrency(suggestion.amount)}
+                                            </Select.Item>
+                                        ))}
+                                        <Select.Item value="manual">Ручная выплата</Select.Item>
+                                    </Select.Content>
+                                </Select.Root>
+                                {getSuggestionByKey(paymentDialogEmployee, paymentForm.suggestionKey)?.note ? (
+                                    <div className={styles.helpText}>
+                                        {getSuggestionByKey(paymentDialogEmployee, paymentForm.suggestionKey)?.note}
+                                    </div>
+                                ) : null}
+                            </div>
+                        ) : null}
+                        {paymentForm.suggestionKey === 'manual' ? (
+                            <div className={styles.field}>
+                                <Text as="label" size="2" weight="medium">Тип выплаты</Text>
+                                <Select.Root
+                                    value={paymentForm.paymentType}
+                                    onValueChange={(value) => setPaymentForm((prev) => ({ ...prev, paymentType: value }))}
+                                >
+                                    <Select.Trigger className={styles.fieldSelect} />
+                                    <Select.Content className={styles.selectContent}>
+                                        <Select.Item value="зарплата">Зарплата</Select.Item>
+                                        <Select.Item value="премия">Премия</Select.Item>
+                                    </Select.Content>
+                                </Select.Root>
+                            </div>
+                        ) : null}
                         <div className={styles.field}>
                             <Text as="label" size="2" weight="medium">Сумма</Text>
                             <TextField.Root
@@ -509,8 +793,215 @@ function AdminFinancePage(): JSX.Element {
                             Закрыть
                         </Button>
                         <Button variant="solid" color="gray" highContrast className={styles.primaryButton} onClick={() => void handlePayNow()} disabled={saving}>
-                            <FiDollarSign className={styles.icon} />
                             {saving ? 'Сохранение…' : 'Выплатить'}
+                        </Button>
+                    </Flex>
+                </Dialog.Content>
+            </Dialog.Root>
+
+            <Dialog.Root open={Boolean(statementEmployee)} onOpenChange={(open) => (!open ? setStatementEmployee(null) : undefined)}>
+                <Dialog.Content className={styles.paymentDialog}>
+                    <Dialog.Title>Расчетка сотрудника</Dialog.Title>
+                    <Dialog.Description>
+                        {statementEmployee ? `${statementEmployee.fio} (${statementEmployee.position || '—'})` : '—'}
+                    </Dialog.Description>
+
+                    {statementEmployee ? (
+                        <div className={styles.dialogForm}>
+                            <Grid columns={{ initial: '1', sm: '2', lg: '4' }} gap="3">
+                                <Card className={styles.statementMetricCard}>
+                                    <Text size="2" color="gray">Начислено</Text>
+                                    <Text as="div" size="5" weight="bold">{formatCurrency(statementEmployee.currentAccrued)}</Text>
+                                </Card>
+                                <Card className={styles.statementMetricCard}>
+                                    <Text size="2" color="gray">Удержано</Text>
+                                    <Text as="div" size="5" weight="bold">{formatCurrency(statementEmployee.currentWithheld)}</Text>
+                                </Card>
+                                <Card className={styles.statementMetricCard}>
+                                    <Text size="2" color="gray">Выплачено</Text>
+                                    <Text as="div" size="5" weight="bold">{formatCurrency(statementEmployee.currentPaid)}</Text>
+                                </Card>
+                                <Card className={styles.statementMetricCard}>
+                                    <Text size="2" color="gray">К выплате</Text>
+                                    <Text as="div" size="5" weight="bold">{formatCurrency(statementEmployee.currentPayable)}</Text>
+                                </Card>
+                            </Grid>
+
+                            <div className={styles.statementBlock}>
+                                <Text size="3" weight="bold">Текущие основания</Text>
+                                <div className={styles.tableWrapper}>
+                                    <Table.Root variant="surface" className={styles.table}>
+                                        <Table.Header>
+                                            <Table.Row>
+                                                <Table.ColumnHeaderCell>Вид</Table.ColumnHeaderCell>
+                                                <Table.ColumnHeaderCell>Период</Table.ColumnHeaderCell>
+                                                <Table.ColumnHeaderCell>Начислено</Table.ColumnHeaderCell>
+                                                <Table.ColumnHeaderCell>Удержано</Table.ColumnHeaderCell>
+                                                <Table.ColumnHeaderCell>К выплате</Table.ColumnHeaderCell>
+                                                <Table.ColumnHeaderCell>Источник</Table.ColumnHeaderCell>
+                                                <Table.ColumnHeaderCell className={styles.actionsCell}>Документы</Table.ColumnHeaderCell>
+                                            </Table.Row>
+                                        </Table.Header>
+                                        <Table.Body>
+                                            {statementEmployee.suggestedPayments.length ? statementEmployee.suggestedPayments.map((item) => (
+                                                <Table.Row key={item.key}>
+                                                    <Table.Cell>{item.type === 'advance' ? 'Аванс' : item.type === 'vacation' ? 'Отпускные' : 'Зарплата'}</Table.Cell>
+                                                    <Table.Cell>{formatPeriod(item.periodFrom, item.periodTo)}</Table.Cell>
+                                                    <Table.Cell>{formatCurrency(item.accruedAmount)}</Table.Cell>
+                                                    <Table.Cell>{formatCurrency(item.withheldAmount)}</Table.Cell>
+                                                    <Table.Cell>{formatCurrency(item.payableAmount)}</Table.Cell>
+                                                    <Table.Cell>{item.sourceSummary || item.note || '—'}</Table.Cell>
+                                                    <Table.Cell className={styles.actionsCell}>
+                                                        <Flex gap="2" justify="end" wrap="wrap" className={styles.statementActions}>
+                                                            <Button
+                                                                variant="surface"
+                                                                color="gray"
+                                                                highContrast
+                                                                className={`${styles.inlineButton} ${styles.surfaceButton}`}
+                                                                onClick={() => openStatementPreviewForSuggestion(statementEmployee, item)}
+                                                            >
+                                                                Просмотр
+                                                            </Button>
+                                                            <Button
+                                                                variant="surface"
+                                                                color="gray"
+                                                                highContrast
+                                                                className={`${styles.inlineButton} ${styles.surfaceButton}`}
+                                                                onClick={() => downloadStatementForSuggestion(statementEmployee, item, 'excel')}
+                                                            >
+                                                                Excel
+                                                            </Button>
+                                                        </Flex>
+                                                    </Table.Cell>
+                                                </Table.Row>
+                                            )) : (
+                                                <Table.Row>
+                                                    <Table.Cell colSpan={7}>
+                                                        <Text color="gray">Сейчас открытых начислений нет.</Text>
+                                                    </Table.Cell>
+                                                </Table.Row>
+                                            )}
+                                        </Table.Body>
+                                    </Table.Root>
+                                </div>
+                            </div>
+
+                            <div className={styles.statementBlock}>
+                                <Text size="3" weight="bold">Прошлые выплаты</Text>
+                                <div className={styles.tableWrapper}>
+                                    <Table.Root variant="surface" className={styles.table}>
+                                        <Table.Header>
+                                            <Table.Row>
+                                                <Table.ColumnHeaderCell>Дата</Table.ColumnHeaderCell>
+                                                <Table.ColumnHeaderCell>Вид</Table.ColumnHeaderCell>
+                                                <Table.ColumnHeaderCell>Период</Table.ColumnHeaderCell>
+                                                <Table.ColumnHeaderCell>Начислено</Table.ColumnHeaderCell>
+                                                <Table.ColumnHeaderCell>Удержано</Table.ColumnHeaderCell>
+                                                <Table.ColumnHeaderCell>Выплачено</Table.ColumnHeaderCell>
+                                                <Table.ColumnHeaderCell>Комментарий</Table.ColumnHeaderCell>
+                                                <Table.ColumnHeaderCell className={styles.actionsCell}>Документы</Table.ColumnHeaderCell>
+                                            </Table.Row>
+                                        </Table.Header>
+                                        <Table.Body>
+                                            {statementEmployee.paymentHistory.length ? statementEmployee.paymentHistory.map((payment) => (
+                                                <Table.Row key={payment.id}>
+                                                    <Table.Cell>{formatDate(payment.date)}</Table.Cell>
+                                                    <Table.Cell>{payment.paymentKind || payment.type || '—'}</Table.Cell>
+                                                    <Table.Cell>{formatPeriod(payment.periodFrom, payment.periodTo)}</Table.Cell>
+                                                    <Table.Cell>{formatCurrency(payment.accruedAmount || payment.amount)}</Table.Cell>
+                                                    <Table.Cell>{formatCurrency(payment.withheldAmount)}</Table.Cell>
+                                                    <Table.Cell>{formatCurrency(payment.paidAmount || payment.amount)}</Table.Cell>
+                                                    <Table.Cell>{payment.comment?.trim() || payment.calculation?.note || '—'}</Table.Cell>
+                                                    <Table.Cell className={styles.actionsCell}>
+                                                        <Flex gap="2" justify="end" wrap="wrap" className={styles.statementActions}>
+                                                            <Button
+                                                                variant="surface"
+                                                                color="gray"
+                                                                highContrast
+                                                                className={`${styles.inlineButton} ${styles.surfaceButton}`}
+                                                                onClick={() => openStatementPreviewForPayment(statementEmployee, payment)}
+                                                            >
+                                                                Просмотр
+                                                            </Button>
+                                                            <Button
+                                                                variant="surface"
+                                                                color="gray"
+                                                                highContrast
+                                                                className={`${styles.inlineButton} ${styles.surfaceButton}`}
+                                                                onClick={() => downloadStatementForPayment(statementEmployee, payment, 'excel')}
+                                                            >
+                                                                Excel
+                                                            </Button>
+                                                        </Flex>
+                                                    </Table.Cell>
+                                                </Table.Row>
+                                            )) : (
+                                                <Table.Row>
+                                                    <Table.Cell colSpan={8}>
+                                                        <Text color="gray">История выплат пока пуста.</Text>
+                                                    </Table.Cell>
+                                                </Table.Row>
+                                            )}
+                                        </Table.Body>
+                                    </Table.Root>
+                                </div>
+                            </div>
+                        </div>
+                    ) : null}
+
+                    <Flex justify="end" gap="3" mt="4">
+                        <Button variant="surface" color="gray" highContrast className={`${styles.actionButton} ${styles.surfaceButton}`} onClick={() => setStatementEmployee(null)}>
+                            Закрыть
+                        </Button>
+                    </Flex>
+                </Dialog.Content>
+            </Dialog.Root>
+
+            <Dialog.Root open={Boolean(statementPreview)} onOpenChange={(open) => (!open ? setStatementPreview(null) : undefined)}>
+                <Dialog.Content className={styles.previewDialog}>
+                    <Dialog.Title>{statementPreview?.title || 'Предпросмотр расчетки'}</Dialog.Title>
+                    <Dialog.Description>Документ сформирован из xlsx-шаблона и показан в браузере.</Dialog.Description>
+
+                    <Box mt="3">
+                        {statementPreview ? (
+                            <iframe
+                                ref={previewFrameRef}
+                                src={statementPreview.url}
+                                title={statementPreview.title}
+                                className={styles.previewFrame}
+                            />
+                        ) : null}
+                    </Box>
+
+                    <Flex justify="end" gap="3" mt="4" wrap="wrap">
+                        <Button
+                            variant="surface"
+                            color="gray"
+                            highContrast
+                            className={`${styles.actionButton} ${styles.surfaceButton}`}
+                            onClick={handlePrintStatementPreview}
+                        >
+                            <FiPrinter className={styles.icon} />
+                            Печать
+                        </Button>
+                        <Button
+                            variant="surface"
+                            color="gray"
+                            highContrast
+                            className={`${styles.actionButton} ${styles.surfaceButton}`}
+                            onClick={() => statementPreview ? window.open(statementPreview.url, '_blank', 'noopener,noreferrer') : undefined}
+                        >
+                            <FiDownload className={styles.icon} />
+                            Открыть в новой вкладке
+                        </Button>
+                        <Button
+                            variant="surface"
+                            color="gray"
+                            highContrast
+                            className={`${styles.actionButton} ${styles.surfaceButton}`}
+                            onClick={() => setStatementPreview(null)}
+                        >
+                            Закрыть
                         </Button>
                     </Flex>
                 </Dialog.Content>

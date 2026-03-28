@@ -13,6 +13,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Badge, Box, Button, Dialog, DropdownMenu, Flex, Select, Table, Tabs, Text, TextArea, TextField } from '@radix-ui/themes';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { getOrderExecutionModeLabel, type OrderExecutionMode } from '../../lib/orderModes';
 
 const MotionTableRow = motion(Table.Row);
 
@@ -20,6 +21,7 @@ interface Order {
     id: number;
     клиент_id: number;
     менеджер_id?: number;
+    режим_исполнения: OrderExecutionMode;
     дата_создания: string;
     дата_выполнения?: string;
     статус: string;
@@ -109,13 +111,14 @@ function OrdersPage(): JSX.Element {
     // Filters state
     const [filters, setFilters] = useState({
         status: 'all',
+        executionMode: 'all',
         sortBy: 'date-desc',
         clientId: 'all',
         managerName: '',
         clientName: '',
     });
 
-    const syncOrdersUrl = (next: { clientId: string; status: string; managerName: string; sortBy: string }) => {
+    const syncOrdersUrl = (next: { clientId: string; status: string; executionMode: string; managerName: string; sortBy: string }) => {
         const query = { ...router.query } as Record<string, any>;
 
         if (next.clientId && next.clientId !== 'all') query.client_id = String(next.clientId);
@@ -123,6 +126,9 @@ function OrdersPage(): JSX.Element {
 
         if (next.status && next.status !== 'all') query.status = String(next.status);
         else delete query.status;
+
+        if (next.executionMode && next.executionMode !== 'all') query.execution_mode = String(next.executionMode);
+        else delete query.execution_mode;
 
         if ((next.managerName || '').trim()) query.manager = String(next.managerName).trim();
         else delete query.manager;
@@ -176,11 +182,13 @@ function OrdersPage(): JSX.Element {
         if (!router.isReady) return;
         const cidRaw = router.query.client_id;
         const statusRaw = router.query.status;
+        const executionModeRaw = router.query.execution_mode;
         const managerRaw = router.query.manager;
         const sortRaw = router.query.sort;
 
         const cid = Array.isArray(cidRaw) ? cidRaw[0] : cidRaw;
         const st = Array.isArray(statusRaw) ? statusRaw[0] : statusRaw;
+        const em = Array.isArray(executionModeRaw) ? executionModeRaw[0] : executionModeRaw;
         const mg = Array.isArray(managerRaw) ? managerRaw[0] : managerRaw;
         const sr = Array.isArray(sortRaw) ? sortRaw[0] : sortRaw;
 
@@ -188,6 +196,7 @@ function OrdersPage(): JSX.Element {
             ...prev,
             clientId: cid ? String(cid) : 'all',
             status: st ? String(st) : prev.status,
+            executionMode: em ? String(em) : 'all',
             managerName: mg ? String(mg) : prev.managerName,
             sortBy: sr ? String(sr) : prev.sortBy,
         }));
@@ -396,37 +405,69 @@ function OrdersPage(): JSX.Element {
             setOperationLoading(true);
             setError(null);
 
+            const shouldUseDirectPositions = order.режим_исполнения === 'direct';
             const [orderResponse, missingResponse] = await Promise.all([
                 fetch(`/api/orders/${order.id}`),
-                fetch(`/api/missing-products?order_id=${order.id}`),
+                shouldUseDirectPositions ? Promise.resolve(null) : fetch(`/api/missing-products?order_id=${order.id}`),
             ]);
 
             const orderData = await orderResponse.json().catch(() => ({}));
-            const missingData = await missingResponse.json().catch(() => ([]));
+            const missingData = missingResponse ? await missingResponse.json().catch(() => ([])) : [];
 
             if (!orderResponse.ok) {
                 throw new Error((orderData as any)?.error || 'Не удалось загрузить позиции заявки');
             }
 
-            if (!missingResponse.ok) {
+            if (missingResponse && !missingResponse.ok) {
                 throw new Error((missingData as any)?.error || 'Не удалось загрузить недостающие товары');
             }
 
-            const activeMissingPositions = (Array.isArray(missingData) ? missingData : [])
-                .filter((item: any) => item && Number(item.недостающее_количество) > 0 && item.статус !== 'получено')
-                .map((item: any) => {
-                    const position = (orderData as any)?.позиции?.find((row: any) => Number(row.товар_id) === Number(item.товар_id));
-                    return {
+            let directRemainingByProductId = new Map<number, number>();
+            if (shouldUseDirectPositions) {
+                const workflowResponse = await fetch(`/api/orders/${order.id}/workflow`);
+                const workflowData = await workflowResponse.json().catch(() => ({}));
+
+                if (!workflowResponse.ok) {
+                    throw new Error((workflowData as any)?.error || 'Не удалось загрузить workflow заявки');
+                }
+
+                directRemainingByProductId = new Map<number, number>(
+                    ((workflowData as any)?.positions || []).map((item: any) => [
+                        Number(item?.товар_id) || 0,
+                        Number(item?.осталось_закупить) || 0,
+                    ])
+                );
+            }
+
+            const activeMissingPositions = shouldUseDirectPositions
+                ? ((orderData as any)?.позиции || [])
+                    .filter((item: any) => item?.способ_обеспечения === 'purchase')
+                    .map((item: any) => ({
                         товар_id: Number(item.товар_id),
-                        количество: Number(item.недостающее_количество),
-                        ндс_id: position?.ндс_id ?? undefined,
-                        цена: Number(position?.цена) || 0,
-                    };
-                })
-                .filter((item: OrderPositionSnapshot) => item.товар_id > 0 && item.количество > 0);
+                        количество: directRemainingByProductId.get(Number(item.товар_id) || 0) || 0,
+                        ндс_id: item?.ндс_id ?? undefined,
+                        цена: Number(item?.цена) || 0,
+                    }))
+                    .filter((item: OrderPositionSnapshot) => item.товар_id > 0 && item.количество > 0)
+                : (Array.isArray(missingData) ? missingData : [])
+                    .filter((item: any) => item && Number(item.недостающее_количество) > 0 && item.статус !== 'получено')
+                    .map((item: any) => {
+                        const position = (orderData as any)?.позиции?.find((row: any) => Number(row.товар_id) === Number(item.товар_id));
+                        return {
+                            товар_id: Number(item.товар_id),
+                            количество: Number(item.недостающее_количество),
+                            ндс_id: position?.ндс_id ?? undefined,
+                            цена: Number(position?.цена) || 0,
+                        };
+                    })
+                    .filter((item: OrderPositionSnapshot) => item.товар_id > 0 && item.количество > 0);
 
             if (activeMissingPositions.length === 0) {
-                throw new Error('По этой заявке нет активных недостающих позиций для закупки');
+                throw new Error(
+                    shouldUseDirectPositions
+                        ? 'По этой заявке больше нет необеспеченных позиций для закупки'
+                        : 'По этой заявке нет активных недостающих позиций для закупки'
+                );
             }
 
             setCreatePurchaseOrderPositions(activeMissingPositions);
@@ -571,6 +612,10 @@ function OrdersPage(): JSX.Element {
                 data = data.filter((order: Order) =>
                     order.статус.toLowerCase() === filters.status.toLowerCase()
                 );
+            }
+
+            if (filters.executionMode !== 'all') {
+                data = data.filter((order: Order) => order.режим_исполнения === filters.executionMode);
             }
 
             // Apply client filter
@@ -939,6 +984,7 @@ function OrdersPage(): JSX.Element {
                                     <Tabs.Root defaultValue="status">
                                         <Tabs.List className={styles.filtersTabs}>
                                             <Tabs.Trigger value="status">Статус</Tabs.Trigger>
+                                            <Tabs.Trigger value="mode">Режим</Tabs.Trigger>
                                             <Tabs.Trigger value="client">Контрагент</Tabs.Trigger>
                                             <Tabs.Trigger value="manager">Менеджер</Tabs.Trigger>
                                         </Tabs.List>
@@ -953,7 +999,7 @@ function OrdersPage(): JSX.Element {
                                                         onValueChange={(value) => {
                                                             setFilters((prev) => {
                                                                 const next = { ...prev, status: value };
-                                                                syncOrdersUrl({ clientId: next.clientId, status: next.status, managerName: next.managerName, sortBy: next.sortBy });
+                                                                syncOrdersUrl({ clientId: next.clientId, status: next.status, executionMode: next.executionMode, managerName: next.managerName, sortBy: next.sortBy });
                                                                 return next;
                                                             });
                                                         }}
@@ -969,6 +1015,29 @@ function OrdersPage(): JSX.Element {
                                                             <Select.Item value="выполнена">Выполнена</Select.Item>
                                                             <Select.Item value="отгружена">Отгружена</Select.Item>
                                                             <Select.Item value="отменена">Отменена</Select.Item>
+                                                        </Select.Content>
+                                                    </Select.Root>
+                                                </Box>
+                                            </Tabs.Content>
+
+                                            <Tabs.Content value="mode">
+                                                <Box>
+                                                    <Text as="label" size="2" weight="medium">Режим заявки</Text>
+                                                    <Select.Root
+                                                        value={filters.executionMode}
+                                                        onValueChange={(value) => {
+                                                            setFilters((prev) => {
+                                                                const next = { ...prev, executionMode: value };
+                                                                syncOrdersUrl({ clientId: next.clientId, status: next.status, executionMode: next.executionMode, managerName: next.managerName, sortBy: next.sortBy });
+                                                                return next;
+                                                            });
+                                                        }}
+                                                    >
+                                                        <Select.Trigger variant="surface" color="gray" className={styles.selectTrigger} />
+                                                        <Select.Content position="popper" variant="solid" color="gray" highContrast data-orders-filters-select-content>
+                                                            <Select.Item value="all">Все режимы</Select.Item>
+                                                            <Select.Item value="warehouse">{getOrderExecutionModeLabel('warehouse')}</Select.Item>
+                                                            <Select.Item value="direct">{getOrderExecutionModeLabel('direct')}</Select.Item>
                                                         </Select.Content>
                                                     </Select.Root>
                                                 </Box>
@@ -993,7 +1062,7 @@ function OrdersPage(): JSX.Element {
                                                                 clientId: v.trim() ? prev.clientId : 'all',
                                                             }));
                                                             if (!v.trim()) {
-                                                                syncOrdersUrl({ clientId: 'all', status: filters.status, managerName: filters.managerName, sortBy: filters.sortBy });
+                                                                syncOrdersUrl({ clientId: 'all', status: filters.status, executionMode: filters.executionMode, managerName: filters.managerName, sortBy: filters.sortBy });
                                                             }
                                                         }}
                                                         className={styles.filterTextArea}
@@ -1012,7 +1081,7 @@ function OrdersPage(): JSX.Element {
                                                                         onClick={() => {
                                                                             setClientQuery(c.name);
                                                                             setFilters((prev) => ({ ...prev, clientId: String(c.id), clientName: c.name }));
-                                                                            syncOrdersUrl({ clientId: String(c.id), status: filters.status, managerName: filters.managerName, sortBy: filters.sortBy });
+                                                                            syncOrdersUrl({ clientId: String(c.id), status: filters.status, executionMode: filters.executionMode, managerName: filters.managerName, sortBy: filters.sortBy });
                                                                         }}
                                                                     >
                                                                         {c.name}
@@ -1039,7 +1108,7 @@ function OrdersPage(): JSX.Element {
                                                             setManagerQuery(v);
                                                             setFilters((prev) => {
                                                                 const next = { ...prev, managerName: v };
-                                                                syncOrdersUrl({ clientId: next.clientId, status: next.status, managerName: next.managerName, sortBy: next.sortBy });
+                                                                syncOrdersUrl({ clientId: next.clientId, status: next.status, executionMode: next.executionMode, managerName: next.managerName, sortBy: next.sortBy });
                                                                 return next;
                                                             });
                                                         }}
@@ -1059,7 +1128,7 @@ function OrdersPage(): JSX.Element {
                                                                         onClick={() => {
                                                                             setFilters((prev) => {
                                                                                 const next = { ...prev, managerName: name };
-                                                                                syncOrdersUrl({ clientId: next.clientId, status: next.status, managerName: next.managerName, sortBy: next.sortBy });
+                                                                                syncOrdersUrl({ clientId: next.clientId, status: next.status, executionMode: next.executionMode, managerName: next.managerName, sortBy: next.sortBy });
                                                                                 return next;
                                                                             });
                                                                             setManagerQuery(name);
@@ -1085,8 +1154,8 @@ function OrdersPage(): JSX.Element {
                                             onClick={() => {
                                                 setClientQuery('');
                                                 setManagerQuery('');
-                                                setFilters({ status: 'all', sortBy: filters.sortBy, clientId: 'all', managerName: '', clientName: '' });
-                                                syncOrdersUrl({ clientId: 'all', status: 'all', managerName: '', sortBy: filters.sortBy });
+                                                setFilters({ status: 'all', executionMode: 'all', sortBy: filters.sortBy, clientId: 'all', managerName: '', clientName: '' });
+                                                syncOrdersUrl({ clientId: 'all', status: 'all', executionMode: 'all', managerName: '', sortBy: filters.sortBy });
                                             }}
                                         >
                                             Сбросить
@@ -1116,7 +1185,7 @@ function OrdersPage(): JSX.Element {
                                 }}
                                 onValueChange={(value) => {
                                     setFilters({ ...filters, sortBy: value });
-                                    syncOrdersUrl({ clientId: filters.clientId, status: filters.status, managerName: filters.managerName, sortBy: value });
+                                    syncOrdersUrl({ clientId: filters.clientId, status: filters.status, executionMode: filters.executionMode, managerName: filters.managerName, sortBy: value });
                                     sortTriggerRef.current?.blur();
                                     (document.activeElement as HTMLElement | null)?.blur?.();
                                 }}
@@ -1198,6 +1267,11 @@ function OrdersPage(): JSX.Element {
                                             <Table.Cell className={styles.tableCell}>
                                                 <div>
                                                     <span className={styles.orderId}>#{order.id}</span>
+                                                    {order.режим_исполнения === 'direct' ? (
+                                                        <Badge color="gray" variant="soft" highContrast>
+                                                            {getOrderExecutionModeLabel(order.режим_исполнения)}
+                                                        </Badge>
+                                                    ) : null}
                                                     {renderAttachmentBadges(order.id)}
                                                 </div>
                                             </Table.Cell>
@@ -1402,6 +1476,7 @@ function OrdersPage(): JSX.Element {
                 поставщик_id={0}
                 поставщик_название=""
                 заявка_id={selectedOrder?.id}
+                lockOrderId
                 initialOrderPositions={createPurchaseOrderPositions}
             />
 

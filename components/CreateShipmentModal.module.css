@@ -31,6 +31,28 @@
     gap: 6px;
 }
 
+.checkboxRow {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 40px;
+    font-size: 14px;
+    color: #111111;
+}
+
+.checkboxInput {
+    width: 16px;
+    height: 16px;
+    accent-color: #111111;
+    cursor: pointer;
+}
+
+.fieldHint {
+    margin: 0;
+    color: #6b7280;
+    line-height: 1.45;
+}
+
 .textField {
     height: 40px;
     border-radius: 15px;
