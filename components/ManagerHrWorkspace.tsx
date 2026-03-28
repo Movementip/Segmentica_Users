@@ -3,6 +3,7 @@ import { Badge, Button, Card, Flex, Grid, Select, Table, Text, TextField } from 
 import {
   FiArrowLeft,
   FiBriefcase,
+  FiCalendar,
   FiCheck,
   FiCreditCard,
   FiFileText,
@@ -22,6 +23,7 @@ import {
   ManagerMilitaryDocument,
   ManagerRelative,
 } from '../lib/managerHr';
+import { EmployeeSchedulePanel } from './EmployeeSchedulePanel';
 import styles from './ManagerHrWorkspace.module.css';
 
 type ManagerSummary = {
@@ -44,13 +46,15 @@ type AttachmentItem = {
   created_at: string;
 };
 
-type SectionKey = 'main' | 'bank' | 'employment' | 'relatives' | 'military';
+type SectionKey = 'main' | 'bank' | 'employment' | 'schedule' | 'relatives' | 'military';
 
 const EMPTY_SELECT_VALUE = '__empty__';
 
 type ManagerHrWorkspaceProps = {
   manager: ManagerSummary;
   canEdit: boolean;
+  canScheduleEdit: boolean;
+  canScheduleApplyPattern: boolean;
   canDelete: boolean;
   canAttachmentsView: boolean;
   canAttachmentsUpload: boolean;
@@ -74,6 +78,7 @@ const sectionItems: Array<{ key: SectionKey; label: string; icon: React.ReactNod
   { key: 'main', label: 'Основное', icon: <FiFileText /> },
   { key: 'bank', label: 'Банковские данные', icon: <FiCreditCard /> },
   { key: 'employment', label: 'Трудовая деятельность', icon: <FiBriefcase /> },
+  { key: 'schedule', label: 'График работы', icon: <FiCalendar /> },
   { key: 'relatives', label: 'Родственники', icon: <FiUsers /> },
   { key: 'military', label: 'Воинский учет', icon: <FiShield /> },
 ];
@@ -192,6 +197,8 @@ const createMilitaryDocument = (): ManagerMilitaryDocument => ({
 export function ManagerHrWorkspace({
   manager,
   canEdit,
+  canScheduleEdit,
+  canScheduleApplyPattern,
   canDelete,
   canAttachmentsView,
   canAttachmentsUpload,
@@ -1154,6 +1161,20 @@ export function ManagerHrWorkspace({
               )}
             </Card>
           </div>
+        ) : null}
+
+        {activeSection === 'schedule' ? (
+          <Card size="2" variant="surface">
+            <div className={styles.cardHeader}>
+              <div>
+                <Text as="div" size="5" weight="bold">График работы</Text>
+                <Text as="div" size="2" color="gray">
+                  Месяц, неделя, шаблон графика и отпуск сотрудника в одной карточке.
+                </Text>
+              </div>
+            </div>
+            <EmployeeSchedulePanel employeeId={manager.id} canEdit={canScheduleEdit} canApplyPattern={canScheduleApplyPattern} />
+          </Card>
         ) : null}
 
         {activeSection === 'relatives' ? (

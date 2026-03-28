@@ -9,6 +9,7 @@ import { Eye, EyeOff, Lock } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
 import { ManagerHrWorkspace } from '../../components/ManagerHrWorkspace';
+import { EmployeeSchedulePanel } from '../../components/EmployeeSchedulePanel';
 
 interface ManagerDetail {
     id: number;
@@ -70,7 +71,7 @@ type ProfilePayload = {
     };
 };
 
-type ProfileTab = 'profile' | 'permissions' | 'salary' | 'password';
+type ProfileTab = 'profile' | 'permissions' | 'salary' | 'schedule' | 'password';
 
 const PROFILE_PERMISSION_LABELS = new Map<string, string>([
     ['dashboard', 'Дашборд'],
@@ -155,15 +156,18 @@ function ManagerDetailPage(): JSX.Element {
     const [payrollMonths, setPayrollMonths] = useState<string>('6');
     const [calendarMonth, setCalendarMonth] = useState<string>('');
 
+    const managerId = Number(Array.isArray(id) ? id[0] : id);
+    const isOwnProfile = Boolean(user?.employee?.id && Number.isInteger(managerId) && managerId > 0 && managerId === Number(user.employee.id));
     const canView = Boolean(user?.permissions?.includes('managers.view'));
     const canEdit = Boolean(user?.permissions?.includes('managers.edit'));
     const canDelete = Boolean(user?.permissions?.includes('managers.delete'));
+    const canScheduleManage = Boolean(user?.permissions?.includes('schedule.manage') || user?.permissions?.includes('managers.edit'));
+    const canSelfScheduleEdit = Boolean(isOwnProfile && (user?.permissions?.includes('schedule.self.edit') || canScheduleManage));
+    const canSelfScheduleApplyPattern = Boolean(isOwnProfile && (user?.permissions?.includes('schedule.self.apply_pattern') || canScheduleManage));
 
     const canAttachmentsView = Boolean(user?.permissions?.includes('managers.attachments.view'));
     const canAttachmentsUpload = Boolean(user?.permissions?.includes('managers.attachments.upload'));
     const canAttachmentsDelete = Boolean(user?.permissions?.includes('managers.attachments.delete'));
-    const managerId = Number(Array.isArray(id) ? id[0] : id);
-    const isOwnProfile = Boolean(user?.employee?.id && Number.isInteger(managerId) && managerId > 0 && managerId === Number(user.employee.id));
     const isSelfProfileMode = isOwnProfile && (Array.isArray(router.query.mode) ? router.query.mode[0] : router.query.mode) === 'profile';
     const canAccessPage = canView || isOwnProfile;
 
@@ -709,6 +713,7 @@ function ManagerDetailPage(): JSX.Element {
                                 <Tabs.Trigger value="profile">Профиль</Tabs.Trigger>
                                 <Tabs.Trigger value="permissions">Права</Tabs.Trigger>
                                 <Tabs.Trigger value="salary">Зарплата</Tabs.Trigger>
+                                <Tabs.Trigger value="schedule">График</Tabs.Trigger>
                                 <Tabs.Trigger value="password">Пароль</Tabs.Trigger>
                             </Tabs.List>
 
@@ -1001,6 +1006,10 @@ function ManagerDetailPage(): JSX.Element {
                                 )}
                             </Tabs.Content>
 
+                            <Tabs.Content value="schedule" className={styles.profileTabContent}>
+                                <EmployeeSchedulePanel employeeId={manager.id} canEdit={canSelfScheduleEdit} canApplyPattern={canSelfScheduleApplyPattern} />
+                            </Tabs.Content>
+
                             <Tabs.Content value="password" className={styles.profileTabContent}>
                                 <Card size="2" variant="surface">
                                     <Flex direction="column" gap="4">
@@ -1107,6 +1116,8 @@ function ManagerDetailPage(): JSX.Element {
             <ManagerHrWorkspace
                 manager={manager}
                 canEdit={canEdit || isOwnProfile}
+                canScheduleEdit={canScheduleManage}
+                canScheduleApplyPattern={canScheduleManage}
                 canDelete={canDelete}
                 canAttachmentsView={canAttachmentsView}
                 canAttachmentsUpload={canAttachmentsUpload}

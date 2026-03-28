@@ -51,7 +51,12 @@
 }
 
 .sectionNavButton:hover {
-  background: #f7f7f7;
+  background: #111111;
+  color: #ffffff;
+}
+
+.sectionNavButton:hover .sectionNavIcon {
+  color: #ffffff;
 }
 
 .sectionNavButtonActive {

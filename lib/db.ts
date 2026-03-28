@@ -409,6 +409,11 @@ const queryNoAudit = async (text: string, params?: any[]) => {
     return p.query(text, params);
 };
 
+export const getDbClient = async (): Promise<PoolClient> => {
+    const p = await ensurePool();
+    return p.connect();
+};
+
 const query = async (text: string, params?: any[]) => {
     const p = await ensurePool();
 
