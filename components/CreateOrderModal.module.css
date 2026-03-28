@@ -53,34 +53,51 @@
   position: fixed;
   max-height: 240px;
   overflow-y: auto;
+  overflow-x: hidden;
   background: #ffffff;
   border: 1px solid #e0e0e0;
-  border-radius: 16px;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+  border-radius: var(--radius-4);
+  box-shadow: var(--shadow-5);
   z-index: 2147483647;
-  padding: 8px;
+  padding: 0;
   pointer-events: auto;
   box-sizing: border-box;
+  color: var(--gray-12);
+  font-family: var(--default-font-family);
 }
 
 .searchSelectOption {
   width: 100%;
-  border: none;
+  min-width: 0;
+  position: relative;
+  border: 0;
   background: transparent;
   display: flex;
   align-items: center;
-  gap: 12px;
+  box-sizing: border-box;
+  height: var(--select-item-height);
+  padding-left: var(--select-item-indicator-width);
+  padding-right: var(--select-item-indicator-width);
   text-align: left;
-  padding: 10px 12px;
-  border-radius: 10px;
-  color: #1f2937;
-  cursor: pointer !important;
-  font-size: 14px;
+  color: var(--gray-12);
+  font: inherit;
+  font-family: inherit;
+  font-size: var(--font-size-2);
+  letter-spacing: var(--letter-spacing-2);
+  line-height: var(--line-height-2);
+  cursor: var(--cursor-menu-item);
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: var(--radius-2);
+  outline: none;
+  user-select: none;
+  -webkit-user-select: none;
+  scroll-margin: var(--select-content-padding) 0;
 }
 
-.searchSelectOption:hover {
-  background: #1f2328 !important;
-  color: #ffffff !important;
+.searchSelectOption[data-highlighted] {
+  background-color: var(--accent-12);
+  color: var(--accent-1);
 }
 
 .searchSelectOptionActive {
@@ -90,24 +107,34 @@
 }
 
 .searchSelectOptionSelected {
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .searchSelectOptionLabel {
-  flex: 1 1 auto;
+  display: block;
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.searchSelectOptionIndicator {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--select-item-indicator-width);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
 }
 
 .searchSelectOptionCheck {
-  flex: 0 0 auto;
-  width: 16px;
-  height: 16px;
-}
-
-.searchSelectOptionCheckSpacer {
-  flex: 0 0 auto;
-  width: 16px;
-  height: 16px;
+  width: calc(10px * var(--scaling));
+  height: calc(10px * var(--scaling));
+  display: block;
+  flex: none;
 }
 
 .searchSelectEmpty {

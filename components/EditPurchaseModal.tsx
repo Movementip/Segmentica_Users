@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Button, Dialog, Flex, Select, Text, TextField } from '@radix-ui/themes';
 import styles from './CreatePurchaseModal.module.css';
 import { calculateVatAmountsFromLine, DEFAULT_VAT_RATE_ID, fetchDefaultVatRateId, getVatRateOption, VAT_RATE_OPTIONS } from '../lib/vat';
+import OrderSearchSelect from './OrderSearchSelect';
 
 interface Product {
     id: number;
@@ -20,6 +21,11 @@ interface Supplier {
 interface TransportOption {
     id: number;
     название: string;
+}
+
+interface OrderOption {
+    id: number;
+    клиент_название?: string;
 }
 
 interface PurchasePosition {
@@ -63,6 +69,7 @@ const EditPurchaseModal: React.FC<EditPurchaseModalProps> = ({ isOpen, onClose, 
     const [products, setProducts] = useState<Product[]>([]);
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
     const [transports, setTransports] = useState<TransportOption[]>([]);
+    const [orders, setOrders] = useState<OrderOption[]>([]);
 
     const [selectedSupplierId, setSelectedSupplierId] = useState<number | null>(null);
     const [selectedSupplierName, setSelectedSupplierName] = useState<string>('');
@@ -91,6 +98,32 @@ const EditPurchaseModal: React.FC<EditPurchaseModalProps> = ({ isOpen, onClose, 
         for (const p of products) map.set(p.id, p);
         return map;
     }, [products]);
+    const supplierOptions = useMemo(
+        () => suppliers.map((supplier) => ({ value: String(supplier.id), label: supplier.название })),
+        [suppliers]
+    );
+    const orderOptions = useMemo(
+        () => orders.map((order) => ({
+            value: String(order.id),
+            label: `#${order.id}${order.клиент_название ? ` — ${order.клиент_название}` : ''}`,
+        })),
+        [orders]
+    );
+    const purchaseOrderOptions = useMemo(
+        () => [{ value: '', label: 'Без заявки' }, ...orderOptions],
+        [orderOptions]
+    );
+    const transportOptions = useMemo(
+        () => transports.map((transport) => ({ value: String(transport.id), label: transport.название })),
+        [transports]
+    );
+    const productOptions = useMemo(
+        () => products.map((product) => ({
+            value: String(product.id),
+            label: `${product.артикул ? `${product.артикул} - ` : ''}${product.название}`,
+        })),
+        [products]
+    );
 
     const datePart = формаДанные.дата_поступления ? формаДанные.дата_поступления.slice(0, 10) : '';
     const timePart = формаДанные.дата_поступления ? формаДанные.дата_поступления.slice(11, 16) : '';
@@ -104,10 +137,11 @@ const EditPurchaseModal: React.FC<EditPurchaseModalProps> = ({ isOpen, onClose, 
 
         const init = async () => {
             try {
-                const [productsRes, suppliersRes, transportsRes, purchaseRes] = await Promise.all([
+                const [productsRes, suppliersRes, transportsRes, ordersRes, purchaseRes] = await Promise.all([
                     fetch('/api/products'),
                     fetch('/api/suppliers'),
                     fetch('/api/transport'),
+                    fetch('/api/orders'),
                     fetch(`/api/purchases?id=${purchase.id}`),
                 ]);
 
@@ -133,6 +167,21 @@ const EditPurchaseModal: React.FC<EditPurchaseModalProps> = ({ isOpen, onClose, 
                             .map((item: any) => ({ id: Number(item?.id), название: String(item?.название || '') }))
                             .filter((item: TransportOption) => Number.isFinite(item.id) && item.id > 0)
                     );
+                }
+
+                if (ordersRes.ok) {
+                    const ordersData = await ordersRes.json().catch(() => []);
+                    const orderList = Array.isArray(ordersData) ? ordersData : [];
+                    setOrders(
+                        orderList
+                            .map((item: any) => ({
+                                id: Number(item?.id),
+                                клиент_название: String(item?.клиент_название || ''),
+                            }))
+                            .filter((item: OrderOption) => Number.isFinite(item.id) && item.id > 0)
+                    );
+                } else {
+                    setOrders([]);
                 }
 
                 let purchaseFull: Purchase = purchase;
@@ -274,8 +323,8 @@ const EditPurchaseModal: React.FC<EditPurchaseModalProps> = ({ isOpen, onClose, 
                     <Flex direction="column" gap="4">
                         <div className={styles.formGrid}>
                             <Box className={styles.formGroup}>
-                                <Text as="label" size="2" weight="medium">Поставщик</Text>
-                                <Select.Root
+                                <OrderSearchSelect
+                                    label="Поставщик"
                                     value={selectedSupplierId ? String(selectedSupplierId) : ''}
                                     onValueChange={(value) => {
                                         const id = value ? Number(value) : 0;
@@ -283,26 +332,18 @@ const EditPurchaseModal: React.FC<EditPurchaseModalProps> = ({ isOpen, onClose, 
                                         const found = suppliers.find((s) => s.id === id);
                                         setSelectedSupplierName(found?.название || selectedSupplierName);
                                     }}
-                                >
-                                    <Select.Trigger variant="surface" color="gray" className={styles.selectTrigger} placeholder="Выберите поставщика" />
-                                    <Select.Content position="popper" variant="solid" color="gray" highContrast>
-                                        {suppliers.map((s) => (
-                                            <Select.Item key={s.id} value={String(s.id)}>
-                                                {s.название}
-                                            </Select.Item>
-                                        ))}
-                                    </Select.Content>
-                                </Select.Root>
+                                    options={supplierOptions}
+                                    placeholder="Поиск поставщика"
+                                />
                             </Box>
 
                             <Box className={styles.formGroup}>
-                                <Text as="label" size="2" weight="medium">Заявка (ID)</Text>
-                                <TextField.Root
+                                <OrderSearchSelect
+                                    label="Заявка"
                                     value={формаДанные.заявка_id}
-                                    onChange={(e) => setФормаДанные((p) => ({ ...p, заявка_id: e.target.value }))}
-                                    placeholder="Например: 23"
-                                    className={styles.textField}
-                                    size="2"
+                                    onValueChange={(value) => setФормаДанные((p) => ({ ...p, заявка_id: value }))}
+                                    options={purchaseOrderOptions}
+                                    placeholder="Без заявки"
                                 />
                                 {!формаДанные.заявка_id.trim() ? (
                                     <Text as="span" size="1" color="gray">
@@ -364,20 +405,13 @@ const EditPurchaseModal: React.FC<EditPurchaseModalProps> = ({ isOpen, onClose, 
                             {формаДанные.использовать_доставку ? (
                                 <>
                                     <Box className={styles.formGroup}>
-                                        <Text as="label" size="2" weight="medium">Кто доставляет</Text>
-                                        <Select.Root
+                                        <OrderSearchSelect
+                                            label="Кто доставляет"
                                             value={формаДанные.транспорт_id ? String(формаДанные.транспорт_id) : ''}
                                             onValueChange={(value) => setФормаДанные((p) => ({ ...p, транспорт_id: value ? Number(value) : 0 }))}
-                                        >
-                                            <Select.Trigger variant="surface" color="gray" className={styles.selectTrigger} placeholder="Выберите ТК" />
-                                            <Select.Content position="popper" variant="solid" color="gray" highContrast>
-                                                {transports.map((transport) => (
-                                                    <Select.Item key={transport.id} value={String(transport.id)}>
-                                                        {transport.название}
-                                                    </Select.Item>
-                                                ))}
-                                            </Select.Content>
-                                        </Select.Root>
+                                            options={transportOptions}
+                                            placeholder="Выберите ТК"
+                                        />
                                     </Box>
 
                                     <Box className={styles.formGroup}>
@@ -432,19 +466,16 @@ const EditPurchaseModal: React.FC<EditPurchaseModalProps> = ({ isOpen, onClose, 
 
                                         return (
                                             <Box key={position.id ?? index} className={`${styles.positionRow} ${styles.positionRowCompact}`}>
-                                                <Select.Root
+                                                <OrderSearchSelect
                                                     value={position.товар_id ? String(position.товар_id) : ''}
                                                     onValueChange={(value) => handlePositionChange(index, 'товар_id', value ? Number(value) : 0)}
-                                                >
-                                                    <Select.Trigger variant="surface" color="gray" className={styles.positionSelectTrigger} placeholder="Выберите товар" />
-                                                    <Select.Content position="popper" variant="solid" color="gray" highContrast>
-                                                        {products.map((product) => (
-                                                            <Select.Item key={product.id} value={String(product.id)}>
-                                                                {product.артикул} - {product.название}
-                                                            </Select.Item>
-                                                        ))}
-                                                    </Select.Content>
-                                                </Select.Root>
+                                                    options={productOptions}
+                                                    placeholder="Выберите товар"
+                                                    compact
+                                                    menuPlacement="top"
+                                                    inputClassName={styles.positionSearchSelectInput}
+                                                    menuClassName={styles.positionSearchSelectMenu}
+                                                />
 
                                                 <Text as="span" size="2" className={styles.unitValue}>
                                                     {selectedProduct?.единица_измерения || 'шт'}

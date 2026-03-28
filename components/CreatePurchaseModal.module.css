@@ -1,5 +1,5 @@
 .modalContent {
-    max-width: 1320px;
+    max-width: 1420px;
     width: 90vw;
     max-height: 90vh;
     overflow: auto;
@@ -126,8 +126,8 @@
 }
 
 .positionsSection {
-    --positions-grid: 84px minmax(360px, 3fr) 72px 110px 140px 150px 120px 150px 150px 36px;
-    --positions-grid-compact: minmax(360px, 3fr) 72px 110px 140px 150px 120px 150px 150px 36px;
+    --positions-grid: 72px minmax(280px, 2.5fr) 58px 86px 120px 138px 96px 132px 128px 28px;
+    --positions-grid-compact: minmax(300px, 2.8fr) 58px 86px 120px 138px 96px 132px 128px 28px;
 }
 
 .positionsTable {
@@ -142,7 +142,7 @@
 .positionHeaderRow {
     display: grid;
     grid-template-columns: var(--positions-grid);
-    gap: 12px;
+    gap: 8px;
     padding: 12px;
 }
 
@@ -162,27 +162,27 @@
 .positionRow {
     display: grid;
     grid-template-columns: var(--positions-grid);
-    gap: 12px;
+    gap: 8px;
     align-items: start;
     padding: 12px;
     border: 1px solid #e0e0e0;
     border-radius: 12px;
     background: #ffffff;
-    min-width: 1450px;
+    min-width: 1180px;
 }
 
 .positionHeaderRow {
-    min-width: 1450px;
+    min-width: 1180px;
 }
 
 .positionRowCompact {
     grid-template-columns: var(--positions-grid-compact);
-    min-width: 1320px;
+    min-width: 1090px;
 }
 
 .positionHeaderRowCompact {
     grid-template-columns: var(--positions-grid-compact);
-    min-width: 1320px;
+    min-width: 1090px;
 }
 
 .positionRowMuted {
@@ -215,6 +215,15 @@
     border-radius: 15px;
     width: 100%;
     min-width: 0;
+}
+
+.positionSearchSelectInput:global(.rt-TextFieldRoot) {
+    width: 100%;
+}
+
+.positionSearchSelectMenu {
+    min-width: 0;
+    width: auto;
 }
 
 .vatField {
@@ -421,11 +430,45 @@
 }
 
 .removePositionButton:global(.rt-Button) {
-    width: 36px;
-    min-width: 36px;
+    width: 28px;
+    min-width: 28px;
     height: 40px;
     padding: 0;
     border-radius: 12px;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    color: #6b7280 !important;
+    justify-self: end;
+    align-self: start;
+}
+
+.removePositionButton:global(.rt-BaseButton) {
+    width: 28px;
+    min-width: 28px;
+    height: 40px;
+    padding: 0;
+    border-radius: 12px;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    color: #6b7280 !important;
+    justify-self: end;
+    align-self: start;
+}
+
+.removePositionButton:global(.rt-Button):hover,
+.removePositionButton:global(.rt-BaseButton):hover {
+    background: #f3f4f6 !important;
+    color: #111827 !important;
+}
+
+.removePositionButton:global(.rt-Button):focus-visible,
+.removePositionButton:global(.rt-BaseButton):focus-visible,
+.removePositionButton:global(.rt-Button):focus-within,
+.removePositionButton:global(.rt-BaseButton):focus-within {
+    outline: none !important;
+    box-shadow: none !important;
 }
 
 .secondaryButton {

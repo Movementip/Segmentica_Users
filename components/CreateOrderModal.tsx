@@ -362,7 +362,6 @@ const CreateOrderModal: React.FC<CreateOrderModalProps> = ({ isOpen, onClose, on
                                                     }))}
                                                     placeholder="Выберите товар"
                                                     compact
-                                                    menuPlacement="top"
                                                     inputClassName={styles.positionSearchSelectInput}
                                                     menuClassName={styles.positionSearchSelectMenu}
                                                 />

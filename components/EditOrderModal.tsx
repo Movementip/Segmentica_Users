@@ -533,7 +533,6 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ isOpen, onClose, onSubm
                                                     }))}
                                                     placeholder="Выберите товар"
                                                     compact
-                                                    menuPlacement="top"
                                                     inputClassName={styles.positionSearchSelectInput}
                                                     menuClassName={styles.positionSearchSelectMenu}
                                                 />

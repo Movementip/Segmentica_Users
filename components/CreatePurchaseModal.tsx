@@ -2,6 +2,7 @@ import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { Box, Button, Dialog, Flex, Select, Text, TextField } from '@radix-ui/themes';
 import styles from './CreatePurchaseModal.module.css';
 import { calculateVatAmountsFromLine, DEFAULT_VAT_RATE_ID, fetchDefaultVatRateId, getVatRateOption, VAT_RATE_OPTIONS } from '../lib/vat';
+import OrderSearchSelect from './OrderSearchSelect';
 
 interface Product {
     id: number;
@@ -41,8 +42,6 @@ export interface OrderPositionSnapshot {
     ндс_id?: number;
     цена?: number;
 }
-
-const EMPTY_SELECT_VALUE = '__empty__';
 
 const normalizeOrderPositionSnapshot = (
     snapshot: OrderPositionSnapshot,
@@ -151,6 +150,32 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
         for (const p of products) map.set(p.id, p);
         return map;
     }, [products]);
+    const supplierOptions = useMemo(
+        () => suppliers.map((supplier) => ({ value: String(supplier.id), label: supplier.название })),
+        [suppliers]
+    );
+    const orderOptions = useMemo(
+        () => orders.map((order) => ({
+            value: String(order.id),
+            label: `#${order.id}${order.клиент_название ? ` — ${order.клиент_название}` : ''}`,
+        })),
+        [orders]
+    );
+    const purchaseOrderOptions = useMemo(
+        () => [{ value: '', label: 'Без заявки' }, ...orderOptions],
+        [orderOptions]
+    );
+    const transportOptions = useMemo(
+        () => transports.map((transport) => ({ value: String(transport.id), label: transport.название })),
+        [transports]
+    );
+    const productOptions = useMemo(
+        () => products.map((product) => ({
+            value: String(product.id),
+            label: `${product.артикул ? `${product.артикул} - ` : ''}${product.название}`,
+        })),
+        [products]
+    );
 
     const datePart = формаДанные.дата_поступления ? формаДанные.дата_поступления.slice(0, 10) : '';
     const timePart = формаДанные.дата_поступления ? формаДанные.дата_поступления.slice(11, 16) : '';
@@ -410,8 +435,8 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
                     <Flex direction="column" gap="4">
                         <div className={styles.formGrid}>
                             <Box className={styles.formGroup}>
-                                <Text as="label" size="2" weight="medium">Поставщик</Text>
-                                <Select.Root
+                                <OrderSearchSelect
+                                    label="Поставщик"
                                     value={selectedSupplierId ? String(selectedSupplierId) : ''}
                                     onValueChange={(value) => {
                                         const id = value ? Number(value) : 0;
@@ -419,16 +444,9 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
                                         const found = suppliers.find((s) => s.id === id);
                                         setSelectedSupplierName(found?.название || '');
                                     }}
-                                >
-                                    <Select.Trigger variant="surface" color="gray" className={styles.selectTrigger} placeholder="Выберите поставщика" />
-                                    <Select.Content position="popper" variant="solid" color="gray" highContrast>
-                                        {suppliers.map((s) => (
-                                            <Select.Item key={s.id} value={String(s.id)}>
-                                                {s.название}
-                                            </Select.Item>
-                                        ))}
-                                    </Select.Content>
-                                </Select.Root>
+                                    options={supplierOptions}
+                                    placeholder="Поиск поставщика"
+                                />
                             </Box>
 
                             <Box className={styles.formGroup}>
@@ -458,20 +476,12 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
                                         size="2"
                                     />
                                 ) : (
-                                    <Select.Root
-                                        value={selectedOrderId ? String(selectedOrderId) : EMPTY_SELECT_VALUE}
-                                        onValueChange={(value) => setSelectedOrderId(value === EMPTY_SELECT_VALUE ? 0 : Number(value) || 0)}
-                                    >
-                                        <Select.Trigger variant="surface" color="gray" className={styles.selectTrigger} placeholder="Без заявки" />
-                                        <Select.Content position="popper" variant="solid" color="gray" highContrast>
-                                            <Select.Item value={EMPTY_SELECT_VALUE}>Без заявки</Select.Item>
-                                            {orders.map((order) => (
-                                                <Select.Item key={order.id} value={String(order.id)}>
-                                                    #{order.id}{order.клиент_название ? ` — ${order.клиент_название}` : ''}
-                                                </Select.Item>
-                                            ))}
-                                        </Select.Content>
-                                    </Select.Root>
+                                    <OrderSearchSelect
+                                        value={selectedOrderId ? String(selectedOrderId) : ''}
+                                        onValueChange={(value) => setSelectedOrderId(value ? Number(value) || 0 : 0)}
+                                        options={purchaseOrderOptions}
+                                        placeholder="Без заявки"
+                                    />
                                 )}
                                 {!selectedOrderId ? (
                                     <Text as="span" size="1" color="gray">
@@ -521,20 +531,13 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
                             {формаДанные.использовать_доставку ? (
                                 <>
                                     <Box className={styles.formGroup}>
-                                        <Text as="label" size="2" weight="medium">Кто доставляет</Text>
-                                        <Select.Root
+                                        <OrderSearchSelect
+                                            label="Кто доставляет"
                                             value={формаДанные.транспорт_id ? String(формаДанные.транспорт_id) : ''}
                                             onValueChange={(value) => setФормаДанные((p) => ({ ...p, транспорт_id: value ? Number(value) : 0 }))}
-                                        >
-                                            <Select.Trigger variant="surface" color="gray" className={styles.selectTrigger} placeholder="Выберите ТК" />
-                                            <Select.Content position="popper" variant="solid" color="gray" highContrast>
-                                                {transports.map((transport) => (
-                                                    <Select.Item key={transport.id} value={String(transport.id)}>
-                                                        {transport.название}
-                                                    </Select.Item>
-                                                ))}
-                                            </Select.Content>
-                                        </Select.Root>
+                                            options={transportOptions}
+                                            placeholder="Выберите ТК"
+                                        />
                                     </Box>
 
                                     <Box className={styles.formGroup}>
@@ -627,20 +630,16 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
                                                     </span>
                                                 </label>
 
-                                                <Select.Root
-                                                    key={`purchase-product-${index}-${position.товар_id || 'empty'}`}
+                                                <OrderSearchSelect
                                                     value={position.товар_id ? String(position.товар_id) : ''}
                                                     onValueChange={(value) => handlePositionChange(index, 'товар_id', value ? Number(value) : 0)}
-                                                >
-                                                    <Select.Trigger variant="surface" color="gray" className={styles.positionSelectTrigger} placeholder="Выберите товар" />
-                                                    <Select.Content position="popper" variant="solid" color="gray" highContrast>
-                                                        {products.map((product) => (
-                                                            <Select.Item key={product.id} value={String(product.id)}>
-                                                                {product.артикул} - {product.название}
-                                                            </Select.Item>
-                                                        ))}
-                                                    </Select.Content>
-                                                </Select.Root>
+                                                    options={productOptions}
+                                                    placeholder="Выберите товар"
+                                                    compact
+                                                    menuPlacement="top"
+                                                    inputClassName={styles.positionSearchSelectInput}
+                                                    menuClassName={styles.positionSearchSelectMenu}
+                                                />
 
                                                 <Text as="span" size="2" className={styles.unitValue}>
                                                     {selectedProduct?.единица_измерения || 'шт'}
