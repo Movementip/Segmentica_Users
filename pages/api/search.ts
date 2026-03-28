@@ -26,23 +26,27 @@ export default async function handler(
     }
 
     try {
-        const searchTerm = `%${searchQuery}%`;
-        console.log('Searching for:', searchQuery);
+        const rawQuery = searchQuery.trim();
+        const searchPatterns = [
+            `%${rawQuery}%`,
+            `%${rawQuery.toLocaleLowerCase('ru-RU')}%`,
+            `%${rawQuery.toLocaleUpperCase('ru-RU')}%`
+        ];
 
         // Search in products
-        const products = await searchProducts(searchTerm);
+        const products = await searchProducts(searchPatterns);
 
         // Search in clients
-        const clients = await searchClients(searchTerm);
+        const clients = await searchClients(searchPatterns);
 
         // Search in orders
-        const orders = await searchOrders(searchTerm);
+        const orders = await searchOrders(rawQuery, searchPatterns);
 
         // Search in categories
-        const categories = await searchCategories(searchTerm);
+        const categories = await searchCategories(searchPatterns);
 
         // Search in suppliers
-        const suppliers = await searchSuppliers(searchTerm);
+        const suppliers = await searchSuppliers(searchPatterns);
 
         // Combine all results
         const results = {
@@ -52,15 +56,6 @@ export default async function handler(
             categories,
             suppliers
         };
-
-        console.log('Search results:', {
-            query: searchQuery,
-            products: products.length,
-            clients: clients.length,
-            orders: orders.length,
-            categories: categories.length,
-            suppliers: suppliers.length
-        });
 
         res.status(200).json(results);
     } catch (error) {
@@ -72,17 +67,17 @@ export default async function handler(
     }
 }
 
-async function searchProducts(searchTerm: string): Promise<SearchResult[]> {
+async function searchProducts(searchPatterns: string[]): Promise<SearchResult[]> {
     try {
         const result = await query(
             `SELECT id, название, артикул, цена_продажи, категория
        FROM "Товары" 
-       WHERE LOWER("название") LIKE LOWER($1) 
-       OR LOWER("артикул") LIKE LOWER($1)
-       OR LOWER("категория") LIKE LOWER($1)
+       WHERE "название" LIKE ANY($1)
+       OR "артикул" LIKE ANY($1)
+       OR "категория" LIKE ANY($1)
        ORDER BY "название"
        LIMIT 10`,
-            [searchTerm]
+            [searchPatterns]
         );
 
         return result.rows.map(product => ({
@@ -98,17 +93,17 @@ async function searchProducts(searchTerm: string): Promise<SearchResult[]> {
     }
 }
 
-async function searchClients(searchTerm: string): Promise<SearchResult[]> {
+async function searchClients(searchPatterns: string[]): Promise<SearchResult[]> {
     try {
         const result = await query(
             `SELECT id, название, телефон, email, created_at
        FROM "Клиенты"
-       WHERE LOWER("название") LIKE LOWER($1)
-       OR LOWER("телефон") LIKE LOWER($1)
-       OR LOWER("email") LIKE LOWER($1)
+       WHERE "название" LIKE ANY($1)
+       OR "телефон" LIKE ANY($1)
+       OR "email" LIKE ANY($1)
        ORDER BY "название"
        LIMIT 10`,
-            [searchTerm]
+            [searchPatterns]
         );
 
         return result.rows.map(client => ({
@@ -124,12 +119,10 @@ async function searchClients(searchTerm: string): Promise<SearchResult[]> {
     }
 }
 
-async function searchOrders(searchTerm: string): Promise<SearchResult[]> {
-    console.log('Поиск заявок по запросу:', searchTerm);
-
+async function searchOrders(rawQuery: string, searchPatterns: string[]): Promise<SearchResult[]> {
     try {
         // Удаляем лишние пробелы и переводим в нижний регистр для обработки
-        const cleanTerm = searchTerm.trim().toLowerCase();
+        const cleanTerm = rawQuery.trim().toLowerCase();
 
         // Проверяем различные форматы:
         // 1. "заявка 9"
@@ -181,8 +174,7 @@ async function searchOrders(searchTerm: string): Promise<SearchResult[]> {
             queryParams = [requestId];
         } else {
             // Обычный поиск по всем полям
-            const searchPattern = `%${searchTerm}%`;
-            const numericId = isNaN(Number(searchTerm)) ? -1 : Number(searchTerm);
+            const numericId = isNaN(Number(rawQuery)) ? -1 : Number(rawQuery);
 
             queryText = `
         SELECT 
@@ -198,24 +190,16 @@ async function searchOrders(searchTerm: string): Promise<SearchResult[]> {
         LEFT JOIN "Сотрудники" с ON з.менеджер_id = с.id
         WHERE 
           CAST(з.id AS TEXT) LIKE $1
-          OR LOWER(з.статус) LIKE LOWER($2)
-          OR LOWER(к.название) LIKE LOWER($2)
-          OR LOWER(с.фио) LIKE LOWER($2)
-          OR (LOWER(з.адрес_доставки) LIKE LOWER($2) AND з.адрес_доставки IS NOT NULL)
+          OR з.статус LIKE ANY($2)
+          OR к.название LIKE ANY($2)
+          OR с.фио LIKE ANY($2)
+          OR (з.адрес_доставки LIKE ANY($2) AND з.адрес_доставки IS NOT NULL)
         ORDER BY з.дата_создания DESC
         LIMIT 10`;
-            queryParams = [numericId.toString(), searchPattern];
+            queryParams = [numericId.toString(), searchPatterns];
         }
-
-        console.log('Выполняем SQL запрос:', queryText);
-        console.log('Параметры запроса:', queryParams);
 
         const result = await query(queryText, queryParams);
-
-        console.log('Результат запроса:', result.rows.length, 'найдено записей');
-        if (result.rows.length > 0) {
-            console.log('Первая найденная запись:', result.rows[0]);
-        }
 
         return result.rows.map(order => {
             const statusMap: Record<string, string> = {
@@ -267,17 +251,17 @@ async function searchOrders(searchTerm: string): Promise<SearchResult[]> {
     }
 }
 
-async function searchCategories(searchTerm: string): Promise<SearchResult[]> {
+async function searchCategories(searchPatterns: string[]): Promise<SearchResult[]> {
     try {
         const result = await query(
             `SELECT id, название, описание
        FROM "Категории_товаров"
-       WHERE (LOWER("название") LIKE LOWER($1)
-       OR LOWER("описание") LIKE LOWER($1))
+       WHERE ("название" LIKE ANY($1)
+       OR "описание" LIKE ANY($1))
        AND "активна" = true
        ORDER BY "название"
        LIMIT 10`,
-            [searchTerm]
+            [searchPatterns]
         );
 
         return result.rows.map(category => ({
@@ -292,17 +276,17 @@ async function searchCategories(searchTerm: string): Promise<SearchResult[]> {
     }
 }
 
-async function searchSuppliers(searchTerm: string): Promise<SearchResult[]> {
+async function searchSuppliers(searchPatterns: string[]): Promise<SearchResult[]> {
     try {
         const result = await query(
             `SELECT id, название, телефон, email, рейтинг, created_at
        FROM "Поставщики"
-       WHERE LOWER("название") LIKE LOWER($1)
-       OR LOWER("телефон") LIKE LOWER($1)
-       OR LOWER("email") LIKE LOWER($1)
+       WHERE "название" LIKE ANY($1)
+       OR "телефон" LIKE ANY($1)
+       OR "email" LIKE ANY($1)
        ORDER BY "название"
        LIMIT 10`,
-            [searchTerm]
+            [searchPatterns]
         );
 
         return result.rows.map(supplier => ({

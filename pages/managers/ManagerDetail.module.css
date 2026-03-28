@@ -1,0 +1,596 @@
+/* Keep client detail aligned with OrderDetail.module.css */
+
+.container {
+  padding: 2rem 1.5rem !important;
+  padding-top: 81px !important;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: #fafafa !important;
+  min-height: 100vh;
+
+  border-radius: 0%;
+}
+
+.container :global(.rt-Card:where(.rt-r-size-3)) {
+  --card-padding: 0px;
+}
+
+.header {
+  margin-bottom: 16px;
+  padding: 16px 20px;
+}
+
+.headerContent {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.headerLeft {
+  display: flex;
+  flex-direction: column;
+}
+
+.headerActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid;
+  gap: 6px;
+  text-decoration: none;
+}
+
+.secondaryButton {
+  background-color: #ffffff;
+  color: #424242;
+  border-color: #e0e0e0;
+}
+
+.secondaryButton:hover {
+  background-color: #f5f5f5;
+  border-color: #d0d0d0;
+}
+
+.surfaceButton {
+  background-color: #ffffff;
+  color: #424242;
+  border: 1px solid;
+  border-color: #e0e0e0;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px var(--accent-a7);
+}
+
+.surfaceButton:hover {
+  background-color: #f5f5f5 !important;
+  border-color: #d0d0d0;
+}
+
+.orderDeleteButton:global(.rt-Button),
+.orderDeleteButton:global(.rt-Button):where(.rt-variant-surface) {
+  color: #dc2626 !important;
+  border-color: #f1d4d4 !important;
+}
+
+.orderDeleteButton:global(.rt-Button:hover),
+.orderDeleteButton:global(.rt-Button):where(.rt-variant-surface):hover {
+  background: #dc2626 !important;
+  border-color: #dc2626 !important;
+  color: #ffffff !important;
+}
+
+.secondaryButton:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.icon {
+  width: 16px;
+  height: 16px;
+}
+
+.title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #212121;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.subtitle {
+  color: #757575;
+  margin: 2px 0 0;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.sectionTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: #212121;
+  margin: 0;
+}
+
+.sectionHeader {
+  padding-left: 20px;
+  padding-right: 20px;
+  padding-top: 20px;
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+.rt-Card:where(.rt-r-size-3) {
+    border-radius: 0%;
+}
+.sectionBlock {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.sectionHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  margin-left: 16px;
+}
+
+.buttonGroup {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.textRight {
+  text-align: right;
+}
+
+.table {
+  width: 100%;
+  background-color: #ffffff;
+  border: none;
+}
+
+.table:global(.rt-TableRoot) {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+.table :global(.rt-TableRootTable) {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  background-color: #ffffff;
+}
+
+.table :global(.rt-TableHeader) {
+  background-color: #ffffff !important;
+  background: #ffffff !important;
+}
+
+.table :global(.rt-TableHeaderRow),
+.table :global(.rt-TableRowHeader) {
+  background-color: #ffffff !important;
+  background: #ffffff !important;
+}
+
+.table :global(.rt-TableColumnHeaderCell) {
+  background-color: #ffffff !important;
+  background: #ffffff !important;
+}
+
+.table :global(.rt-TableRow) {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.table :global(.rt-TableColumnHeaderCell),
+.table :global(.rt-TableCell) {
+  padding: 12px 16px;
+}
+
+.sectionTotal {
+  font-size: 14px;
+  font-weight: 600;
+  color: #212121;
+  text-align: right;
+}
+
+.infoLabel {
+  margin: 0;
+  font-size: 12px;
+  color: #757575;
+}
+
+.infoValue {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: #212121;
+  font-weight: 500;
+}
+
+.tableWrapper {
+  overflow-x: auto;
+}
+
+.actionsCellHeader {
+  text-align: right;
+}
+
+.actionsCellRight {
+  text-align: right;
+}
+
+.statusPill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 12px;
+  padding: 5px 12px;
+  border: 1px solid rgba(97, 97, 97, 0.25);
+}
+
+.statusPillBlue {
+  background-color: rgba(25, 118, 210, 0.082);
+  color: rgb(25, 118, 210);
+  border-color: rgba(25, 118, 210, 0.25);
+}
+
+.statusPillGreen {
+  background-color: rgba(56, 142, 60, 0.082);
+  color: rgb(56, 142, 60);
+  border-color: rgba(56, 142, 60, 0.25);
+}
+
+.statusPillOrange {
+  background-color: rgba(245, 124, 0, 0.082);
+  color: rgb(245, 124, 0);
+  border-color: rgba(245, 124, 0, 0.25);
+}
+
+.profileSectionHeader {
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.profileTabsList {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 6px;
+  border-radius: 9999px;
+  background: #f3f4f6;
+  margin-bottom: 20px;
+}
+
+.profileTabsList :global(.rt-TabsTrigger) {
+  min-height: 48px;
+  border-radius: 9999px;
+  font-weight: 600;
+}
+
+.profileTabContent {
+  margin-top: 0 !important;
+}
+
+.profileCardTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.profileField {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.profileInput:global(.rt-TextFieldRoot),
+.salarySelectTrigger:global(.rt-SelectTrigger) {
+  min-height: 46px !important;
+  border-radius: 14px !important;
+  border: 1px solid #e5e7eb !important;
+  background: #f3f4f6 !important;
+  box-shadow: none !important;
+}
+
+.profileInput:global(.rt-TextFieldRoot):hover,
+.salarySelectTrigger:global(.rt-SelectTrigger):hover {
+  background: #eef0f3 !important;
+}
+
+.profileInput:global(.rt-TextFieldRoot):focus-within,
+.salarySelectTrigger:global(.rt-SelectTrigger):focus-visible,
+.salarySelectTrigger:global(.rt-SelectTrigger)[data-state='open'] {
+  border-color: #111111 !important;
+  background: #f3f4f6 !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.summaryList {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.summaryRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.summaryRow:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.primaryActionButton {
+  height: 46px;
+  padding: 0 20px;
+  border-radius: 9999px !important;
+}
+
+.permissionGroups {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.permissionCard {
+  height: 100%;
+}
+
+.permissionList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.permissionItem {
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid #eceff3;
+  background: #fafafa;
+}
+
+.salaryToolbar {
+  margin-bottom: 18px;
+}
+
+.salarySummaryGrid {
+  margin-bottom: 18px;
+}
+
+.metricCard {
+  min-height: 118px;
+}
+
+.calendarHeader {
+  margin-bottom: 16px;
+}
+
+.calendarWeekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.calendarWeekday {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.calendarGrid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.calendarCell {
+  min-height: 96px;
+  border-radius: 16px;
+  padding: 10px;
+  border: 1px solid #eceff3;
+}
+
+.calendarCellEmpty {
+  background: transparent;
+  border-style: dashed;
+}
+
+.calendarCellActive {
+  background: #fafafa;
+}
+
+.calendarCellHighlighted {
+  background: #eef6ff;
+  border-color: #bfdbfe;
+}
+
+.calendarAmount {
+  margin-top: 10px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.passwordFieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.passwordInput:global(.rt-TextFieldRoot) {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  border-radius: 14px !important;
+  background: #f3f4f6 !important;
+  border: 1px solid #e5e7eb !important;
+  height: 48px !important;
+  padding: 0 12px !important;
+  overflow: hidden;
+  box-shadow: none !important;
+}
+
+.passwordInput:global(.rt-TextFieldRoot):hover {
+  background-color: #eef0f3 !important;
+}
+
+.passwordInput:global(.rt-TextFieldRoot):focus-within {
+  outline: none !important;
+  border-color: #111111 !important;
+  background: #f3f4f6 !important;
+}
+
+.passwordInput :global(.rt-TextFieldInput) {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 48px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: #000000;
+  font-size: 16px;
+}
+
+.passwordInput :global(.rt-TextFieldSlot) {
+  display: flex;
+  align-items: center;
+  padding-left: 10px;
+  padding-right: 8px;
+  color: #111111;
+}
+
+.passwordInput :global(.rt-TextFieldSlot)[data-side='left'] {
+  color: #6b7280;
+  padding-left: 12px;
+  padding-right: 10px;
+}
+
+.passwordInputError:global(.rt-TextFieldRoot) {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.18) !important;
+  background: #ffffff !important;
+}
+
+.passwordToggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: rgba(0, 0, 0, 0.55);
+  border-radius: 10px;
+}
+
+.passwordToggle:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.inlineError {
+  color: #dc2626;
+}
+
+.inlineSuccess {
+  color: #15803d;
+}
+
+@media (max-width: 900px) {
+  .profileTabsList {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border-radius: 24px;
+  }
+
+  .calendarGrid,
+  .calendarWeekdays {
+    gap: 6px;
+  }
+
+  .calendarCell {
+    min-height: 78px;
+    padding: 8px;
+  }
+}
+
+.statusPillRed {
+  background-color: rgba(211, 47, 47, 0.082);
+  color: rgb(211, 47, 47);
+  border-color: rgba(211, 47, 47, 0.25);
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 16px;
+  }
+  
+  .infoGrid {
+    grid-template-columns: 1fr;
+  }
+  
+  .infoItem {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    text-align: left;
+  }
+  
+  .infoValue {
+    text-align: left;
+  }
+  
+  .infoLabel {
+    min-width: auto;
+  }
+  
+  .table {
+    font-size: 14px;
+  }
+  
+  .table th,
+  .table td {
+    padding: 8px 12px;
+  }
+}
+
+.dangerButton {
+  background-color: #ffffff;
+  color: #d32f2f;
+  border: 1px solid;
+  border-color: rgba(211, 47, 47, 0.25);
+  border-radius: 6px;
+}
+
+.modalContent {
+  max-width: 560px;
+}
+
+.modalDescription {
+  margin-top: 6px;
+}

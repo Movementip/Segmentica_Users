@@ -1,0 +1,729 @@
+.container {
+    padding: 2rem 1.5rem;
+
+    padding-top: 81px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #fafafa;
+    min-height: 100vh;
+}
+
+.surface {
+    background: #ffffff;
+
+}
+
+.stack {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.header {
+    margin-bottom: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.headerLeft {
+    display: flex;
+    flex-direction: column;
+}
+
+.title {
+    font-size: 24px;
+    font-weight: 600;
+    color: #212121;
+    margin: 0;
+    line-height: 1.2;
+}
+
+.subtitle {
+    color: #757575;
+    margin: 4px 0 0;
+    font-size: 13px;
+    font-weight: 400;
+}
+
+.statsContainer:global(.rt-Card) {
+    margin-bottom: 24px;
+    padding-bottom: 24px;
+    padding-left: 20px;
+    padding-right: 20px;
+    padding-top: 20px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.statsGridOrdersStyle {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0;
+}
+
+.statCardOrdersStyle {
+    background: transparent;
+    border-radius: 0;
+    padding: 16px 20px;
+    box-shadow: none;
+    border: none;
+    text-align: center;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.statCardOrdersStyle+.statCardOrdersStyle {
+    border-left: 1px solid #f0f0f0;
+}
+
+.statValueOrdersStyle {
+    font-size: 20px;
+    font-weight: 700;
+    color: #111111;
+    margin-bottom: 2px;
+}
+
+.statLabelOrdersStyle {
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.statCritical {
+    color: #ef4444;
+}
+
+.statsGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.statCard {
+    background: white;
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.statCard:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.statCard h3 {
+    font-size: 0.875rem;
+    color: #6b7280;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.statValue {
+    font-size: 1.875rem;
+    font-weight: 600;
+    color: #111827;
+    margin: 0.5rem 0;
+}
+
+.statChange {
+    display: flex;
+    align-items: center;
+    font-size: 0.875rem;
+    color: #10b981;
+}
+
+.statChange.danger {
+    color: #ef4444;
+}
+
+.section {
+    background: white;
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.sectionHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.sectionTitle {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: #111827;
+    margin: 0;
+}
+
+.viewAll {
+    color: #111827;
+    font-size: 0.875rem;
+    font-weight: 500;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+}
+
+.viewAll:hover {
+    text-decoration: underline;
+}
+
+.viewAll svg {
+    margin-left: 0.25rem;
+    width: 1rem;
+    height: 1rem;
+}
+
+.mainGrid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    min-width: 0;
+}
+
+@media (min-width: 1024px) {
+    .mainGrid {
+        grid-template-columns: 2fr 1fr;
+    }
+}
+
+.card:global(.rt-Card) {
+    box-shadow: none;
+
+    background: #ffffff;
+    padding: 0;
+    overflow: visible;
+    border: 1px solid #e0e0e0 !important;
+    border-radius: 6px;
+    padding: 6px;
+}
+
+.cardtop {
+    margin-bottom: 24px;
+    padding-bottom: 24px;
+    padding-left: 20px;
+    padding-right: 20px;
+    padding-top: 20px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.cardHeader {
+    margin-bottom: 10px;
+    padding-left: 14px;
+}
+
+.chartWrap {
+    width: 100%;
+    min-width: 0;
+    overflow: visible;
+    padding: 0 10px 8px;
+    box-sizing: border-box;
+}
+
+.chartWrap :global(.recharts-wrapper) {
+    display: block;
+}
+
+.pieWrap {
+    width: 100%;
+    min-width: 0;
+    overflow: visible;
+    padding: 0 10px 8px;
+    box-sizing: border-box;
+}
+
+.pieWrap :global(.recharts-wrapper) {
+    display: block;
+}
+
+.emptyState {
+    height: 280px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #6b7280;
+    font-size: 13px;
+}
+
+.divider {
+    margin-top: 12px;
+    margin-bottom: 12px;
+}
+
+.pieLegend {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.legendRow {
+    display: grid;
+    grid-template-columns: 12px 1fr auto;
+    align-items: center;
+    gap: 10px;
+    font-size: 12px;
+    color: #374151;
+}
+
+.legendDot {
+    width: 10px;
+    height: 10px;
+    border-radius: 999px;
+}
+
+.legendName {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.legendValue {
+    color: #111827;
+    font-weight: 600;
+}
+
+.tableWrap {
+    width: 100%;
+    overflow: hidden;
+}
+
+.table:global(.rt-TableRoot) {
+    width: 100%;
+    table-layout: fixed;
+    border: none;
+}
+
+.table :global(.rt-TableHeader) {
+    background: #ffffff;
+}
+
+.table :global(.rt-TableColumnHeaderCell) {
+    padding: 12px 14px;
+    vertical-align: middle;
+    color: #424242;
+    font-size: 14px;
+    border-bottom: 1px solid #f3f3f3;
+    text-align: left;
+    background-color: #ffffff;
+}
+
+.table :global(.rt-TableCell) {
+    padding: 12px 14px;
+    vertical-align: middle;
+    color: #424242;
+    font-size: 14px;
+    border-bottom: 1px solid #f3f3f3;
+}
+
+.table :global(.rt-TableRow) {
+    background-color: #ffffff;
+    transition: background-color 0.2s;
+}
+
+.table :global(.rt-TableBody) :global(.rt-TableRow):hover {
+    background-color: #f9fafb;
+}
+
+.table :global(.rt-TableBody) :global(.rt-TableRow):last-child :global(.rt-TableCell) {
+    border-bottom: none;
+}
+
+.textRight {
+    text-align: right;
+}
+
+.statusCell {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.statusHeaderLabel {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 120px;
+}
+
+.statusBadge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    height: 28px;
+    padding: 0 14px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-align: center;
+    min-width: 120px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 22px;
+    padding: 0 10px;
+    border-radius: 9999px;
+    font-size: 11px;
+    font-weight: 600;
+    border: 1px solid transparent;
+}
+
+.badgeIn {
+    color: #166534;
+    background: #f0fdf4;
+    border-color: #dcfce7;
+}
+
+.badgeOut {
+    color: #991b1b;
+    background: #fef2f2;
+    border-color: #fee2e2;
+}
+
+.movementQty {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.movementQtyIn {
+    color: #15803d;
+}
+
+.movementQtyOut {
+    color: #b91c1c;
+}
+
+.rowLink {
+    color: #111827;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.rowLink:hover {
+    text-decoration: underline;
+}
+
+.monoCell {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+}
+
+.cellTitle {
+    font-weight: 600;
+    color: #111827;
+}
+
+.cellSub {
+    margin-top: 2px;
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.positive {
+    color: #16a34a;
+}
+
+.negative {
+    color: #ef4444;
+}
+
+.actionsGrid {
+    margin-top: 10px;
+}
+
+.extraGrid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+    margin-top: 16px;
+}
+
+@media (min-width: 1024px) {
+    .extraGrid {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+.emptyRow {
+    padding: 10px 0;
+    color: #6b7280;
+    font-size: 13px;
+}
+
+.actionCard {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px 14px;
+    border-radius: 14px;
+    border: 1px solid #ededed;
+    background: #ffffff;
+    text-decoration: none;
+    color: #111827;
+    transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+
+.actionCard:hover {
+    transform: translateY(-1px);
+    border-color: #e5e7eb;
+    box-shadow: 0 8px 20px rgba(17, 24, 39, 0.06);
+}
+
+.actionIcon {
+    width: 18px;
+    height: 18px;
+}
+
+.actionTitle {
+    font-weight: 700;
+    font-size: 13px;
+}
+
+.actionHint {
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.ordersTable {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.ordersTable th {
+    text-align: left;
+    padding: 0.75rem 1rem;
+    font-size: 0.75rem;
+    color: #6b7280;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 500;
+    background-color: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.ordersTable td {
+    padding: 1rem;
+    border-bottom: 1px solid #f3f4f6;
+    font-size: 0.875rem;
+    color: #4b5563;
+}
+
+.ordersTable tr:last-child td {
+    border-bottom: none;
+}
+
+.orderId {
+    font-weight: 500;
+    color: #111827;
+}
+
+.orderClient {
+    color: #4b5563;
+    margin-top: 0.25rem;
+    font-size: 0.875rem;
+}
+
+.orderDate {
+    color: #6b7280;
+    font-size: 0.875rem;
+}
+
+.orderAmount {
+    font-weight: 500;
+    color: #111827;
+}
+
+.statusBadge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.75rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: capitalize;
+}
+
+.statusPending {
+    background-color: #fef3c7;
+    color: #92400e;
+}
+
+.statusCompleted {
+    background-color: #d1fae5;
+    color: #065f46;
+}
+
+.statusCancelled {
+    background-color: #fee2e2;
+    color: #991b1b;
+}
+
+.chartContainer {
+    height: 300px;
+    margin-top: 1.5rem;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+}
+
+@media (min-width: 1024px) {
+    .grid {
+        grid-template-columns: 2fr 1fr;
+    }
+}
+
+.categoryItem {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #f3f4f6;
+}
+
+.categoryItem:last-child {
+    border-bottom: none;
+}
+
+.categoryName {
+    font-weight: 500;
+    color: #111827;
+}
+
+.categoryCount {
+    color: #6b7280;
+    font-size: 0.875rem;
+}
+
+.progressBar {
+    height: 8px;
+    background-color: #e5e7eb;
+    border-radius: 4px;
+    margin-top: 0.5rem;
+    overflow: hidden;
+}
+
+.progressFill {
+    height: 100%;
+    background-color: #3b82f6;
+    border-radius: 4px;
+}
+
+.quickActions {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+.actionButton {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem 1rem;
+    background: white;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.5rem;
+    text-align: center;
+    color: #4b5563;
+    text-decoration: none;
+    transition: all 0.2s;
+}
+
+.actionButton:hover {
+    border-color: #d1d5db;
+    color: #111827;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
+.actionButton svg {
+    width: 2rem;
+    height: 2rem;
+    margin-bottom: 0.75rem;
+    color: #3b82f6;
+}
+
+.actionButton span {
+    font-weight: 500;
+    font-size: 0.875rem;
+}
+
+.loading {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 300px;
+}
+
+.error {
+    color: #ef4444;
+    background-color: #fef2f2;
+    padding: 1rem;
+    border-radius: 0.375rem;
+    margin: 1rem 0;
+    display: flex;
+    align-items: center;
+}
+
+.error svg {
+    margin-right: 0.5rem;
+    flex-shrink: 0;
+}
+
+/* Warehouse movements styles */
+.quantityCell {
+    font-weight: 500;
+    text-align: right;
+    padding-right: 1.25rem;
+}
+
+.quantityCell.positive {
+    color: #10b981;
+}
+
+.quantityCell.negative {
+    color: #ef4444;
+}
+
+.orderNote {
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin-top: 0.25rem;
+    font-style: italic;
+}
+
+/* Responsive table adjustments */
+@media (max-width: 768px) {
+    .tableContainer {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .ordersTable {
+        min-width: 800px;
+    }
+
+    .quickActions {
+        grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+    }
+}

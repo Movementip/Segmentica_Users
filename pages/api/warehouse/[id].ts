@@ -1,13 +1,16 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { query } from '../../../lib/db';
+import { requirePermission } from '../../../lib/auth';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { id } = req.query;
+    const { id } = req.query;
 
-  if (req.method === 'GET') {
-    try {
-      // Get warehouse item details with product information and stock status
-      const itemResult = await query(`
+    if (req.method === 'GET') {
+        const actor = await requirePermission(req, res, 'warehouse.view');
+        if (!actor) return;
+        try {
+            // Get warehouse item details with product information and stock status
+            const itemResult = await query(`
         SELECT 
           с.*,
           т."название" as товар_название,
@@ -27,14 +30,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         WHERE с.id = $1
       `, [id]);
 
-      if (itemResult.rows.length === 0) {
-        return res.status(404).json({ error: 'Warehouse item not found' });
-      }
+            if (itemResult.rows.length === 0) {
+                return res.status(404).json({ error: 'Warehouse item not found' });
+            }
 
-      const item = itemResult.rows[0];
+            const item = itemResult.rows[0];
 
-      // Get all movements for this item
-      const movementsResult = await query(`
+            // Get all movements for this item (RBAC: warehouse.movements.view)
+            const movementsResult = actor.permissions?.includes('warehouse.movements.view')
+                ? await query(`
         SELECT 
           дс.*,
           з."id" as заявка_номер,
@@ -49,10 +53,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         WHERE дс."товар_id" = $1
         ORDER BY дс."дата_операции" DESC
         LIMIT 100
-      `, [item.товар_id]);
+      `, [item.товар_id])
+                : { rows: [] as any[] };
 
-      // Get current orders waiting for this item
-      const waitingOrdersResult = await query(`
+            // Get current orders waiting for this item (RBAC: warehouse.waiting_orders.view)
+            const waitingOrdersResult = actor.permissions?.includes('warehouse.waiting_orders.view')
+                ? await query(`
         SELECT 
           пз.*,
           з."id" as заявка_номер,
@@ -65,10 +71,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         WHERE пз."товар_id" = $1 
         AND з."статус" IN ('новая', 'в обработке', 'частично выполнена')
         ORDER BY з."дата_создания" ASC
-      `, [item.товар_id]);
+      `, [item.товар_id])
+                : { rows: [] as any[] };
 
-      // Get pending purchases for this item
-      const pendingPurchasesResult = await query(`
+            // Get pending purchases for this item (RBAC: warehouse.pending_purchases.view)
+            const pendingPurchasesResult = actor.permissions?.includes('warehouse.pending_purchases.view')
+                ? await query(`
         SELECT 
           пз.*,
           зак."id" as закупка_номер,
@@ -82,20 +90,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         WHERE пз."товар_id" = $1 
         AND зак."статус" IN ('заказано', 'в пути')
         ORDER BY зак."дата_заказа" DESC
-      `, [item.товар_id]);
+      `, [item.товар_id])
+                : { rows: [] as any[] };
 
-      res.status(200).json({
-        item,
-        movements: movementsResult.rows,
-        waitingOrders: waitingOrdersResult.rows,
-        pendingPurchases: pendingPurchasesResult.rows
-      });
-    } catch (error) {
-      console.error('Error fetching warehouse item details:', error);
-      res.status(500).json({ error: 'Failed to fetch warehouse item details' });
+            res.status(200).json({
+                item,
+                movements: movementsResult.rows,
+                waitingOrders: waitingOrdersResult.rows,
+                pendingPurchases: pendingPurchasesResult.rows
+            });
+        } catch (error) {
+            console.error('Error fetching warehouse item details:', error);
+            res.status(500).json({ error: 'Failed to fetch warehouse item details' });
+        }
+    } else {
+        res.setHeader('Allow', ['GET']);
+        res.status(405).end(`Method ${req.method} Not Allowed`);
     }
-  } else {
-    res.setHeader('Allow', ['GET']);
-    res.status(405).end(`Method ${req.method} Not Allowed`);
-  }
 }

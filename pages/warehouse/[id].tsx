@@ -1,468 +1,1004 @@
 import { useRouter } from 'next/router';
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
+import { useCallback, useState, useEffect } from 'react';
 import { Layout } from '../../layout/Layout';
 import { EditProductModal } from '../../components/EditProductModal';
-import DeleteConfirmation from '../../components/DeleteConfirmation';
-import styles from '../../styles/WarehouseDetail.module.css';
+import deleteConfirmationStyles from '../../components/DeleteConfirmation.module.css';
+import styles from './WarehouseDetail.module.css';
+import { Box, Button, Card, Dialog, Flex, Table, Tabs, Text, TextField } from '@radix-ui/themes';
+import { FiArrowLeft, FiDownload, FiEdit2, FiFile, FiPaperclip, FiSearch, FiTrash2, FiUploadCloud } from 'react-icons/fi';
+import { useAuth } from '../../context/AuthContext';
+import { NoAccessPage } from '../../components/NoAccessPage';
 
 interface WarehouseItem {
-  id: number;
-  товар_id: number;
-  количество: number;
-  дата_последнего_поступления: string | null;
-  updated_at: string;
-  товар_название: string;
-  товар_артикул: string;
-  товар_категория: string;
-  товар_единица: string;
-  товар_мин_остаток: number;
-  товар_цена_закупки: number;
-  товар_цена_продажи: number;
-  stock_status: 'critical' | 'low' | 'normal';
+    id: number;
+    товар_id: number;
+    количество: number;
+    дата_последнего_поступления: string | null;
+    updated_at: string;
+    товар_название: string;
+    товар_артикул: string;
+    товар_категория: string;
+    товар_единица: string;
+    товар_мин_остаток: number;
+    товар_цена_закупки: number;
+    товар_цена_продажи: number;
+    stock_status: 'critical' | 'low' | 'normal';
 }
 
 interface Movement {
-  id: number;
-  товар_id: number;
-  тип_операции: string;
-  количество: number;
-  дата_операции: string;
-  заявка_id: number | null;
-  закупка_id: number | null;
-  комментарий: string | null;
-  заявка_номер: number | null;
-  закупка_номер: number | null;
-  клиент_название: string | null;
-  поставщик_название: string | null;
+    id: number;
+    товар_id: number;
+    тип_операции: string;
+    количество: number;
+    дата_операции: string;
+    заявка_id: number | null;
+    закупка_id: number | null;
+    комментарий: string | null;
+    заявка_номер: number | null;
+    закупка_номер: number | null;
+    клиент_название: string | null;
+    поставщик_название: string | null;
 }
 
 interface WaitingOrder {
-  id: number;
-  заявка_id: number;
-  товар_id: number;
-  количество: number;
-  цена: number;
-  заявка_номер: number;
-  заявка_статус: string;
-  клиент_название: string;
-  заявка_дата: string;
+    id: number;
+    заявка_id: number;
+    товар_id: number;
+    количество: number;
+    цена: number;
+    заявка_номер: number;
+    заявка_статус: string;
+    клиент_название: string;
+    заявка_дата: string;
 }
 
 interface PendingPurchase {
-  id: number;
-  закупка_id: number;
-  товар_id: number;
-  количество: number;
-  цена: number;
-  закупка_номер: number;
-  закупка_статус: string;
-  поставщик_название: string;
-  закупка_дата: string;
-  ожидаемая_дата: string | null;
+    id: number;
+    закупка_id: number;
+    товар_id: number;
+    количество: number;
+    цена: number;
+    закупка_номер: number;
+    закупка_статус: string;
+    поставщик_название: string;
+    закупка_дата: string;
+    ожидаемая_дата: string | null;
 }
 
 interface WarehouseDetailData {
-  item: WarehouseItem;
-  movements: Movement[];
-  waitingOrders: WaitingOrder[];
-  pendingPurchases: PendingPurchase[];
+    item: WarehouseItem;
+    movements: Movement[];
+    waitingOrders: WaitingOrder[];
+    pendingPurchases: PendingPurchase[];
+}
+
+interface AttachmentItem {
+    id: string;
+    filename: string;
+    mime_type: string;
+    size_bytes: number;
+    created_at: string;
 }
 
 export default function WarehouseDetail() {
-  const [data, setData] = useState<WarehouseDetailData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
-  const router = useRouter();
-  const { id } = router.query;
+    const [data, setData] = useState<WarehouseDetailData | null>(null);
+    const [loading, setLoading] = useState(true);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false);
+    const [activeTab, setActiveTab] = useState<'movements' | 'waitingOrders' | 'pendingPurchases'>('movements');
+    const [search, setSearch] = useState('');
+    const router = useRouter();
+    const { id } = router.query;
 
-  useEffect(() => {
-    if (id) {
-      fetchData();
-    }
-  }, [id]);
+    const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
+    const [attachmentsLoading, setAttachmentsLoading] = useState(false);
+    const [attachmentsError, setAttachmentsError] = useState<string | null>(null);
+    const [attachmentsUploading, setAttachmentsUploading] = useState(false);
+    const fileInputRef = useState<{ current: HTMLInputElement | null }>({ current: null })[0];
+    const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+    const [previewAttachment, setPreviewAttachment] = useState<AttachmentItem | null>(null);
 
-  const fetchData = async () => {
-    try {
-      const response = await fetch(`/api/warehouse/${id}`);
-      if (response.ok) {
-        const result = await response.json();
-        setData(result);
-      } else {
-        console.error('Failed to fetch warehouse item details');
-      }
-    } catch (error) {
-      console.error('Error fetching warehouse item details:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+    const { user, loading: authLoading } = useAuth();
+    const canView = Boolean(user?.permissions?.includes('warehouse.view'));
+    const canEdit = Boolean(user?.permissions?.includes('warehouse.edit'));
+    const canDelete = Boolean(user?.permissions?.includes('warehouse.delete'));
+    const canMovementsView = Boolean(user?.permissions?.includes('warehouse.movements.view'));
+    const canWaitingOrdersView = Boolean(user?.permissions?.includes('warehouse.waiting_orders.view'));
+    const canPendingPurchasesView = Boolean(user?.permissions?.includes('warehouse.pending_purchases.view'));
+    const canOrdersView = Boolean(user?.permissions?.includes('orders.view'));
+    const canPurchasesView = Boolean(user?.permissions?.includes('purchases.view'));
+    const canWarehouseProductAttachmentsView =
+        Boolean(user?.permissions?.includes('warehouse-products.attachments.view'));
+    const canWarehouseProductAttachmentsUpload =
+        Boolean(user?.permissions?.includes('warehouse-products.attachments.upload'));
+    const canWarehouseProductAttachmentsDelete =
+        Boolean(user?.permissions?.includes('warehouse-products.attachments.delete'));
 
-  const handleEditProduct = () => {
-    setIsEditModalOpen(true);
-  };
+    const canShowTableSection = canMovementsView || canWaitingOrdersView || canPendingPurchasesView;
 
-  const handleDeleteProduct = () => {
-    setIsDeleteModalOpen(true);
-  };
+    const fetchAttachments = useCallback(async (productId: number) => {
+        if (!canWarehouseProductAttachmentsView) return;
+        try {
+            setAttachmentsLoading(true);
+            setAttachmentsError(null);
+            const res = await fetch(
+                `/api/attachments?entity_type=product&entity_id=${encodeURIComponent(String(productId))}&perm_scope=warehouse`
+            );
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data?.error || 'Ошибка загрузки вложений');
+            }
+            const data = (await res.json()) as AttachmentItem[];
+            setAttachments(Array.isArray(data) ? data : []);
+        } catch (e) {
+            console.error(e);
+            setAttachmentsError(e instanceof Error ? e.message : 'Ошибка загрузки вложений');
+        } finally {
+            setAttachmentsLoading(false);
+        }
+    }, [canWarehouseProductAttachmentsView]);
 
-  const handleConfirmDelete = async () => {
-    if (!data?.item) return;
+    const fetchData = useCallback(async () => {
+        try {
+            const response = await fetch(`/api/warehouse/${id}`);
+            if (response.ok) {
+                const result = await response.json();
+                setData(result);
 
-    try {
-      const response = await fetch(`/api/warehouse?id=${data.item.id}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Ошибка удаления товара');
-      }
-
-      // Navigate back to warehouse page after successful deletion
-      router.push('/warehouse');
-    } catch (error) {
-      console.error('Error deleting product:', error);
-      alert('Ошибка удаления товара: ' + (error instanceof Error ? error.message : 'Unknown error'));
-    }
-  };
-
-  const handleProductUpdated = () => {
-    fetchData();
-    setIsEditModalOpen(false);
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('ru-RU');
-  };
-
-  const formatDateTime = (dateString: string) => {
-    return new Date(dateString).toLocaleString('ru-RU');
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('ru-RU', {
-      style: 'currency',
-      currency: 'RUB'
-    }).format(amount);
-  };
-
-  const getStockStatusColor = (status: string) => {
-    switch (status) {
-      case 'critical': return '#ff4444';
-      case 'low': return '#ff8800';
-      default: return '#4CAF50';
-    }
-  };
-
-  const getStockStatusText = (status: string) => {
-    switch (status) {
-      case 'critical': return 'Критический';
-      case 'low': return 'Низкий';
-      default: return 'Нормальный';
-    }
-  };
-
-  const getOperationTypeColor = (type: string) => {
-    switch (type) {
-      case 'поступление': return '#4CAF50';
-      case 'отгрузка': return '#ff4444';
-      case 'списание': return '#ff8800';
-      case 'инвентаризация': return '#2196F3';
-      default: return '#666';
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'новая': return '#2196F3';
-      case 'в обработке': return '#ff8800';
-      case 'выполнена': return '#4CAF50';
-      case 'отменена': return '#f44336';
-      case 'заказано': return '#ff8800';
-      case 'в пути': return '#2196F3';
-      case 'получено': return '#4CAF50';
-      default: return '#666';
-    }
-  };
-
-  if (loading) {
-    return (
-      <Layout>
-        <div className={styles.loading}>Загрузка...</div>
-      </Layout>
-    );
-  }
-
-  if (!data) {
-    return (
-      <Layout>
-        <div className={styles.error}>Товар не найден</div>
-      </Layout>
-    );
-  }
-
-  const { item, movements, waitingOrders, pendingPurchases } = data;
-
-  return (
-    <Layout>
-      <div className={styles.container}>
-        <div className={styles.header}>
-          <button onClick={() => router.back()} className={styles.backButton}>
-            ← Назад к складу
-          </button>
-          <h1>{item.товар_название}</h1>
-          <div className={styles.headerActions}>
-            <button 
-              onClick={handleEditProduct}
-              className={styles.editButton}
-            >
-              ✏️ Редактировать
-            </button>
-            <button 
-              onClick={handleDeleteProduct}
-              className={styles.deleteButton}
-            >
-              🗑️ Удалить
-            </button>
-          </div>
-        </div>
-
-        <div className={styles.itemInfo}>
-          <div className={styles.infoCard}>
-            <div className={styles.infoRow}>
-              <span className={styles.infoLabel}>Артикул:</span>
-              <span className={styles.infoValue}>{item.товар_артикул}</span>
-            </div>
-            <div className={styles.infoRow}>
-              <span className={styles.infoLabel}>Категория:</span>
-              <span className={styles.infoValue}>{item.товар_категория}</span>
-            </div>
-            <div className={styles.infoRow}>
-              <span className={styles.infoLabel}>Текущий остаток:</span>
-              <span className={styles.infoValue}>
-                <span className={styles.quantity}>
-                  {item.количество} {item.товар_единица}
-                </span>
-              </span>
-            </div>
-            <div className={styles.infoRow}>
-              <span className={styles.infoLabel}>Минимальный остаток:</span>
-              <span className={styles.infoValue}>
-                {item.товар_мин_остаток} {item.товар_единица}
-              </span>
-            </div>
-            <div className={styles.infoRow}>
-              <span className={styles.infoLabel}>Статус:</span>
-              <span
-                className={styles.status}
-                style={{ backgroundColor: getStockStatusColor(item.stock_status) }}
-              >
-                {getStockStatusText(item.stock_status)}
-              </span>
-            </div>
-            <div className={styles.infoRow}>
-              <span className={styles.infoLabel}>Цена закупки:</span>
-              <span className={styles.infoValue}>{formatCurrency(item.товар_цена_закупки)}</span>
-            </div>
-            <div className={styles.infoRow}>
-              <span className={styles.infoLabel}>Цена продажи:</span>
-              <span className={styles.infoValue}>{formatCurrency(item.товар_цена_продажи)}</span>
-            </div>
-            <div className={styles.infoRow}>
-              <span className={styles.infoLabel}>Последнее поступление:</span>
-              <span className={styles.infoValue}>
-                {item.дата_последнего_поступления 
-                  ? formatDate(item.дата_последнего_поступления)
-                  : 'Нет данных'
+                if (result?.item?.товар_id) {
+                    if (canWarehouseProductAttachmentsView) {
+                        await fetchAttachments(Number(result.item.товар_id));
+                    }
                 }
-              </span>
-            </div>
-          </div>
-        </div>
+            } else {
+                console.error('Failed to fetch warehouse item details');
+            }
+        } catch (error) {
+            console.error('Error fetching warehouse item details:', error);
+        } finally {
+            setLoading(false);
+        }
+    }, [canWarehouseProductAttachmentsView, fetchAttachments, id]);
 
-        <div className={styles.content}>
-          <div className={styles.section}>
-            <h2>Ожидающие заявки</h2>
-            {waitingOrders.length > 0 ? (
-              <div className={styles.tableContainer}>
-                <table className={styles.table}>
-                  <thead>
-                    <tr>
-                      <th>№ Заявки</th>
-                      <th>Клиент</th>
-                      <th>Количество</th>
-                      <th>Цена</th>
-                      <th>Сумма</th>
-                      <th>Статус</th>
-                      <th>Дата создания</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {waitingOrders.map((order) => (
-                      <tr
-                        key={order.id}
-                        className={styles.clickableRow}
-                        onClick={() => router.push(`/orders/${order.заявка_номер}`)}
-                      >
-                        <td>#{order.заявка_номер}</td>
-                        <td>{order.клиент_название}</td>
-                        <td>{order.количество} {item.товар_единица}</td>
-                        <td>{formatCurrency(order.цена)}</td>
-                        <td>{formatCurrency(order.количество * order.цена)}</td>
-                        <td>
-                          <span
-                            className={styles.status}
-                            style={{ backgroundColor: getStatusColor(order.заявка_статус) }}
-                          >
-                            {order.заявка_статус}
-                          </span>
-                        </td>
-                        <td>{formatDate(order.заявка_дата)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <p className={styles.noData}>Нет ожидающих заявок</p>
-            )}
-          </div>
+    useEffect(() => {
+        if (authLoading) return;
+        if (!canView) return;
+        if (id) {
+            fetchData();
+        }
+    }, [authLoading, canView, fetchData, id]);
 
-          <div className={styles.section}>
-            <h2>Ожидаемые поступления</h2>
-            {pendingPurchases.length > 0 ? (
-              <div className={styles.tableContainer}>
-                <table className={styles.table}>
-                  <thead>
-                    <tr>
-                      <th>№ Закупки</th>
-                      <th>Поставщик</th>
-                      <th>Количество</th>
-                      <th>Цена</th>
-                      <th>Сумма</th>
-                      <th>Статус</th>
-                      <th>Дата создания</th>
-                      <th>Ожидаемая дата</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pendingPurchases.map((purchase) => (
-                      <tr
-                        key={purchase.id}
-                        className={styles.clickableRow}
-                        onClick={() => router.push(`/purchases/${purchase.закупка_номер}`)}
-                      >
-                        <td>#{purchase.закупка_номер}</td>
-                        <td>{purchase.поставщик_название}</td>
-                        <td>{purchase.количество} {item.товар_единица}</td>
-                        <td>{formatCurrency(purchase.цена)}</td>
-                        <td>{formatCurrency(purchase.количество * purchase.цена)}</td>
-                        <td>
-                          <span
-                            className={styles.status}
-                            style={{ backgroundColor: getStatusColor(purchase.закупка_статус) }}
-                          >
-                            {purchase.закупка_статус}
-                          </span>
-                        </td>
-                        <td>{formatDate(purchase.закупка_дата)}</td>
-                        <td>
-                          {purchase.ожидаемая_дата 
-                            ? formatDate(purchase.ожидаемая_дата)
-                            : 'Нет данных'
-                          }
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <p className={styles.noData}>Нет ожидаемых поступлений</p>
-            )}
-          </div>
+    useEffect(() => {
+        if (authLoading) return;
 
-          <div className={styles.section}>
-            <h2>История движений</h2>
-            <div className={styles.movementsList}>
-              {movements.map((movement) => (
-                <div key={movement.id} className={styles.movementItem}>
-                  <div className={styles.movementType}>
-                    <span
-                      className={styles.operationType}
-                      style={{ color: getOperationTypeColor(movement.тип_операции) }}
-                    >
-                      {movement.тип_операции}
-                    </span>
-                  </div>
-                  <div className={styles.movementDetails}>
-                    <div className={styles.movementQuantity}>
-                      {movement.тип_операции === 'поступление' ? '+' : '-'}
-                      {Math.abs(movement.количество)} {item.товар_единица}
+        // Ensure activeTab is always permitted
+        if (activeTab === 'movements' && !canMovementsView) {
+            if (canWaitingOrdersView) setActiveTab('waitingOrders');
+            else if (canPendingPurchasesView) setActiveTab('pendingPurchases');
+        }
+        if (activeTab === 'waitingOrders' && !canWaitingOrdersView) {
+            if (canMovementsView) setActiveTab('movements');
+            else if (canPendingPurchasesView) setActiveTab('pendingPurchases');
+        }
+        if (activeTab === 'pendingPurchases' && !canPendingPurchasesView) {
+            if (canMovementsView) setActiveTab('movements');
+            else if (canWaitingOrdersView) setActiveTab('waitingOrders');
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [authLoading, activeTab, canMovementsView, canWaitingOrdersView, canPendingPurchasesView]);
+
+    const handleUploadAttachment = async (file: File) => {
+        if (!data?.item?.товар_id) return;
+        if (!canWarehouseProductAttachmentsUpload) return;
+        try {
+            setAttachmentsUploading(true);
+            setAttachmentsError(null);
+
+            const productId = Number(data.item.товар_id);
+            const form = new FormData();
+            form.append('file', file);
+            form.append('entity_type', 'product');
+            form.append('entity_id', String(productId));
+            form.append('perm_scope', 'warehouse');
+
+            const res = await fetch('/api/attachments', { method: 'POST', body: form });
+            if (!res.ok) {
+                const responseData = await res.json().catch(() => ({}));
+                throw new Error(responseData?.error || 'Ошибка загрузки файла');
+            }
+
+            await fetchAttachments(productId);
+        } catch (e) {
+            console.error(e);
+            setAttachmentsError(e instanceof Error ? e.message : 'Ошибка загрузки файла');
+        } finally {
+            setAttachmentsUploading(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
+
+    const formatBytes = (bytes: number) => {
+        const b = Number(bytes) || 0;
+        if (b < 1024) return `${b} B`;
+        const kb = b / 1024;
+        if (kb < 1024) return `${kb.toFixed(1)} KB`;
+        const mb = kb / 1024;
+        if (mb < 1024) return `${mb.toFixed(1)} MB`;
+        const gb = mb / 1024;
+        return `${gb.toFixed(1)} GB`;
+    };
+
+    const canPreviewInline = (a: AttachmentItem) => {
+        const mime = (a.mime_type || '').toLowerCase();
+        const name = (a.filename || '').toLowerCase();
+        if (mime.includes('pdf') || name.endsWith('.pdf')) return true;
+        if (mime.startsWith('image/')) return true;
+        if (/\.(png|jpg|jpeg|gif|webp|bmp|svg)$/.test(name)) return true;
+        return false;
+    };
+
+    const openPreview = (a: AttachmentItem) => {
+        if (!canPreviewInline(a)) {
+            window.open(
+                `/api/attachments/${encodeURIComponent(a.id)}/download?perm_scope=warehouse`,
+                '_blank',
+                'noopener,noreferrer'
+            );
+            return;
+        }
+        setPreviewAttachment(a);
+        setIsPreviewOpen(true);
+    };
+
+    const handleDeleteAttachment = async (attachmentId: string) => {
+        if (!data?.item?.товар_id) return;
+        if (!canWarehouseProductAttachmentsDelete) return;
+        try {
+            setAttachmentsError(null);
+            const productId = Number(data.item.товар_id);
+            const res = await fetch(
+                `/api/attachments/${encodeURIComponent(attachmentId)}?entity_type=product&entity_id=${encodeURIComponent(String(productId))}&perm_scope=warehouse`,
+                { method: 'DELETE' }
+            );
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data?.error || 'Ошибка удаления вложения');
+            }
+            await fetchAttachments(productId);
+        } catch (e) {
+            console.error(e);
+            setAttachmentsError(e instanceof Error ? e.message : 'Ошибка удаления вложения');
+        }
+    };
+
+    const getPlural = (n: number, one: string, few: string, many: string) => {
+        const abs = Math.abs(n);
+        const mod10 = abs % 10;
+        const mod100 = abs % 100;
+        if (mod100 >= 11 && mod100 <= 14) return many;
+        if (mod10 === 1) return one;
+        if (mod10 >= 2 && mod10 <= 4) return few;
+        return many;
+    };
+
+    const getStatusBadgeClass = (status: WarehouseItem['stock_status']) => {
+        if (status === 'critical') return styles.badgeCritical;
+        if (status === 'low') return styles.badgeLow;
+        return styles.badgeNormal;
+    };
+
+    const handleEditProduct = () => {
+        if (!canEdit) return;
+        setIsEditModalOpen(true);
+    };
+
+    const handleDeleteProduct = () => {
+        if (!canDelete) return;
+        setIsDeleteModalOpen(true);
+    };
+
+    const handleConfirmDelete = async () => {
+        if (!data?.item) return;
+
+        try {
+            setIsDeleting(true);
+            const response = await fetch(`/api/warehouse?id=${data.item.id}`, {
+                method: 'DELETE',
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Ошибка удаления товара');
+            }
+
+            // Navigate back to warehouse page after successful deletion
+            router.push('/warehouse');
+        } catch (error) {
+            console.error('Error deleting product:', error);
+            alert('Ошибка удаления товара: ' + (error instanceof Error ? error.message : 'Unknown error'));
+        } finally {
+            setIsDeleting(false);
+            setIsDeleteModalOpen(false);
+        }
+    };
+
+    const handleProductUpdated = () => {
+        fetchData();
+        setIsEditModalOpen(false);
+    };
+
+    const formatDate = (dateString: string) => {
+        return new Date(dateString).toLocaleDateString('ru-RU');
+    };
+
+    const formatDateTime = (dateString: string) => {
+        return new Date(dateString).toLocaleString('ru-RU');
+    };
+
+    const formatCurrency = (amount: number) => {
+        return new Intl.NumberFormat('ru-RU', {
+            style: 'currency',
+            currency: 'RUB'
+        }).format(amount);
+    };
+
+    const getStockStatusText = (status: string) => {
+        switch (status) {
+            case 'critical': return 'Критический';
+            case 'low': return 'Низкий';
+            default: return 'Нормальный';
+        }
+    };
+
+    const getOperationTypeColor = (type: string) => {
+        switch (type) {
+            case 'поступление': return '#4CAF50';
+            case 'отгрузка': return '#ff4444';
+            case 'списание': return '#ff8800';
+            case 'инвентаризация': return '#2196F3';
+            default: return '#666';
+        }
+    };
+
+    const getDocStatusClass = (status: string) => {
+        const s = (status || '').trim().toLowerCase();
+        if (s === 'новая') return styles.docStatusNew;
+        if (s === 'в обработке') return styles.docStatusInProgress;
+        if (s === 'выполнена') return styles.docStatusDone;
+        if (s === 'отменена') return styles.docStatusCanceled;
+        if (s === 'заказано') return styles.docStatusOrdered;
+        if (s === 'в пути') return styles.docStatusInTransit;
+        if (s === 'получено') return styles.docStatusReceived;
+        return styles.docStatusDefault;
+    };
+
+    if (authLoading) {
+        return (
+            <Layout>
+                <Box p="5">
+                    <Text>Загрузка…</Text>
+                </Box>
+            </Layout>
+        );
+    }
+
+    if (!canView) {
+        return (
+            <Layout>
+                <NoAccessPage />
+            </Layout>
+        );
+    }
+
+    if (loading) {
+        return (
+            <Layout>
+                <div className={styles.loading}>Загрузка...</div>
+            </Layout>
+        );
+    }
+
+    if (!data) {
+        return (
+            <Layout>
+                <div className={styles.error}>Товар не найден</div>
+            </Layout>
+        );
+    }
+
+    const { item, movements, waitingOrders, pendingPurchases } = data;
+
+    const filteredMovements = movements.filter((m) => {
+        const q = search.trim().toLowerCase();
+        if (!q) return true;
+        return (
+            (m.тип_операции || '').toLowerCase().includes(q) ||
+            (m.комментарий || '').toLowerCase().includes(q) ||
+            String(m.заявка_номер || '').includes(q) ||
+            String(m.закупка_номер || '').includes(q)
+        );
+    });
+
+    const filteredWaitingOrders = waitingOrders.filter((o) => {
+        const q = search.trim().toLowerCase();
+        if (!q) return true;
+        return (
+            String(o.заявка_номер || '').includes(q) ||
+            (o.клиент_название || '').toLowerCase().includes(q) ||
+            (o.заявка_статус || '').toLowerCase().includes(q)
+        );
+    });
+
+    const filteredPendingPurchases = pendingPurchases.filter((p) => {
+        const q = search.trim().toLowerCase();
+        if (!q) return true;
+        return (
+            String(p.закупка_номер || '').includes(q) ||
+            (p.поставщик_название || '').toLowerCase().includes(q) ||
+            (p.закупка_статус || '').toLowerCase().includes(q)
+        );
+    });
+
+    const movementsCount = movements.length;
+    const waitingCount = waitingOrders.length;
+    const pendingCount = pendingPurchases.length;
+
+    return (
+        <Layout>
+            <div className={styles.container}>
+
+                <div className={styles.header}>
+                    <div className={styles.headerLeft}>
+                        <h1 className={styles.title}>{item.товар_название}</h1>
+                        <div className={styles.subtitle}>{item.товар_артикул ? `Артикул: ${item.товар_артикул}` : 'Карточка товара на складе'}</div>
                     </div>
-                    <div className={styles.movementDate}>
-                      {formatDateTime(movement.дата_операции)}
+
+                    <div className={styles.headerActions}>
+                        <Button
+                            type="button"
+                            variant="surface"
+                            color="gray"
+                            highContrast
+                            className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
+                            onClick={() => router.back()}
+                        >
+                            <FiArrowLeft className={styles.icon} /> Назад
+                        </Button>
+
+                        {canEdit ? (
+                            <Button
+                                type="button"
+                                variant="surface"
+                                color="gray"
+                                highContrast
+                                className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
+                                onClick={handleEditProduct}
+                            >
+                                <FiEdit2 className={styles.icon} /> Редактировать
+                            </Button>
+                        ) : null}
+
+                        {canDelete ? (
+                            <Button
+                                type="button"
+                                variant="surface"
+                                color="red"
+                                highContrast
+                                className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton} ${styles.orderDeleteButton}`}
+                                onClick={handleDeleteProduct}
+                            >
+                                <FiTrash2 className={styles.icon} /> Удалить
+                            </Button>
+                        ) : null}
                     </div>
-                    {movement.заявка_номер && (
-                      <div className={styles.movementRef}>
-                        <Link href={`/orders/${movement.заявка_номер}`}>
-                          Заявка #{movement.заявка_номер}
-                        </Link>
-                      </div>
-                    )}
-                    {movement.закупка_номер && (
-                      <div className={styles.movementRef}>
-                        <Link href={`/purchases/${movement.закупка_номер}`}>
-                          Закупка #{movement.закупка_номер}
-                        </Link>
-                      </div>
-                    )}
-                    {movement.комментарий && (
-                      <div className={styles.movementComment}>
-                        {movement.комментарий}
-                      </div>
-                    )}
-                  </div>
                 </div>
-              ))}
+
+                <div className={styles.unifiedBlock}>
+                    <Card className={styles.statsContainer}>
+                        <h2 className={styles.statsTitle}>Статистика</h2>
+                        <div className={styles.statsGrid}>
+                            <div className={styles.statCard}>
+                                <div className={styles.statValue}>{item.количество.toLocaleString('ru-RU')}</div>
+                                <div className={styles.statLabel}>Текущий остаток, {item.товар_единица}</div>
+                            </div>
+                            <div className={styles.statCard}>
+                                <div className={styles.statValue}>{item.товар_мин_остаток.toLocaleString('ru-RU')}</div>
+                                <div className={styles.statLabel}>Минимальный остаток, {item.товар_единица}</div>
+                            </div>
+                            <div className={styles.statCard}>
+                                <div className={styles.statValue}>{formatCurrency(item.количество * (item.товар_цена_закупки || 0))}</div>
+                                <div className={styles.statLabel}>Стоимость по закупке</div>
+                            </div>
+                            <div className={styles.statCard}>
+                                <div className={styles.statValue}>{movementsCount.toLocaleString('ru-RU')}</div>
+                                <div className={styles.statLabel}>Движений ({getPlural(movementsCount, 'запись', 'записи', 'записей')})</div>
+                            </div>
+                        </div>
+
+                        <div className={styles.infoRow}>
+                            <div className={styles.infoKey}>Категория</div>
+                            <div className={styles.infoVal}><span className={styles.categoryPill}>{item.товар_категория || '—'}</span></div>
+                        </div>
+                        <div className={styles.infoRow}>
+                            <div className={styles.infoKey}>Статус</div>
+                            <div className={styles.infoVal}>
+                                <span className={`${styles.badge} ${getStatusBadgeClass(item.stock_status)}`}>{getStockStatusText(item.stock_status)}</span>
+                            </div>
+                        </div>
+                        <div className={styles.infoRow}>
+                            <div className={styles.infoKey}>Цена закупки</div>
+                            <div className={styles.infoVal}>{formatCurrency(item.товар_цена_закупки || 0)}</div>
+                        </div>
+                        <div className={styles.infoRow}>
+                            <div className={styles.infoKey}>Цена продажи</div>
+                            <div className={styles.infoVal}>{formatCurrency(item.товар_цена_продажи || 0)}</div>
+                        </div>
+                        <div className={styles.infoRow}>
+                            <div className={styles.infoKey}>Последнее поступление</div>
+                            <div className={styles.infoVal}>
+                                {item.дата_последнего_поступления ? formatDate(item.дата_последнего_поступления) : 'Нет данных'}
+                            </div>
+                        </div>
+                    </Card>
+
+                    {canWarehouseProductAttachmentsView ? (
+                        <Card className={styles.tableCard}>
+                            <div className={styles.tableHeader}>
+                                <div>
+                                    <h2 className={styles.sectionTitle}>Документы товара</h2>
+                                </div>
+                                {canWarehouseProductAttachmentsUpload ? (
+                                    <div className={styles.tableHeaderActions}>
+                                        <input
+                                            ref={(el) => {
+                                                fileInputRef.current = el;
+                                            }}
+                                            type="file"
+                                            style={{ display: 'none' }}
+                                            onChange={(e) => {
+                                                const f = e.target.files?.[0];
+                                                if (f) void handleUploadAttachment(f);
+                                            }}
+                                        />
+                                        <Button
+                                            type="button"
+                                            onClick={() => fileInputRef.current?.click()}
+                                            disabled={attachmentsUploading}
+                                            variant="surface"
+                                            color="gray"
+                                            highContrast
+                                            className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
+                                        >
+                                            <FiUploadCloud className={styles.icon} />
+                                            {attachmentsUploading ? 'Загрузка…' : 'Загрузить файл'}
+                                        </Button>
+                                    </div>
+                                ) : null}
+                            </div>
+
+                            {attachmentsError ? (
+                                <Text size="2" color="red" style={{ padding: '0 16px 12px' }}>{attachmentsError}</Text>
+                            ) : null}
+
+                            {attachmentsLoading ? (
+                                <Text size="2" color="gray" style={{ padding: '0 16px 12px' }}>Загрузка документов…</Text>
+                            ) : attachments.length === 0 ? (
+                                <Text size="2" color="gray" style={{ padding: '0 16px 12px' }}>Нет прикрепленных документов</Text>
+                            ) : (
+                                <div className={styles.tableContainer}>
+                                    <Table.Root variant="surface" className={styles.table}>
+                                        <Table.Header>
+                                            <Table.Row>
+                                                <Table.ColumnHeaderCell>Файл</Table.ColumnHeaderCell>
+                                                <Table.ColumnHeaderCell align="right">Размер</Table.ColumnHeaderCell>
+                                                <Table.ColumnHeaderCell align="right">Действия</Table.ColumnHeaderCell>
+                                            </Table.Row>
+                                        </Table.Header>
+                                        <Table.Body>
+                                            {attachments.map((a) => (
+                                                <Table.Row key={a.id}>
+                                                    <Table.Cell>
+                                                        <Flex align="center" gap="2">
+                                                            <FiPaperclip />
+                                                            <Text as="div" size="2" weight="medium">{a.filename}</Text>
+                                                        </Flex>
+                                                        <Text as="div" size="1" color="gray">{a.mime_type}</Text>
+                                                    </Table.Cell>
+                                                    <Table.Cell align="right">{formatBytes(a.size_bytes)}</Table.Cell>
+                                                    <Table.Cell align="right">
+                                                        <Flex justify="end" gap="2" wrap="wrap">
+                                                            <Button
+                                                                type="button"
+                                                                variant="surface"
+                                                                color="gray"
+                                                                highContrast
+                                                                className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
+                                                                onClick={() => openPreview(a)}
+                                                            >
+                                                                <FiFile className={styles.icon} /> Открыть
+                                                            </Button>
+                                                            <a
+                                                                href={`/api/attachments/${encodeURIComponent(a.id)}/download?perm_scope=warehouse`}
+                                                                style={{ textDecoration: 'none' }}
+                                                            >
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="surface"
+                                                                    color="gray"
+                                                                    highContrast
+                                                                    className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
+                                                                >
+                                                                    <FiDownload className={styles.icon} /> Скачать
+                                                                </Button>
+                                                            </a>
+                                                            {canWarehouseProductAttachmentsDelete ? (
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="surface"
+                                                                    color="red"
+                                                                    highContrast
+                                                                    className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton} ${styles.orderDeleteButton}`}
+                                                                    onClick={() => void handleDeleteAttachment(a.id)}
+                                                                >
+                                                                    <FiTrash2 className={styles.icon} /> Удалить
+                                                                </Button>
+                                                            ) : null}
+                                                        </Flex>
+                                                    </Table.Cell>
+                                                </Table.Row>
+                                            ))}
+                                        </Table.Body>
+                                    </Table.Root>
+                                </div>
+                            )}
+                        </Card>
+                    ) : null}
+
+                    <Dialog.Root open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+                        <Dialog.Content style={{ maxWidth: 980, width: '95vw' }}>
+                            <Dialog.Title>{previewAttachment?.filename || 'Документ'}</Dialog.Title>
+                            <Dialog.Description>{previewAttachment?.mime_type || ''}</Dialog.Description>
+
+                            <Box style={{ marginTop: 12 }}>
+                                {previewAttachment && canPreviewInline(previewAttachment) ? (
+                                    previewAttachment.mime_type.toLowerCase().startsWith('image/') || /\.(png|jpg|jpeg|gif|webp|bmp|svg)$/i.test(previewAttachment.filename) ? (
+                                        <img
+                                            src={`/api/attachments/${encodeURIComponent(previewAttachment.id)}/inline?perm_scope=warehouse`}
+                                            alt={previewAttachment.filename}
+                                            style={{ width: '100%', maxHeight: '75vh', objectFit: 'contain' }}
+                                        />
+                                    ) : (
+                                        <iframe
+                                            src={`/api/attachments/${encodeURIComponent(previewAttachment.id)}/inline?perm_scope=warehouse`}
+                                            style={{ width: '100%', height: '75vh', border: '1px solid #eee', borderRadius: 8 }}
+                                            title={previewAttachment.filename}
+                                        />
+                                    )
+                                ) : (
+                                    <Text as="div" size="2" color="gray">
+                                        Предпросмотр недоступен для этого формата. Используй &quot;Скачать&quot;.
+                                    </Text>
+                                )}
+                            </Box>
+
+                            <Flex gap="3" mt="4" justify="end">
+                                {previewAttachment ? (
+                                    <a
+                                        href={`/api/attachments/${encodeURIComponent(previewAttachment.id)}/download?perm_scope=warehouse`}
+                                        style={{ textDecoration: 'none' }}
+                                    >
+                                        <Button variant="surface" color="gray" highContrast>
+                                            <FiDownload className={styles.icon} /> Скачать
+                                        </Button>
+                                    </a>
+                                ) : null}
+                                <Dialog.Close>
+                                    <Button variant="surface" color="gray" highContrast>Закрыть</Button>
+                                </Dialog.Close>
+                            </Flex>
+                        </Dialog.Content>
+                    </Dialog.Root>
+
+                    {canShowTableSection ? (
+                        <div className={styles.tableSection}>
+                            <Tabs.Root
+                                value={activeTab}
+                                onValueChange={(v) => {
+                                    const next = v as any;
+                                    if (next === 'movements' && !canMovementsView) return;
+                                    if (next === 'waitingOrders' && !canWaitingOrdersView) return;
+                                    if (next === 'pendingPurchases' && !canPendingPurchasesView) return;
+                                    setActiveTab(next);
+                                }}
+                            >
+                                <Tabs.List className={styles.tabsList}>
+                                    {canMovementsView ? (
+                                        <Tabs.Trigger value="movements">
+                                            История движений
+                                            {movementsCount > 0 ? <span className={styles.tabBadge}>{movementsCount}</span> : null}
+                                        </Tabs.Trigger>
+                                    ) : null}
+                                    {canWaitingOrdersView ? (
+                                        <Tabs.Trigger value="waitingOrders">
+                                            Ожидающие заявки
+                                            {waitingCount > 0 ? <span className={styles.tabBadge}>{waitingCount}</span> : null}
+                                        </Tabs.Trigger>
+                                    ) : null}
+                                    {canPendingPurchasesView ? (
+                                        <Tabs.Trigger value="pendingPurchases">
+                                            Ожидаемые поступления
+                                            {pendingCount > 0 ? <span className={styles.tabBadge}>{pendingCount}</span> : null}
+                                        </Tabs.Trigger>
+                                    ) : null}
+                                </Tabs.List>
+
+                                <div className={styles.tableHeader}>
+                                    <div>
+                                        <h2 className={styles.sectionTitle}>
+                                            {activeTab === 'movements'
+                                                ? 'История движений'
+                                                : activeTab === 'waitingOrders'
+                                                    ? 'Ожидающие заявки'
+                                                    : 'Ожидаемые поступления'}
+                                        </h2>
+                                    </div>
+                                    <div className={styles.tableHeaderActions}>
+                                        <TextField.Root
+                                            className={styles.searchInput}
+                                            size="3"
+                                            radius="large"
+                                            variant="surface"
+                                            placeholder="Поиск..."
+                                            value={search}
+                                            onChange={(e) => setSearch(e.target.value)}
+                                        >
+                                            <TextField.Slot side="left">
+                                                <FiSearch height="16" width="16" />
+                                            </TextField.Slot>
+                                        </TextField.Root>
+                                    </div>
+                                </div>
+
+                                {canMovementsView ? (
+                                    <Tabs.Content value="movements">
+                                        <div className={styles.tableContainer}>
+                                            <Table.Root variant="surface" className={styles.table}>
+                                                <Table.Header>
+                                                    <Table.Row>
+                                                        <Table.ColumnHeaderCell>Тип</Table.ColumnHeaderCell>
+                                                        <Table.ColumnHeaderCell>Количество</Table.ColumnHeaderCell>
+                                                        <Table.ColumnHeaderCell>Комментарий</Table.ColumnHeaderCell>
+                                                        <Table.ColumnHeaderCell>Дата</Table.ColumnHeaderCell>
+                                                        <Table.ColumnHeaderCell>Документ</Table.ColumnHeaderCell>
+                                                    </Table.Row>
+                                                </Table.Header>
+                                                <Table.Body>
+                                                    {filteredMovements.length ? filteredMovements.map((movement) => (
+                                                        <Table.Row key={movement.id} className={styles.tableRow}>
+                                                            <Table.Cell>
+                                                                <span className={styles.muted}>{movement.тип_операции}</span>
+                                                            </Table.Cell>
+                                                            <Table.Cell>
+                                                                <span className={styles.movementQty}>
+                                                                    {(movement.тип_операции === 'поступление' || movement.тип_операции === 'приход') ? '+' : '-'}{Math.abs(movement.количество)}
+                                                                </span>
+                                                                <span className={styles.muted}> {item.товар_единица}</span>
+                                                            </Table.Cell>
+                                                            <Table.Cell>
+                                                                {movement.комментарий ? movement.комментарий : <span className={styles.muted}>—</span>}
+                                                            </Table.Cell>
+                                                            <Table.Cell>
+                                                                <div className={styles.itemTitle}>{formatDateTime(movement.дата_операции)}</div>
+                                                            </Table.Cell>
+                                                            <Table.Cell>
+                                                                {movement.заявка_номер && canOrdersView ? (
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="surface"
+                                                                        color="gray"
+                                                                        highContrast
+                                                                        className={styles.linkPill}
+                                                                        onClick={() => router.push(`/orders/${movement.заявка_номер}`)}
+                                                                    >
+                                                                        Заявка #{movement.заявка_номер}
+                                                                    </Button>
+                                                                ) : movement.закупка_номер && canPurchasesView ? (
+                                                                    <Button
+                                                                        type="button"
+                                                                        variant="surface"
+                                                                        color="gray"
+                                                                        highContrast
+                                                                        className={styles.linkPill}
+                                                                        onClick={() => router.push(`/purchases/${movement.закупка_номер}`)}
+                                                                    >
+                                                                        Закупка #{movement.закупка_номер}
+                                                                    </Button>
+                                                                ) : (
+                                                                    <span className={styles.muted}>—</span>
+                                                                )}
+                                                            </Table.Cell>
+                                                        </Table.Row>
+                                                    )) : (
+                                                        <Table.Row>
+                                                            <Table.Cell colSpan={5}>
+                                                                <Text size="2" color="gray">Нет движений</Text>
+                                                            </Table.Cell>
+                                                        </Table.Row>
+                                                    )}
+                                                </Table.Body>
+                                            </Table.Root>
+                                        </div>
+                                    </Tabs.Content>
+                                ) : null}
+
+                                {canWaitingOrdersView ? (
+                                    <Tabs.Content value="waitingOrders">
+                                        <div className={styles.tableContainer}>
+                                            <Table.Root variant="surface" className={styles.table}>
+                                                <Table.Header>
+                                                    <Table.Row>
+                                                        <Table.ColumnHeaderCell>№ заявки</Table.ColumnHeaderCell>
+                                                        <Table.ColumnHeaderCell>Клиент</Table.ColumnHeaderCell>
+                                                        <Table.ColumnHeaderCell>Количество</Table.ColumnHeaderCell>
+                                                        <Table.ColumnHeaderCell>Цена</Table.ColumnHeaderCell>
+                                                        <Table.ColumnHeaderCell>Сумма</Table.ColumnHeaderCell>
+                                                        <Table.ColumnHeaderCell>Статус</Table.ColumnHeaderCell>
+                                                        <Table.ColumnHeaderCell>Дата</Table.ColumnHeaderCell>
+                                                    </Table.Row>
+                                                </Table.Header>
+                                                <Table.Body>
+                                                    {filteredWaitingOrders.length ? filteredWaitingOrders.map((order) => (
+                                                        <Table.Row key={order.id} className={styles.tableRow} onClick={() => router.push(`/orders/${order.заявка_номер}`)}>
+                                                            <Table.Cell>#{order.заявка_номер}</Table.Cell>
+                                                            <Table.Cell>{order.клиент_название}</Table.Cell>
+                                                            <Table.Cell>{order.количество} {item.товар_единица}</Table.Cell>
+                                                            <Table.Cell>{formatCurrency(order.цена)}</Table.Cell>
+                                                            <Table.Cell>{formatCurrency(order.количество * order.цена)}</Table.Cell>
+                                                            <Table.Cell>
+                                                                <span className={`${styles.statusPill} ${getDocStatusClass(order.заявка_статус)}`}>
+                                                                    {order.заявка_статус}
+                                                                </span>
+                                                            </Table.Cell>
+                                                            <Table.Cell>{formatDate(order.заявка_дата)}</Table.Cell>
+                                                        </Table.Row>
+                                                    )) : (
+                                                        <Table.Row>
+                                                            <Table.Cell colSpan={7}>
+                                                                <Text size="2" color="gray">Нет ожидающих заявок</Text>
+                                                            </Table.Cell>
+                                                        </Table.Row>
+                                                    )}
+                                                </Table.Body>
+                                            </Table.Root>
+                                        </div>
+                                    </Tabs.Content>
+                                ) : null}
+
+                                {canPendingPurchasesView ? (
+                                    <Tabs.Content value="pendingPurchases">
+                                        <div className={styles.tableContainer}>
+                                            <Table.Root variant="surface" className={styles.table}>
+                                                <Table.Header>
+                                                    <Table.Row>
+                                                        <Table.ColumnHeaderCell>№ закупки</Table.ColumnHeaderCell>
+                                                        <Table.ColumnHeaderCell>Поставщик</Table.ColumnHeaderCell>
+                                                        <Table.ColumnHeaderCell>Количество</Table.ColumnHeaderCell>
+                                                        <Table.ColumnHeaderCell>Цена</Table.ColumnHeaderCell>
+                                                        <Table.ColumnHeaderCell>Сумма</Table.ColumnHeaderCell>
+                                                        <Table.ColumnHeaderCell>Статус</Table.ColumnHeaderCell>
+                                                        <Table.ColumnHeaderCell>Дата</Table.ColumnHeaderCell>
+                                                        <Table.ColumnHeaderCell>Ожидаемая</Table.ColumnHeaderCell>
+                                                    </Table.Row>
+                                                </Table.Header>
+                                                <Table.Body>
+                                                    {filteredPendingPurchases.length ? filteredPendingPurchases.map((purchase) => (
+                                                        <Table.Row key={purchase.id} className={styles.tableRow} onClick={() => router.push(`/purchases/${purchase.закупка_номер}`)}>
+                                                            <Table.Cell>#{purchase.закупка_номер}</Table.Cell>
+                                                            <Table.Cell>{purchase.поставщик_название}</Table.Cell>
+                                                            <Table.Cell>{purchase.количество} {item.товар_единица}</Table.Cell>
+                                                            <Table.Cell>{formatCurrency(purchase.цена)}</Table.Cell>
+                                                            <Table.Cell>{formatCurrency(purchase.количество * purchase.цена)}</Table.Cell>
+                                                            <Table.Cell>
+                                                                <span className={`${styles.statusPill} ${getDocStatusClass(purchase.закупка_статус)}`}>
+                                                                    {purchase.закупка_статус}
+                                                                </span>
+                                                            </Table.Cell>
+                                                            <Table.Cell>{formatDate(purchase.закупка_дата)}</Table.Cell>
+                                                            <Table.Cell>{purchase.ожидаемая_дата ? formatDate(purchase.ожидаемая_дата) : '—'}</Table.Cell>
+                                                        </Table.Row>
+                                                    )) : (
+                                                        <Table.Row>
+                                                            <Table.Cell colSpan={8}>
+                                                                <Text size="2" color="gray">Нет ожидаемых поступлений</Text>
+                                                            </Table.Cell>
+                                                        </Table.Row>
+                                                    )}
+                                                </Table.Body>
+                                            </Table.Root>
+                                        </div>
+                                    </Tabs.Content>
+                                ) : null}
+                            </Tabs.Root>
+                        </div>
+                    ) : null}
+
+                    {/* Modals */}
+                    {
+                        data?.item && (
+                            <EditProductModal
+                                isOpen={isEditModalOpen}
+                                onClose={() => setIsEditModalOpen(false)}
+                                onProductUpdated={handleProductUpdated}
+                                product={{
+                                    id: data.item.товар_id,
+                                    название: data.item.товар_название,
+                                    артикул: data.item.товар_артикул,
+                                    категория: data.item.товар_категория,
+                                    единица_измерения: data.item.товар_единица,
+                                    минимальный_остаток: data.item.товар_мин_остаток,
+                                    цена_закупки: data.item.товар_цена_закупки,
+                                    цена_продажи: data.item.товар_цена_продажи
+                                }}
+                            />
+                        )
+                    }
+
+                    {
+                        data?.item && (
+                            <Dialog.Root
+                                open={isDeleteModalOpen}
+                                onOpenChange={(open) => {
+                                    if (!open) setIsDeleteModalOpen(false);
+                                }}
+                            >
+                                <Dialog.Content className={deleteConfirmationStyles.modalContent}>
+                                    <Dialog.Title>Подтверждение удаления</Dialog.Title>
+                                    <Box className={deleteConfirmationStyles.form}>
+                                        <Flex direction="column" gap="3">
+                                            <Text as="div" size="2" color="gray">
+                                                Вы уверены, что хотите удалить этот товар со склада? Это действие нельзя отменить.
+                                            </Text>
+
+                                            <Box className={deleteConfirmationStyles.positionsSection}>
+                                                <Flex direction="column" gap="1">
+                                                    <Text as="div" weight="bold">{data.item.товар_название}</Text>
+                                                    <Text as="div" size="2" color="gray">Артикул: {data.item.товар_артикул || '-'}</Text>
+                                                    <Text as="div" size="2" color="gray">Остаток: {data.item.количество} {data.item.товар_единица}</Text>
+                                                </Flex>
+                                            </Box>
+
+                                            <Flex justify="end" gap="3" mt="4" className={deleteConfirmationStyles.modalActions}>
+                                                <Button
+                                                    type="button"
+                                                    variant="surface"
+                                                    color="gray"
+                                                    highContrast
+                                                    onClick={() => setIsDeleteModalOpen(false)}
+                                                    disabled={isDeleting}
+                                                >
+                                                    Отмена
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    variant="surface"
+                                                    color="red"
+                                                    highContrast
+                                                    className={deleteConfirmationStyles.modalDeleteButton}
+                                                    onClick={handleConfirmDelete}
+                                                    disabled={isDeleting}
+                                                >
+                                                    {isDeleting ? 'Удаление...' : 'Удалить'}
+                                                </Button>
+                                            </Flex>
+                                        </Flex>
+                                    </Box>
+                                </Dialog.Content>
+                            </Dialog.Root>
+                        )
+                    }
+                </div>
             </div>
-          </div>
-        </div>
-
-        {/* Modals */}
-        {data?.item && (
-          <EditProductModal
-            isOpen={isEditModalOpen}
-            onClose={() => setIsEditModalOpen(false)}
-            onProductUpdated={handleProductUpdated}
-            product={{
-              id: data.item.товар_id,
-              название: data.item.товар_название,
-              артикул: data.item.товар_артикул,
-              категория: data.item.товар_категория,
-              единица_измерения: data.item.товар_единица,
-              минимальный_остаток: data.item.товар_мин_остаток,
-              цена_закупки: data.item.товар_цена_закупки,
-              цена_продажи: data.item.товар_цена_продажи
-            }}
-          />
-        )}
-
-        {data?.item && (
-          <DeleteConfirmation
-            isOpen={isDeleteModalOpen}
-            onClose={() => setIsDeleteModalOpen(false)}
-            onConfirm={handleConfirmDelete}
-            order={{
-              id: data.item.id,
-              клиент_название: data.item.товар_название,
-              общая_сумма: data.item.количество * data.item.товар_цена_продажи
-            }}
-          />
-        )}
-      </div>
-    </Layout>
-  );
+        </Layout>
+    );
 }

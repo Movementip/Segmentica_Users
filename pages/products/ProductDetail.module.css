@@ -1,0 +1,368 @@
+.container {
+  padding: 2rem 1.5rem;
+  padding-top: 81px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: #fafafa;
+  min-height: 100vh;
+}
+
+.header {
+  margin-bottom: 16px;
+  padding: 16px 20px;
+}
+
+.headerContent {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.headerLeft {
+  display: flex;
+  flex-direction: column;
+}
+
+.headerActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #212121;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.subtitle {
+  color: #757575;
+  margin: 2px 0 0;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid;
+  gap: 6px;
+  text-decoration: none;
+}
+
+.secondaryButton {
+  background-color: #ffffff;
+  color: #424242;
+  border-color: #e0e0e0;
+}
+
+.secondaryButton:hover {
+  background-color: #f5f5f5;
+  border-color: #d0d0d0;
+}
+
+.primaryButton:global(.rt-Button) {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+  border: 1px solid #000000 !important;
+}
+
+.surfaceButton:global(.rt-Button),
+.surfaceButton:global(.rt-Button):where(.rt-variant-surface) {
+  background-color: #ffffff !important;
+  color: #424242 !important;
+  border: 1px solid #e0e0e0 !important;
+  border-radius: 6px !important;
+  box-shadow: inset 0 0 0 1px var(--accent-a7) !important;
+}
+
+.surfaceButton:global(.rt-Button):hover,
+.surfaceButton:global(.rt-Button):where(.rt-variant-surface):hover {
+  background-color: #f5f5f5 !important;
+  border-color: #d0d0d0 !important;
+}
+
+.orderDeleteButton:global(.rt-Button),
+.orderDeleteButton:global(.rt-Button):where(.rt-variant-surface) {
+  color: #dc2626 !important;
+  border-color: #f1d4d4 !important;
+}
+
+.orderDeleteButton:global(.rt-Button:hover),
+.orderDeleteButton:global(.rt-Button):where(.rt-variant-surface):hover {
+  background: #dc2626 !important;
+  border-color: #dc2626 !important;
+  color: #ffffff !important;
+}
+
+.secondaryButton:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.icon {
+  width: 16px;
+  height: 16px;
+}
+
+.card {
+  background: white;
+  border-radius: 0;
+  box-shadow: none;
+  overflow: hidden;
+  border: none;
+  padding: 0;
+}
+
+.sectionHeader {
+  padding: 20px 20px 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.sectionTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: #212121;
+  margin: 0;
+}
+
+.sectionBlock {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.sectionBlock .sectionHeaderRow {
+display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+    margin-left: 16px;
+}
+
+.infoGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-top: 16px;
+  padding: 0 20px 20px;
+}
+
+.infoGroup {
+  margin-top: 12px;
+}
+
+.infoLabel {
+  margin: 0;
+  font-size: 12px;
+  color: #757575;
+}
+
+.infoValue {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: #212121;
+  font-weight: 500;
+}
+
+.tableWrapper {
+  overflow-x: auto;
+  padding: 0 4px 20px;
+}
+
+.table:global(.rt-TableRoot),
+.table:global(.rt-TableRoot.rt-variant-surface) {
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+}
+
+.table :global(.rt-TableRootTable) {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 14px;
+  background-color: #ffffff;
+  border: none;
+  outline: none;
+  box-shadow: none;
+}
+
+.table :global(colgroup) col:nth-child(1) {
+  width: 20%;
+}
+
+.table :global(colgroup) col:nth-child(2),
+.table :global(colgroup) col:nth-child(3) {
+  width: 17%;
+}
+
+.table :global(colgroup) col:nth-child(4) {
+  width: 17%;
+}
+
+.table :global(colgroup) col:nth-child(5) {
+  width: 29%;
+}
+
+.table :global(.rt-TableColumnHeaderCell) {
+  padding: 12px 14px;
+  vertical-align: middle;
+  color: #757575;
+  font-size: 12px;
+  font-weight: 600;
+  border-bottom: 1px solid #f0f0f0;
+  text-align: left;
+  background-color: #ffffff;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.table :global(.rt-TableColumnHeaderCell:first-child),
+.table :global(.rt-TableCell:first-child) {
+  padding-left: 12px;
+}
+
+.table :global(.rt-TableColumnHeaderCell:last-child),
+.table :global(.rt-TableCell:last-child) {
+  padding-right: 12px;
+}
+
+.table :global(.rt-TableCell) {
+  padding: 12px 14px;
+  vertical-align: middle;
+  color: #424242;
+  font-size: 14px;
+  border-bottom: 1px solid #f3f3f3;
+}
+
+.table :global(.rt-TableColumnHeaderCell:nth-child(2)),
+.table :global(.rt-TableColumnHeaderCell:nth-child(3)),
+.table :global(.rt-TableCell:nth-child(2)),
+.table :global(.rt-TableCell:nth-child(3)) {
+  text-align: right;
+}
+
+.table :global(.rt-TableColumnHeaderCell:nth-child(5)),
+.table :global(.rt-TableCell:nth-child(5)) {
+  text-align: left;
+}
+
+.table :global(.rt-TableBody) :global(.rt-TableRow):last-child :global(.rt-TableCell) {
+  border-bottom: none;
+}
+
+.textRight {
+  text-align: right;
+}
+
+.tableRow {
+  background-color: #ffffff;
+  transition: background-color 0.2s;
+}
+
+.tableRow:hover {
+  background-color: #f9fafb;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 0 20px 20px;
+}
+
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fieldLabel {
+  font-size: 12px;
+  color: #757575;
+  font-weight: 500;
+}
+
+.textField:global(.rt-TextFieldRoot) {
+  width: 100%;
+  min-height: 40px;
+  border-radius: 15px !important;
+  border: 1px solid #e0e0e0 !important;
+  background: #ffffff !important;
+  box-shadow: inset 0 0 0 1px var(--gray-a7) !important;
+}
+
+.textField :global(.rt-TextFieldInput) {
+  height: 40px;
+}
+
+.selectTrigger:global(.rt-SelectTrigger) {
+  width: 100%;
+  height: 40px;
+  border-radius: 15px !important;
+  border: 1px solid #e0e0e0 !important;
+  background: #ffffff !important;
+  box-shadow: inset 0 0 0 1px var(--gray-a7) !important;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 20px 20px;
+  flex-wrap: wrap;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px;
+  color: #6b7280;
+}
+
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+.error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  padding: 16px;
+  border-radius: 8px;
+  margin: 0 20px 20px;
+}
+
+.noData {
+  padding: 0 20px 20px;
+  color: #6b7280;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 900px) {
+  .infoGrid,
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,242 @@
+.container {
+  padding: 20px;
+  padding-top: 81px;
+  max-width: 100%;
+  overflow-x: visible;
+  color: #333;
+  line-height: 1.5;
+  min-height: calc(100vh - 4rem);
+  background-color: #fff;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #f0f0f0;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+.headerLeft {
+  display: flex;
+  flex-direction: column;
+}
+
+.title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: #1a1a1a;
+  line-height: 1.2;
+}
+
+.subtitle {
+  color: #757575;
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.filterSelectTrigger {
+  width: 220px;
+  min-width: 220px;
+}
+
+.filterSelectTrigger:global(.rt-SelectTrigger) {
+  height: 40px;
+  border-radius: 15px;
+  border: 1px solid #e0e0e0 !important;
+  background: #ffffff !important;
+  box-shadow: inset 0 0 0 1px var(--gray-a7) !important;
+}
+
+.filterSelectTrigger:global(.rt-SelectTrigger[data-state='open']),
+.filterSelectTrigger:global(.rt-SelectTrigger:focus-visible),
+.filterSelectTrigger:global(.rt-SelectTrigger[data-focus-visible]) {
+  outline: none !important;
+  border-color: #000000 !important;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12) !important;
+}
+
+.filterSelectContent:global(.rt-SelectContent) {
+  min-width: var(--radix-select-trigger-width) !important;
+  width: var(--radix-select-trigger-width) !important;
+}
+
+.searchInput {
+  width: min(420px, 100%);
+}
+
+.searchInput:global(.rt-TextFieldRoot) {
+  height: 40px;
+  border-radius: 15px;
+  border: 1px solid #e0e0e0;
+  background: #ffffff;
+}
+
+.searchInput:global(.rt-TextFieldRoot):has(:focus-visible) {
+  outline: none !important;
+  border-color: rgba(0, 0, 0, 0.45) !important;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35) !important;
+}
+
+.searchInput :global(.rt-TextFieldSlot) {
+  display: flex;
+  align-items: center;
+  padding-left: 12px;
+}
+
+.searchInput :global(.rt-TextFieldSlot)[data-side='right'] {
+  display: none;
+}
+
+.tableSection:global(.rt-Card) {
+  padding: 0;
+  border: 1px solid #ededed;
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.tableWrapper {
+  overflow-x: hidden;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table:global(.rt-TableRootTable) {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  background-color: #ffffff;
+  table-layout: fixed;
+}
+
+.table :global(.rt-TableHeader) {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.container .table:global(.rt-TableRoot.rt-variant-surface) {
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.table :global(.rt-TableColumnHeaderCell) {
+  padding: 12px 14px;
+  vertical-align: middle;
+  color: #424242;
+  font-size: 14px;
+  border-bottom: 1px solid #f3f3f3;
+  text-align: left;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.table :global(.rt-TableCell) {
+  padding: 12px 14px;
+  color: #212121;
+  border-bottom: 1px solid #f5f5f5;
+  vertical-align: middle;
+  max-width: 420px;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.tableRow:hover {
+  background: #fafafa;
+}
+
+.cellContent {
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal;
+}
+
+.surfaceButton:global(.rt-Button) {
+  background-color: #ffffff;
+  color: #424242;
+  border: 1px solid;
+  border-color: #e0e0e0;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px var(--accent-a7);
+}
+
+@media (max-width: 1024px) {
+  .table :global(.rt-TableColumnHeaderCell),
+  .table :global(.rt-TableCell) {
+    padding: 8px 10px;
+    font-size: 12px;
+  }
+
+  .table:global(.rt-TableRootTable) {
+    font-size: 12px;
+  }
+}
+
+.loading,
+.error,
+.noData {
+  padding: 2rem;
+  text-align: center;
+  color: #666;
+  font-size: 1rem;
+}
+
+.error {
+  color: #d32f2f;
+  background-color: #fde8e8;
+  padding: 1rem;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+}
+
+.noData {
+  color: #888;
+  font-style: italic;
+  text-align: center;
+  padding: 2rem;
+}
+
+/* Print styles */
+@media print {
+  .container {
+    padding: 0;
+  }
+  
+  .header {
+    display: none;
+  }
+
+  .tableSection:global(.rt-Card) {
+    border: none;
+    box-shadow: none;
+  }
+
+  .tableWrapper {
+    overflow: visible;
+  }
+  
+  .noPrint {
+    display: none;
+  }
+}

@@ -1,9 +1,25 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { query } from '../../../lib/db';
+import { requireAuth } from '../../../lib/auth';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'GET') {
     try {
+      const actor = await requireAuth(req, res);
+      if (!actor) return;
+
+      const perms = actor.permissions || [];
+      const canOrders = perms.includes('archive.orders.list');
+      const canPurchases = perms.includes('archive.purchases.list');
+      const canShipments = perms.includes('archive.shipments.list');
+      const canPayments = perms.includes('archive.payments.list');
+      const canFinance = perms.includes('archive.finance.list');
+
+      const canAnyArchive = canOrders || canPurchases || canShipments || canPayments || canFinance;
+      if (!canAnyArchive) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+
       // Get completed orders
       const completedOrdersResult = await query(`
         SELECT 
@@ -94,13 +110,33 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           (SELECT SUM("сумма") FROM "Выплаты") as общие_выплаты
       `);
 
+      const stats = statsResult.rows[0] || {};
+      if (!canOrders) {
+        stats.завершенные_заявки = 0;
+        stats.выручка_от_заявок = null;
+      }
+      if (!canPurchases) {
+        stats.завершенные_закупки = 0;
+        stats.затраты_на_закупки = null;
+      }
+      if (!canShipments) {
+        stats.завершенные_отгрузки = 0;
+      }
+      if (!canPayments) {
+        stats.всего_выплат = 0;
+        stats.общие_выплаты = null;
+      }
+      if (!canFinance) {
+        stats.финансовых_записей = 0;
+      }
+
       res.status(200).json({
-        completedOrders: completedOrdersResult.rows,
-        completedPurchases: completedPurchasesResult.rows,
-        completedShipments: completedShipmentsResult.rows,
-        employeePayments: employeePaymentsResult.rows,
-        financialRecords: financialRecordsResult.rows,
-        statistics: statsResult.rows[0] || {}
+        completedOrders: canOrders ? completedOrdersResult.rows : [],
+        completedPurchases: canPurchases ? completedPurchasesResult.rows : [],
+        completedShipments: canShipments ? completedShipmentsResult.rows : [],
+        employeePayments: canPayments ? employeePaymentsResult.rows : [],
+        financialRecords: canFinance ? financialRecordsResult.rows : [],
+        statistics: stats
       });
     } catch (error) {
       console.error('Error fetching archive data:', error);

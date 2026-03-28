@@ -1,65 +1,103 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/router';
 import styles from './Header.module.css';
+import { FiSearch, FiX, FiPackage, FiUser } from 'react-icons/fi';
 import {
-    FiUser,
-    FiSearch,
-    FiX,
-    FiPackage,
     FiShoppingBag,
     FiFolder,
     FiTruck,
-    FiUser as FiClient,
     FiDatabase
 } from 'react-icons/fi';
-
-interface HeaderProps {
-    onMenuToggle?: () => void;
-    pageTitle?: string;
-}
+import { Box, Card, DropdownMenu, Flex, ScrollArea, Separator, Text, TextField } from '@radix-ui/themes';
+import { useAuth } from '../../context/AuthContext';
 
 interface SearchResult {
-    id: number;
+    id: string;
     type: 'product' | 'client' | 'order' | 'category' | 'supplier';
     title: string;
     subtitle: string;
     price?: number;
-    status?: string;
     date?: string;
+    status?: string;
     phone?: string;
 }
 
 interface SearchResults {
-    products: SearchResult[];
-    clients: SearchResult[];
     orders: SearchResult[];
+    clients: SearchResult[];
+    products: SearchResult[];
     categories: SearchResult[];
     suppliers: SearchResult[];
 }
 
-export function Header({ pageTitle: propPageTitle }: HeaderProps): JSX.Element {
+export function Header(): JSX.Element {
     const router = useRouter();
-    const defaultPageTitle = router.pathname.startsWith('/reports') ? 'Отчеты' : 'Дашборд';
-    const pageTitle = propPageTitle || defaultPageTitle;
+    const { user, logout, setTheme } = useAuth();
     const [searchQuery, setSearchQuery] = useState('');
+    const [isSearchOpen, setIsSearchOpen] = useState(false);
+    const [isSearching, setIsSearching] = useState(false);
+    const [searchMode, setSearchMode] = useState<'default' | 'sku' | 'supplier' | 'category'>('default');
+    const searchRef = useRef<HTMLDivElement>(null);
     const [searchResults, setSearchResults] = useState<SearchResults>({
-        products: [],
-        clients: [],
         orders: [],
+        clients: [],
+        products: [],
         categories: [],
         suppliers: []
     });
-    const [isSearching, setIsSearching] = useState(false);
-    const searchRef = useRef<HTMLDivElement>(null);
+
+    const [dbStatus, setDbStatus] = useState<{ isRemote: boolean; mode: 'local' | 'remote'; remoteAvailable: boolean } | null>(null);
+    const [isDbLoading, setIsDbLoading] = useState(true);
+    const [isDbSwitching, setIsDbSwitching] = useState(false);
+
+    const fetchDbStatus = async () => {
+        try {
+            const response = await fetch('/api/db-status');
+            if (!response.ok) return;
+            const data = await response.json();
+            setDbStatus({
+                isRemote: Boolean(data.isRemote),
+                mode: data.mode === 'remote' ? 'remote' : 'local',
+                remoteAvailable: Boolean(data.remoteAvailable)
+            });
+        } catch (error) {
+            console.error('Failed to fetch DB status:', error);
+        } finally {
+            setIsDbLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchDbStatus();
+        const t = window.setInterval(fetchDbStatus, 10000);
+        return () => window.clearInterval(t);
+    }, []);
+
+    const switchDbMode = async (mode: 'local' | 'remote') => {
+        setIsDbSwitching(true);
+        try {
+            const response = await fetch('/api/db-mode', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mode })
+            });
+            if (!response.ok) return;
+            await fetchDbStatus();
+        } catch (error) {
+            console.error('Failed to switch DB mode:', error);
+        } finally {
+            setIsDbSwitching(false);
+        }
+    };
 
     // Handle search input changes with debounce
     useEffect(() => {
         const search = async () => {
             if (searchQuery.trim().length < 2) {
                 setSearchResults({
-                    products: [],
-                    clients: [],
                     orders: [],
+                    clients: [],
+                    products: [],
                     categories: [],
                     suppliers: []
                 });
@@ -71,14 +109,21 @@ export function Header({ pageTitle: propPageTitle }: HeaderProps): JSX.Element {
                 const response = await fetch(`/api/search?query=${encodeURIComponent(searchQuery)}`);
                 const data = await response.json();
                 setSearchResults({
-                    products: data.products || [],
-                    clients: data.clients || [],
                     orders: data.orders || [],
+                    clients: data.clients || [],
+                    products: data.products || [],
                     categories: data.categories || [],
                     suppliers: data.suppliers || []
                 });
             } catch (error) {
                 console.error('Search error:', error);
+                setSearchResults({
+                    orders: [],
+                    clients: [],
+                    products: [],
+                    categories: [],
+                    suppliers: []
+                });
             } finally {
                 setIsSearching(false);
             }
@@ -90,20 +135,9 @@ export function Header({ pageTitle: propPageTitle }: HeaderProps): JSX.Element {
 
     // Close search results when clicking outside or when input loses focus
     useEffect(() => {
-        const clearResults = () => {
-            setSearchQuery('');
-            setSearchResults({
-                products: [],
-                clients: [],
-                orders: [],
-                categories: [],
-                suppliers: []
-            });
-        };
-
         const handleClickOutside = (event: MouseEvent) => {
             if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
-                clearResults();
+                setIsSearchOpen(false);
             }
         };
 
@@ -111,7 +145,7 @@ export function Header({ pageTitle: propPageTitle }: HeaderProps): JSX.Element {
             // Use setTimeout to allow click events to be processed before clearing
             setTimeout(() => {
                 if (searchRef.current && !searchRef.current.contains(document.activeElement)) {
-                    clearResults();
+                    setIsSearchOpen(false);
                 }
             }, 200);
         };
@@ -126,14 +160,7 @@ export function Header({ pageTitle: propPageTitle }: HeaderProps): JSX.Element {
     }, []);
 
     const handleResultClick = (result: SearchResult) => {
-        setSearchQuery('');
-        setSearchResults({
-            products: [],
-            clients: [],
-            orders: [],
-            categories: [],
-            suppliers: []
-        });
+        setIsSearchOpen(false);
 
         switch (result.type) {
             case 'product':
@@ -154,210 +181,498 @@ export function Header({ pageTitle: propPageTitle }: HeaderProps): JSX.Element {
         }
     };
 
+    const handleExampleClick = (value: string) => {
+        setIsSearchOpen(true);
+        setSearchMode('default');
+        setSearchQuery(value);
+        setTimeout(() => {
+            const el = searchRef.current?.querySelector('input') as HTMLInputElement | null;
+            el?.focus();
+        }, 0);
+    };
+
+    const handleModeHintClick = (mode: 'sku' | 'supplier' | 'category') => {
+        setIsSearchOpen(true);
+        setSearchMode(mode);
+        setTimeout(() => {
+            const el = searchRef.current?.querySelector('input') as HTMLInputElement | null;
+            el?.focus();
+        }, 0);
+    };
+
+    const placeholder =
+        searchMode === 'sku'
+            ? 'Введите артикул / SKU…'
+            : searchMode === 'supplier'
+                ? 'Введите название поставщика…'
+                : searchMode === 'category'
+                    ? 'Введите категорию…'
+                    : 'Например: заявка #5, Иванов, +7…';
+
+    const showDropdown = isSearchOpen;
+    const isQueryReady = searchQuery.trim().length >= 2;
+
     const hasResults =
-        searchResults.products.length > 0 ||
-        searchResults.clients.length > 0 ||
         searchResults.orders.length > 0 ||
+        searchResults.clients.length > 0 ||
+        searchResults.products.length > 0 ||
         searchResults.categories.length > 0 ||
         searchResults.suppliers.length > 0;
+
+    const getStatusColor = (status: string) => {
+        switch ((status || '').toLowerCase()) {
+            case 'новая':
+                return '#1976d2';
+            case 'в обработке':
+                return '#f57c00';
+            case 'подтверждена':
+                return '#7b1fa2';
+            case 'в работе':
+                return '#0288d1';
+            case 'собрана':
+                return '#5d4037';
+            case 'отгружена':
+                return '#00897b';
+            case 'выполнена':
+                return '#388e3c';
+            case 'отменена':
+                return '#d32f2f';
+            default:
+                return '#616161';
+        }
+    };
+
+    const renderSectionHeader = (
+        icon: React.ReactNode,
+        title: string
+    ) => (
+        <Flex align="center" gap="2" className={styles.sectionHeader}>
+            <Box className={styles.sectionHeaderIcon}>{icon}</Box>
+            <Text size="3" weight="bold" color="gray">
+                {title}
+            </Text>
+        </Flex>
+    );
 
     return (
         <header className={styles.header}>
             <div className={styles.leftSection}>
-                <h1 className={styles.pageTitle}>{pageTitle}</h1>
+                <div className={styles.leftSpacer} />
             </div>
 
             <div className={styles.rightSection}>
                 <div className={styles.searchWrapper} ref={searchRef}>
-                    <div className={styles.searchContainer}>
-                        <input
-                            type="text"
-                            className={styles.searchInput}
-                            placeholder="Поиск по заявкам, товарам, клиентам..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            onFocus={() => searchQuery.length >= 2 && setSearchResults(prev => ({
-                                products: [...prev.products],
-                                clients: [...prev.clients],
-                                orders: [...prev.orders],
-                                categories: [...prev.categories],
-                                suppliers: [...prev.suppliers]
-                            }))}
-                            title="Поиск по всем разделам системы"
-                        />
+                    <TextField.Root
+                        className={styles.searchField}
+                        size="3"
+                        variant="surface"
+                        radius="large"
+                        placeholder={placeholder}
+                        value={searchQuery}
+                        onChange={(e) => {
+                            setSearchQuery(e.target.value);
+                            setIsSearchOpen(true);
+                        }}
+                        onFocus={() => setIsSearchOpen(true)}
+                        title="Поиск по всем разделам системы"
+                    >
+                        <TextField.Slot>
+                            <FiSearch className={styles.searchIcon} />
+                        </TextField.Slot>
+
                         {searchQuery ? (
-                            <button
-                                className={styles.clearButton}
-                                onClick={() => {
-                                    setSearchQuery('');
-                                    setSearchResults({
-                                        products: [],
-                                        clients: [],
-                                        orders: [],
-                                        categories: [],
-                                        suppliers: []
-                                    });
-                                }}
-                            >
-                                <FiX size={18} />
-                            </button>
-                        ) : (
-                            <div className={styles.searchButton}>
-                                <FiSearch />
-                            </div>
-                        )}
-                    </div>
+                            <TextField.Slot>
+                                <button
+                                    type="button"
+                                    className={styles.clearButton}
+                                    onClick={() => {
+                                        setSearchQuery('');
+                                        setIsSearchOpen(true);
+                                        setSearchResults({
+                                            products: [],
+                                            clients: [],
+                                            orders: [],
+                                            categories: [],
+                                            suppliers: []
+                                        });
+                                    }}
+                                    aria-label="Очистить поиск"
+                                >
+                                    <FiX size={18} />
+                                </button>
+                            </TextField.Slot>
+                        ) : null}
+                    </TextField.Root>
 
-                    {(isSearching || (searchResults && searchQuery.length >= 2)) && (
+                    {showDropdown && (
                         <div className={styles.searchResults}>
-                            {isSearching ? (
-                                <div className={styles.loading}>Загрузка...</div>
-                            ) : hasResults ? (
-                                <>
-                                    {searchResults.products.length > 0 && (
-                                        <div className={styles.resultsSection}>
-                                            <div className={styles.sectionTitle}>
-                                                <FiPackage className={styles.sectionIcon} data-type="product" />
-                                                Товары
-                                            </div>
-                                            {searchResults.products.map((product) => (
-                                                <div
-                                                    key={`product-${product.id}`}
-                                                    className={styles.resultItem}
-                                                    data-type="product"
-                                                    onClick={() => handleResultClick(product)}
-                                                >
-                                                    <div className={styles.resultTitle}>{product.title}</div>
-                                                    <div className={styles.resultSubtitle}>
-                                                        {product.subtitle} • {product.price} ₽
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
+                            <Card size="2" variant="surface" className={styles.searchCard}>
+                                <ScrollArea type="auto" scrollbars="vertical" style={{ maxHeight: 520 }}>
+                                    <Flex direction="column" className={styles.searchCardInner}>
+                                        {!isQueryReady ? (
+                                            <Box className={styles.searchEmpty}>
+                                                <Text size="3" weight="bold">
+                                                    Что можно найти
+                                                </Text>
+                                                <Text size="2" color="gray" style={{ marginTop: 4 }}>
+                                                    Введи минимум 2 символа. Примеры:
+                                                </Text>
 
-                                    {searchResults.clients.length > 0 && (
-                                        <div className={styles.resultsSection}>
-                                            <div className={styles.sectionTitle}>
-                                                <FiUser className={styles.sectionIcon} data-type="client" />
-                                                Клиенты
-                                            </div>
-                                            {searchResults.clients.map((client) => (
-                                                <div
-                                                    key={`client-${client.id}`}
-                                                    className={styles.resultItem}
-                                                    data-type="client"
-                                                    onClick={() => handleResultClick(client)}
-                                                >
-                                                    <div className={styles.resultTitle}>{client.title}</div>
-                                                    <div className={styles.resultSubtitle}>
-                                                        {client.subtitle}
-                                                        {client.date && ` • ${client.date}`}
-                                                    </div>
+                                                <div className={styles.exampleGrid}>
+                                                    <button
+                                                        type="button"
+                                                        className={styles.exampleChip}
+                                                        onClick={() => handleExampleClick('заявка #5')}
+                                                    >
+                                                        заявка #5
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className={styles.exampleChip}
+                                                        onClick={() => handleExampleClick('ИП Иванов')}
+                                                    >
+                                                        ИП Иванов
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className={styles.exampleChip}
+                                                        onClick={() => handleExampleClick('+7')}
+                                                    >
+                                                        +7… (телефон)
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className={styles.exampleChip}
+                                                        onClick={() => handleModeHintClick('sku')}
+                                                    >
+                                                        артикул / SKU
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className={styles.exampleChip}
+                                                        onClick={() => handleModeHintClick('supplier')}
+                                                    >
+                                                        поставщик
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        className={styles.exampleChip}
+                                                        onClick={() => handleModeHintClick('category')}
+                                                    >
+                                                        категория
+                                                    </button>
                                                 </div>
-                                            ))}
-                                        </div>
-                                    )}
+                                            </Box>
+                                        ) : isSearching ? (
+                                            <Box className={styles.loading}>
+                                                <Text size="2" color="gray">
+                                                    Загрузка...
+                                                </Text>
+                                            </Box>
+                                        ) : hasResults ? (
+                                            <>
+                                                {searchResults.orders.length > 0 && (
+                                                    <Box>
+                                                        {renderSectionHeader(
+                                                            <FiShoppingBag className={styles.sectionIcon} data-type="order" />,
+                                                            'Заказы'
+                                                        )}
+                                                        <Separator size="4" />
+                                                        <Flex direction="column">
+                                                            {searchResults.orders.map((order) => (
+                                                                <Box
+                                                                    key={`order-${order.id}`}
+                                                                    className={styles.resultRow}
+                                                                    data-type="order"
+                                                                    onClick={() => handleResultClick(order)}
+                                                                >
+                                                                    <Flex align="center" gap="2" wrap="wrap">
+                                                                        <Text size="3" weight="bold">
+                                                                            {order.title}
+                                                                        </Text>
+                                                                        {order.status ? (
+                                                                            <div
+                                                                                className={styles.statusBadge}
+                                                                                style={{
+                                                                                    backgroundColor: `${getStatusColor(order.status)}15`,
+                                                                                    color: getStatusColor(order.status),
+                                                                                    border: `1px solid ${getStatusColor(order.status)}40`
+                                                                                }}
+                                                                            >
+                                                                                {order.status}
+                                                                            </div>
+                                                                        ) : null}
+                                                                    </Flex>
+                                                                    <Text size="2" color="gray" style={{ marginTop: 4 }}>
+                                                                        {order.subtitle}
+                                                                        {order.date && ` • ${order.date}`}
+                                                                    </Text>
+                                                                </Box>
+                                                            ))}
+                                                        </Flex>
+                                                    </Box>
+                                                )}
 
-                                    {searchResults.orders.length > 0 && (
-                                        <div className={styles.resultsSection}>
-                                            <div className={styles.sectionTitle}>
-                                                <FiShoppingBag className={styles.sectionIcon} data-type="order" />
-                                                Заказы
-                                            </div>
-                                            {searchResults.orders.map((order) => (
-                                                <div
-                                                    key={`order-${order.id}`}
-                                                    className={styles.resultItem}
-                                                    data-type="order"
-                                                    onClick={() => handleResultClick(order)}
-                                                >
-                                                    <div className={styles.resultTitle}>
-                                                        {order.title} •
-                                                        <span className={`${styles.status} ${order.status === 'completed' ? styles.statusCompleted :
-                                                            order.status === 'processing' ? styles.statusProcessing :
-                                                                styles.statusPending
-                                                            }`}>
-                                                            {order.status === 'completed' ? 'Завершен' :
-                                                                order.status === 'processing' ? 'В обработке' : 'В ожидании'}
-                                                        </span>
-                                                    </div>
-                                                    <div className={styles.resultSubtitle}>
-                                                        {order.subtitle}
-                                                        {order.date && ` • ${order.date}`}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
+                                                {searchResults.clients.length > 0 && (
+                                                    <Box style={{ marginTop: 12 }}>
+                                                        {renderSectionHeader(
+                                                            <FiUser className={styles.sectionIcon} data-type="client" />,
+                                                            'Клиенты'
+                                                        )}
+                                                        <Separator size="4" />
+                                                        <Flex direction="column">
+                                                            {searchResults.clients.map((client) => (
+                                                                <Box
+                                                                    key={`client-${client.id}`}
+                                                                    className={styles.resultRow}
+                                                                    data-type="client"
+                                                                    onClick={() => handleResultClick(client)}
+                                                                >
+                                                                    <Text size="3" weight="bold">
+                                                                        {client.title}
+                                                                    </Text>
+                                                                    <Text size="2" color="gray" style={{ marginTop: 4 }}>
+                                                                        {client.subtitle}
+                                                                        {client.date && ` • ${client.date}`}
+                                                                    </Text>
+                                                                </Box>
+                                                            ))}
+                                                        </Flex>
+                                                    </Box>
+                                                )}
 
-                                    {searchResults.categories.length > 0 && (
-                                        <div className={styles.resultsSection}>
-                                            <div className={styles.sectionTitle}>
-                                                <FiFolder className={styles.sectionIcon} data-type="category" />
-                                                Категории
-                                            </div>
-                                            {searchResults.categories.map((category) => (
-                                                <div
-                                                    key={`category-${category.id}`}
-                                                    className={styles.resultItem}
-                                                    data-type="category"
-                                                    onClick={() => handleResultClick(category)}
-                                                >
-                                                    <div className={styles.resultTitle}>{category.title}</div>
-                                                    <div className={styles.resultSubtitle}>
-                                                        {category.subtitle}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
+                                                {searchResults.products.length > 0 && (
+                                                    <Box style={{ marginTop: 12 }}>
+                                                        {renderSectionHeader(
+                                                            <FiPackage className={styles.sectionIcon} data-type="product" />,
+                                                            'Товары'
+                                                        )}
+                                                        <Separator size="4" />
+                                                        <Flex direction="column">
+                                                            {searchResults.products.map((product) => (
+                                                                <Box
+                                                                    key={`product-${product.id}`}
+                                                                    className={styles.resultRow}
+                                                                    data-type="product"
+                                                                    onClick={() => handleResultClick(product)}
+                                                                >
+                                                                    <Text size="3" weight="bold">
+                                                                        {product.title}
+                                                                    </Text>
+                                                                    <Text size="2" color="gray" style={{ marginTop: 4 }}>
+                                                                        {product.subtitle}
+                                                                        {typeof product.price === 'number' && ` • ${product.price} ₽`}
+                                                                    </Text>
+                                                                </Box>
+                                                            ))}
+                                                        </Flex>
+                                                    </Box>
+                                                )}
 
-                                    {searchResults.suppliers.length > 0 && (
-                                        <div className={styles.resultsSection}>
-                                            <div className={styles.sectionTitle}>
-                                                <FiTruck className={styles.sectionIcon} data-type="supplier" />
-                                                Поставщики
-                                            </div>
-                                            {searchResults.suppliers.map((supplier) => (
-                                                <div
-                                                    key={`supplier-${supplier.id}`}
-                                                    className={styles.resultItem}
-                                                    data-type="supplier"
-                                                    onClick={() => handleResultClick(supplier)}
-                                                >
-                                                    <div className={styles.resultTitle}>{supplier.title}</div>
-                                                    <div className={styles.resultSubtitle}>
-                                                        {supplier.subtitle}
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </>
-                            ) : searchQuery.length >= 2 ? (
-                                <div className={styles.noResults}>Ничего не найдено</div>
-                            ) : null}
+                                                {searchResults.categories.length > 0 && (
+                                                    <Box style={{ marginTop: 12 }}>
+                                                        {renderSectionHeader(
+                                                            <FiFolder className={styles.sectionIcon} data-type="category" />,
+                                                            'Категории'
+                                                        )}
+                                                        <Separator size="4" />
+                                                        <Flex direction="column">
+                                                            {searchResults.categories.map((category) => (
+                                                                <Box
+                                                                    key={`category-${category.id}`}
+                                                                    className={styles.resultRow}
+                                                                    data-type="category"
+                                                                    onClick={() => handleResultClick(category)}
+                                                                >
+                                                                    <Text size="3" weight="bold">
+                                                                        {category.title}
+                                                                    </Text>
+                                                                    <Text size="2" color="gray" style={{ marginTop: 4 }}>
+                                                                        {category.subtitle}
+                                                                    </Text>
+                                                                </Box>
+                                                            ))}
+                                                        </Flex>
+                                                    </Box>
+                                                )}
+
+                                                {searchResults.suppliers.length > 0 && (
+                                                    <Box style={{ marginTop: 12 }}>
+                                                        {renderSectionHeader(
+                                                            <FiTruck className={styles.sectionIcon} data-type="supplier" />,
+                                                            'Поставщики'
+                                                        )}
+                                                        <Separator size="4" />
+                                                        <Flex direction="column">
+                                                            {searchResults.suppliers.map((supplier) => (
+                                                                <Box
+                                                                    key={`supplier-${supplier.id}`}
+                                                                    className={styles.resultRow}
+                                                                    data-type="supplier"
+                                                                    onClick={() => handleResultClick(supplier)}
+                                                                >
+                                                                    <Text size="3" weight="bold">
+                                                                        {supplier.title}
+                                                                    </Text>
+                                                                    <Text size="2" color="gray" style={{ marginTop: 4 }}>
+                                                                        {supplier.subtitle}
+                                                                    </Text>
+                                                                </Box>
+                                                            ))}
+                                                        </Flex>
+                                                    </Box>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <Box className={styles.noResults}>
+                                                <Text size="2" color="gray">
+                                                    Ничего не найдено
+                                                </Text>
+                                            </Box>
+                                        )}
+                                    </Flex>
+                                </ScrollArea>
+                            </Card>
                         </div>
                     )}
                 </div>
 
                 <div className={styles.dbInfo}>
-                    <div className={styles.dbIcon}>
-                        <FiDatabase />
-                    </div>
-                    <div className={styles.dbDetails}>
-                        <div className={styles.dbName}>
-                            <span className={styles.dbLabel}>DB:</span> {process.env.NEXT_PUBLIC_DB_NAME || 'Segmentica'}
-                        </div>
-                        <div className={styles.dbConnection}>
-                            <span className={styles.dbLabel}>Host:</span> {process.env.NEXT_PUBLIC_DB_HOST || 'localhost'}:{process.env.NEXT_PUBLIC_DB_PORT || '5436'}
-                        </div>
-                        <div className={styles.dbUser}>
-                            <span className={styles.dbLabel}>User:</span> {process.env.NEXT_PUBLIC_DB_USER || 'postgres'}
-                        </div>
-                    </div>
+                    <DropdownMenu.Root>
+                        <DropdownMenu.Trigger>
+                            <button
+                                type="button"
+                                className={styles.dbButton}
+                                disabled={isDbLoading}
+                                aria-label="Переключение базы данных"
+                            >
+                                <div className={styles.dbIcon}>
+                                    <FiDatabase />
+                                </div>
+
+                                <div className={styles.dbStatus}>
+                                    <div
+                                        className={`${styles.statusIndicator} ${dbStatus?.isRemote ? styles.online : styles.offline}`}
+                                    >
+                                        <div className={styles.statusDot}></div>
+                                        <span>{dbStatus?.isRemote ? 'Онлайн' : 'Оффлайн'}</span>
+                                    </div>
+                                </div>
+                            </button>
+                        </DropdownMenu.Trigger>
+
+                        <DropdownMenu.Content align="end">
+                            {dbStatus?.isRemote ? (
+                                <DropdownMenu.Item
+                                    onSelect={() => switchDbMode('local')}
+                                    disabled={isDbSwitching}
+                                >
+                                    Перейти в оффлайн базу
+                                </DropdownMenu.Item>
+                            ) : (
+                                <DropdownMenu.Item
+                                    onSelect={() => switchDbMode('remote')}
+                                    disabled={isDbSwitching || !dbStatus?.remoteAvailable}
+                                >
+                                    Попробовать подключиться к удаленной базе
+                                </DropdownMenu.Item>
+                            )}
+                        </DropdownMenu.Content>
+                    </DropdownMenu.Root>
                 </div>
+
+                <DropdownMenu.Root>
+                    <DropdownMenu.Trigger>
+                        <div className={styles.profile} role="button" tabIndex={0}>
+                            <div className={styles.profileMeta}>
+                                <div className={styles.profileName}>{user?.employee?.fio || '—'}</div>
+                                <div className={styles.profileRole}>
+                                    {user?.roles?.includes('director') ? 'Директор' : 'Профиль'}
+                                </div>
+                            </div>
+                        </div>
+                    </DropdownMenu.Trigger>
+
+                    <DropdownMenu.Content align="end" className={styles.profileMenuContent}>
+                        <DropdownMenu.Item
+                            onSelect={async (e) => {
+                                e?.preventDefault?.();
+                                if (!user?.employee?.id) return;
+                                await router.push(`/managers/${user.employee.id}?mode=profile`);
+                            }}
+                        >
+                            Профиль
+                        </DropdownMenu.Item>
+
+                        <DropdownMenu.Separator />
+                        <DropdownMenu.Sub>
+                            <DropdownMenu.SubTrigger>
+                                Тема
+                            </DropdownMenu.SubTrigger>
+                            <DropdownMenu.SubContent className={styles.profileMenuContent}>
+                                <DropdownMenu.RadioGroup value={user?.preferences?.theme === 'dark' ? 'dark' : 'light'}>
+                                    <DropdownMenu.RadioItem
+                                        value="light"
+                                        onSelect={async () => {
+                                            await setTheme('light');
+                                        }}
+                                    >
+                                        Светлая
+                                    </DropdownMenu.RadioItem>
+                                    <DropdownMenu.RadioItem
+                                        value="dark"
+                                        onSelect={async () => {
+                                            await setTheme('dark');
+                                        }}
+                                    >
+                                        Тёмная
+                                    </DropdownMenu.RadioItem>
+                                </DropdownMenu.RadioGroup>
+                            </DropdownMenu.SubContent>
+                        </DropdownMenu.Sub>
+
+                        {user?.roles?.includes('director') ? (
+                            <>
+                                <DropdownMenu.Separator />
+                                <DropdownMenu.Item
+                                    onSelect={async (e) => {
+                                        e?.preventDefault?.();
+                                        await router.push('/admin/finance');
+                                    }}
+                                >
+                                    Финансы
+                                </DropdownMenu.Item>
+                                <DropdownMenu.Item
+                                    onSelect={async (e) => {
+                                        e?.preventDefault?.();
+                                        await router.push('/admin');
+                                    }}
+                                >
+                                    Администрирование
+                                </DropdownMenu.Item>
+                                <DropdownMenu.Item
+                                    onSelect={async (e) => {
+                                        e?.preventDefault?.();
+                                        await router.push('/admin/audit');
+                                    }}
+                                >
+                                    Аудит-лог
+                                </DropdownMenu.Item>
+                            </>
+                        ) : null}
+
+                        <DropdownMenu.Separator />
+                        <DropdownMenu.Item
+                            onSelect={async (e) => {
+                                e?.preventDefault?.();
+                                await logout();
+                                await router.push('/login');
+                            }}
+                        >
+                            Выйти
+                        </DropdownMenu.Item>
+                    </DropdownMenu.Content>
+                </DropdownMenu.Root>
             </div>
         </header>
     );

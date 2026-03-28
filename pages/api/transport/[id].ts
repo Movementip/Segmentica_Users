@@ -1,13 +1,20 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { query } from '../../../lib/db';
+import { requireAuth, requirePermission } from '../../../lib/auth';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  const { id } = req.query;
+    const { id } = req.query;
 
-  if (req.method === 'GET') {
-    try {
-      // Get transport company details
-      const transportResult = await query(`
+    if (req.method === 'GET') {
+        const actor = await requirePermission(req, res, 'transport.view');
+        if (!actor) return;
+        try {
+            const canActiveShipmentsView = actor.permissions.includes('transport.active_shipments.view');
+            const canHistoryView = actor.permissions.includes('transport.shipments.history.view');
+            const canMonthsView = actor.permissions.includes('transport.shipments.months.view');
+
+            // Get transport company details
+            const transportResult = await query(`
         SELECT 
           тк.*,
           COUNT(о.id) as общее_количество_отгрузок,
@@ -21,14 +28,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         GROUP BY тк.id, тк."название", тк."телефон", тк.email, тк."тариф", тк.created_at
       `, [id]);
 
-      if (transportResult.rows.length === 0) {
-        return res.status(404).json({ error: 'Transport company not found' });
-      }
+            if (transportResult.rows.length === 0) {
+                return res.status(404).json({ error: 'Transport company not found' });
+            }
 
-      const transport = transportResult.rows[0];
+            const transport = transportResult.rows[0];
 
-      // Get all shipments for this transport company
-      const shipmentsResult = await query(`
+            // Get all shipments for this transport company
+            const shipmentsResult = canHistoryView
+                ? await query(`
         SELECT 
           о.*,
           з."id" as заявка_номер,
@@ -42,10 +50,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         WHERE о."транспорт_id" = $1
         ORDER BY о."дата_отгрузки" DESC
         LIMIT 100
-      `, [id]);
+      `, [id])
+                : { rows: [] as any[] };
 
-      // Get performance statistics by month
-      const performanceResult = await query(`
+            // Get performance statistics by month
+            const performanceResult = canMonthsView
+                ? await query(`
         SELECT 
           DATE_TRUNC('month', о."дата_отгрузки") as месяц,
           COUNT(*) as количество_отгрузок,
@@ -54,13 +64,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           COUNT(CASE WHEN о."статус" = 'доставлено' THEN 1 END) as успешные_доставки
         FROM "Отгрузки" о
         WHERE о."транспорт_id" = $1
-        AND о."дата_отгрузки" >= NOW() - INTERVAL '12 months'
         GROUP BY DATE_TRUNC('month', о."дата_отгрузки")
         ORDER BY месяц DESC
-      `, [id]);
+      `, [id])
+                : { rows: [] as any[] };
 
-      // Get current active shipments
-      const activeShipmentsResult = await query(`
+            // Get current active shipments
+            const activeShipmentsResult = canActiveShipmentsView
+                ? await query(`
         SELECT 
           о.*,
           з."id" as заявка_номер,
@@ -73,71 +84,74 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         WHERE о."транспорт_id" = $1
         AND о."статус" IN ('в пути', 'в обработке')
         ORDER BY о."дата_отгрузки" DESC
-      `, [id]);
+      `, [id])
+                : { rows: [] as any[] };
 
-      res.status(200).json({
-        transport,
-        shipments: shipmentsResult.rows,
-        performance: performanceResult.rows,
-        activeShipments: activeShipmentsResult.rows
-      });
-    } catch (error) {
-      console.error('Error fetching transport details:', error);
-      res.status(500).json({ error: 'Failed to fetch transport details' });
-    }
-  } else if (req.method === 'PUT') {
-    // Update transport company information
-    try {
-      const { название, телефон, email, тариф } = req.body;
+            res.status(200).json({
+                transport,
+                shipments: shipmentsResult.rows,
+                performance: performanceResult.rows,
+                activeShipments: activeShipmentsResult.rows
+            });
+        } catch (error) {
+            console.error('Error fetching transport details:', error);
+            res.status(500).json({ error: 'Failed to fetch transport details' });
+        }
+    } else if (req.method === 'PUT') {
+        // Update transport company information
+        const actor = await requirePermission(req, res, 'transport.edit');
+        if (!actor) return;
+        try {
+            const { название, телефон, email, тариф } = req.body;
 
-      // Validate required fields
-      if (!название) {
-        return res.status(400).json({ error: 'Название компании обязательно' });
-      }
+            // Validate required fields
+            if (!название) {
+                return res.status(400).json({ error: 'Название компании обязательно' });
+            }
 
-      // Check if company exists
-      const companyCheck = await query(
-        'SELECT id FROM "Транспортные_компании" WHERE id = $1',
-        [id]
-      );
+            // Check if company exists
+            const companyCheck = await query(
+                'SELECT id FROM "Транспортные_компании" WHERE id = $1',
+                [id]
+            );
 
-      if (companyCheck.rows.length === 0) {
-        return res.status(404).json({ error: 'Транспортная компания не найдена' });
-      }
+            if (companyCheck.rows.length === 0) {
+                return res.status(404).json({ error: 'Транспортная компания не найдена' });
+            }
 
-      // Check if another company with this name already exists (excluding current company)
-      const existingCompany = await query(
-        'SELECT id FROM "Транспортные_компании" WHERE "название" = $1 AND id != $2',
-        [название, id]
-      );
+            // Check if another company with this name already exists (excluding current company)
+            const existingCompany = await query(
+                'SELECT id FROM "Транспортные_компании" WHERE "название" = $1 AND id != $2',
+                [название, id]
+            );
 
-      if (existingCompany.rows.length > 0) {
-        return res.status(400).json({ error: 'Компания с таким названием уже существует' });
-      }
+            if (existingCompany.rows.length > 0) {
+                return res.status(400).json({ error: 'Компания с таким названием уже существует' });
+            }
 
-      // Validate email format if provided
-      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        return res.status(400).json({ error: 'Некорректный формат email' });
-      }
+            // Validate email format if provided
+            if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                return res.status(400).json({ error: 'Некорректный формат email' });
+            }
 
-      // Update transport company
-      await query(`
+            // Update transport company
+            await query(`
         UPDATE "Транспортные_компании" 
         SET "название" = $1, "телефон" = $2, "email" = $3, "тариф" = $4
         WHERE id = $5
       `, [название, телефон || null, email || null, тариф || null, id]);
 
-      res.status(200).json({ 
-        message: 'Информация о транспортной компании успешно обновлена'
-      });
-    } catch (error) {
-      console.error('Error updating transport company:', error);
-      res.status(500).json({ 
-        error: 'Ошибка обновления информации о транспортной компании: ' + (error instanceof Error ? error.message : 'Неизвестная ошибка')
-      });
+            res.status(200).json({
+                message: 'Информация о транспортной компании успешно обновлена'
+            });
+        } catch (error) {
+            console.error('Error updating transport company:', error);
+            res.status(500).json({
+                error: 'Ошибка обновления информации о транспортной компании: ' + (error instanceof Error ? error.message : 'Неизвестная ошибка')
+            });
+        }
+    } else {
+        res.setHeader('Allow', ['GET', 'PUT']);
+        res.status(405).end(`Method ${req.method} Not Allowed`);
     }
-  } else {
-    res.setHeader('Allow', ['GET', 'PUT']);
-    res.status(405).end(`Method ${req.method} Not Allowed`);
-  }
 }

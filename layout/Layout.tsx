@@ -1,8 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { AppContextProvider, TopLevelCategory } from '../context/app.context';
-import { Sidebar } from './Sidebar/Sidebar';
-import { Header } from './Header/Header';
+import { usePageTitle } from '../context/PageTitleContext';
 import styles from './Layout.module.css';
 
 interface LayoutProps {
@@ -11,72 +10,71 @@ interface LayoutProps {
 
 const pageTitles: Record<string, string> = {
     '/': 'Дашборд',
-    '/orders': 'Управление заявками',
-    '/warehouse': 'Управление складом',
-    '/suppliers': 'Управление поставщиками',
-    '/transport': 'Транспортные компании',
-    '/clients': 'Управление клиентами',
-    '/managers': 'Управление сотрудниками',
-    '/products': 'Управление товарами',
-    '/categories': 'Управление категориями',
-    '/purchases': 'Управление закупками',
-    '/shipments': 'Управление отгрузками',
+    '/dashboard': 'Дашборд',
+    '/orders': 'Заявки',
+    '/warehouse': 'Склад',
+    '/suppliers': 'Поставщики',
+    '/transport': 'ТК',
+    '/clients': 'Контрагенты',
+    '/managers': 'Сотрудники',
+    '/products': 'Товары',
+    '/categories': 'Категории',
+    '/purchases': 'Закупки',
+    '/shipments': 'Отгрузки',
     '/missing-products': 'Недостающие товары',
     '/archive': 'Архив',
-    '/settings': 'Настройки'
+    '/reports': 'Отчеты',
+    '/settings': 'Настройки',
+    '/admin': 'Администрирование',
+    '/admin/audit': 'Аудит-лог',
+    '/admin/finance': 'Финансы'
 };
 
-export function Layout({ children }: LayoutProps): JSX.Element {
+const detailTitleByPathname: Record<string, (id: string) => string> = {
+    '/orders/[id]': (id) => `Заявка ${id}`,
+    '/shipments/[id]': (id) => `Отгрузка ${id}`,
+    '/purchases/[id]': (id) => `Закупка ${id}`,
+    '/products/[id]': (id) => `Товар ${id}`,
+    '/warehouse/[id]': (id) => `Склад ${id}`,
+    '/suppliers/[id]': (id) => `Поставщик ${id}`,
+    '/transport/[id]': (id) => `ТК ${id}`,
+    '/clients/[id]': (id) => `Контрагент ${id}`,
+    '/managers/[id]': (id) => `Сотрудник ${id}`,
+    '/categories/[id]': (id) => `Категория ${id}`,
+};
+
+function LayoutContent({ children }: { children: React.ReactNode }): JSX.Element {
     const router = useRouter();
-    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-    const [pageTitle, setPageTitle] = useState('Дашборд');
+    const { setPageTitle } = usePageTitle();
 
     useEffect(() => {
-        // Set initial page title
+        if (!router.isReady) return;
+
         const path = router.pathname;
-        setPageTitle(pageTitles[path] || 'Дашборд');
+        const fromStatic = pageTitles[path];
+        if (fromStatic) {
+            setPageTitle(fromStatic);
+            return;
+        }
 
-        // Update page title when route changes
-        const handleRouteChange = (url: string) => {
-            const path = url.split('?')[0]; // Remove query params
-            setPageTitle(pageTitles[path] || 'Дашборд');
-        };
+        const resolver = detailTitleByPathname[path];
+        const rawId = router.query.id;
+        const id = Array.isArray(rawId) ? rawId[0] : rawId;
+        if (resolver && typeof id === 'string' && id.trim()) {
+            setPageTitle(resolver(id));
+            return;
+        }
 
-        router.events.on('routeChangeComplete', handleRouteChange);
-        return () => {
-            router.events.off('routeChangeComplete', handleRouteChange);
-        };
-    }, [router]);
+        setPageTitle('Дашборд');
+    }, [router.isReady, router.pathname, router.query.id, setPageTitle]);
 
-    const toggleMobileMenu = () => {
-        setIsMobileMenuOpen(!isMobileMenuOpen);
-    };
+    return <main className={styles.content}>{children}</main>;
+}
 
-    const closeMobileMenu = () => {
-        setIsMobileMenuOpen(false);
-    };
-
+export function Layout({ children }: LayoutProps): JSX.Element {
     return (
         <AppContextProvider menu={[]} firstCategory={TopLevelCategory.Dashboard}>
-            <div className={styles.wrapper}>
-                <Sidebar
-                    isOpen={isMobileMenuOpen}
-                    onClose={closeMobileMenu}
-                />
-                <div className={styles.main}>
-                    <Header
-                        onMenuToggle={toggleMobileMenu}
-                        pageTitle={pageTitle}
-                    />
-                    <main className={styles.content}>{children}</main>
-                </div>
-                {isMobileMenuOpen && (
-                    <div
-                        className={styles.overlay}
-                        onClick={closeMobileMenu}
-                    />
-                )}
-            </div>
+            <LayoutContent>{children}</LayoutContent>
         </AppContextProvider>
     );
 }

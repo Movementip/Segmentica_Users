@@ -1,0 +1,396 @@
+.pageShell {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
+}
+
+.sidebar {
+  position: sticky;
+  top: 88px;
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: none;
+  background: transparent;
+  color: #262626;
+  font-size: 15px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.sectionNav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-right: 16px;
+  border-right: 1px solid #ececec;
+}
+
+.sectionNavButton,
+.sectionNavButtonActive {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  color: #262626;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 14px;
+  text-align: left;
+}
+
+.sectionNavButton:hover {
+  background: #f7f7f7;
+}
+
+.sectionNavButtonActive {
+  background: #f0f0f0;
+  font-weight: 600;
+}
+
+.sectionNavIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #6b7280;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #ececec;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(28px, 3.4vw, 42px);
+  line-height: 0.98;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  text-transform: uppercase;
+  color: #111111;
+  max-width: 720px;
+  overflow-wrap: anywhere;
+}
+
+.saveState {
+  margin-top: 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #757575;
+  font-size: 13px;
+}
+
+.saveStateIcon {
+  color: #525252;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.statusBadge {
+  min-height: 42px;
+  padding: 0 14px !important;
+  border-radius: 9999px !important;
+  display: inline-flex;
+  align-items: center;
+  font-size: 13px !important;
+}
+
+.surfaceButton:global(.rt-Button),
+.primaryButton:global(.rt-Button),
+.deleteButton:global(.rt-Button) {
+  min-height: 42px !important;
+  border-radius: 16px !important;
+  padding: 0 16px !important;
+  font-size: 14px !important;
+}
+
+.surfaceButton:global(.rt-Button) {
+  background: #ffffff !important;
+  border: 1px solid #d8dbe2 !important;
+  box-shadow: none !important;
+}
+
+.primaryButton:global(.rt-Button) {
+  background: #111111 !important;
+  color: #ffffff !important;
+}
+
+.deleteButton:global(.rt-Button) {
+  background: #ffffff !important;
+  border: 1px solid #ead7d7 !important;
+  color: #b42318 !important;
+}
+
+.summaryGrid {
+  margin-top: 2px;
+}
+
+.metricCard {
+  min-height: 92px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.sectionStack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.formGrid {
+  align-items: start;
+}
+
+.field,
+.fieldWide,
+.checkboxRow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fieldWide {
+  grid-column: span 2;
+}
+
+.input:global(.rt-TextFieldRoot),
+.selectTrigger:global(.rt-SelectTrigger) {
+  min-height: 42px !important;
+  border-radius: 12px !important;
+  border: 1px solid #d8dbe2 !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+  font-size: 14px !important;
+}
+
+.input:global(.rt-TextFieldRoot):focus-within,
+.selectTrigger:global(.rt-SelectTrigger):focus-visible,
+.selectTrigger:global(.rt-SelectTrigger)[data-state='open'] {
+  border-color: #111111 !important;
+}
+
+.selectContent:global(.rt-SelectContent) {
+  border-radius: 14px !important;
+  overflow: hidden !important;
+}
+
+.selectContent :global(.rt-SelectItem) {
+  font-size: 14px !important;
+  color: #262626 !important;
+}
+
+.selectContent :global(.rt-SelectItem[data-highlighted]) {
+  background: rgba(17, 17, 17, 0.08) !important;
+  color: #111111 !important;
+}
+
+.selectContent :global(.rt-SelectItem[data-state='checked']) {
+  background: #111111 !important;
+  color: #ffffff !important;
+}
+
+.selectContent :global(.rt-SelectItemIndicator) {
+  color: currentColor !important;
+}
+
+.textarea {
+  width: 100%;
+  min-height: 96px;
+  border-radius: 14px;
+  border: 1px solid #d8dbe2;
+  background: #ffffff;
+  padding: 12px 14px;
+  font: inherit;
+  font-size: 14px;
+  resize: vertical;
+  color: #111111;
+}
+
+.textarea:focus {
+  outline: none;
+  border-color: #111111;
+}
+
+.radioGroup {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  min-height: 42px;
+}
+
+.radioOption,
+.checkboxLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: #262626;
+}
+
+.radioOption input,
+.checkboxLabel input {
+  accent-color: #111111;
+}
+
+.rowList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.inlineRowCard {
+  border-radius: 16px;
+  border: 1px solid #eceff3;
+  background: #fafafa;
+  padding: 14px;
+}
+
+.inlineRowFooter {
+  margin-top: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.rowDeleteButton {
+  border: none;
+  background: transparent;
+  color: #b42318;
+  font-size: 15px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.table:global(.rt-TableRoot) {
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+.table :global(.rt-TableRootTable) {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table :global(.rt-TableColumnHeaderCell),
+.table :global(.rt-TableCell) {
+  padding: 12px 14px;
+  border-bottom: 1px solid #eceff3;
+  font-size: 14px;
+}
+
+.emptyState,
+.loadingState {
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: #7a7a7a;
+  font-size: 15px;
+}
+
+.loadingState {
+  min-height: 320px;
+}
+
+.alertCard {
+  border-left: 4px solid #f59e0b;
+}
+
+.uploadLabel {
+  display: inline-flex;
+}
+
+.uploadButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  border-radius: 16px;
+  border: 1px solid #d8dbe2;
+  padding: 0 16px;
+  background: #ffffff;
+  color: #262626;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.hiddenInput {
+  display: none;
+}
+
+@media (max-width: 1180px) {
+  .pageShell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: static;
+  }
+
+  .sectionNav {
+    border-right: none;
+    border-bottom: 1px solid #ececec;
+    padding-right: 0;
+    padding-bottom: 16px;
+  }
+}
+
+@media (max-width: 900px) {
+  .header {
+    flex-direction: column;
+  }
+
+  .headerActions {
+    justify-content: flex-start;
+  }
+
+  .sectionNavButton,
+  .sectionNavButtonActive {
+    font-size: 14px;
+  }
+
+  .fieldWide {
+    grid-column: span 1;
+  }
+}

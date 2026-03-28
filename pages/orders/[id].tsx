@@ -4,8 +4,20 @@ import Link from 'next/link';
 import { withLayout } from '../../layout/Layout';
 import { Htag } from '../../components';
 import EditOrderModal from '../../components/EditOrderModal';
+import { CreatePurchaseModal, OrderPositionSnapshot } from '../../components/CreatePurchaseModal';
+import { CreateShipmentModal } from '../../components/CreateShipmentModal';
 import { exportToExcel, exportToWord } from '../../utils/exportUtils';
-import styles from '../../styles/OrderDetail.module.css';
+import styles from './OrderDetail.module.css';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { FiArrowLeft, FiCheckCircle, FiDownload, FiEdit2, FiFile, FiFileText, FiPackage, FiPaperclip, FiPrinter, FiTrash2, FiUploadCloud, FiShoppingCart, FiTruck } from 'react-icons/fi';
+import { Button, Table, DropdownMenu, Flex, Box, Text, Card, Grid, Separator, Badge, Dialog } from '@radix-ui/themes';
+import { FiMoreHorizontal } from 'react-icons/fi';
+import DeleteConfirmation from '../../components/DeleteConfirmation';
+import { useAuth } from '../../context/AuthContext';
+import { NoAccessPage } from '../../components/NoAccessPage';
+import { calculateVatAmountsFromLine, getVatRateOption } from '../../lib/vat';
+import type { OrderWorkflowModalSummary } from '../../components/OrderWorkflowModal';
 
 interface OrderPosition {
     id: number;
@@ -13,6 +25,12 @@ interface OrderPosition {
     количество: number;
     цена: number;
     сумма: number;
+    ндс_id?: number;
+    ндс_название?: string;
+    ндс_ставка?: number;
+    сумма_без_ндс?: number;
+    сумма_ндс?: number;
+    сумма_всего?: number;
     товар_название: string;
     товар_артикул: string;
     товар_категория?: string;
@@ -50,20 +68,122 @@ interface OrderDetail {
     недостающие_товары?: MissingProduct[];
 }
 
+interface AttachmentItem {
+    id: string;
+    filename: string;
+    mime_type: string;
+    size_bytes: number;
+    created_at: string;
+}
+
 function OrderDetailPage(): JSX.Element {
     const router = useRouter();
+    const { user, loading: authLoading } = useAuth();
     const { id } = router.query;
     const [order, setOrder] = useState<OrderDetail | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [isCreatePurchaseOpen, setIsCreatePurchaseOpen] = useState(false);
+    const [createPurchaseModalKey, setCreatePurchaseModalKey] = useState(0);
+    const [isCreateShipmentOpen, setIsCreateShipmentOpen] = useState(false);
     const [operationLoading, setOperationLoading] = useState(false);
+    const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+    const [createPurchaseOrderPositions, setCreatePurchaseOrderPositions] = useState<OrderPositionSnapshot[]>([]);
+    const [workflow, setWorkflow] = useState<OrderWorkflowModalSummary | null>(null);
+
+    const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
+    const [attachmentsLoading, setAttachmentsLoading] = useState(false);
+    const [attachmentsError, setAttachmentsError] = useState<string | null>(null);
+    const [uploadLoading, setUploadLoading] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+    const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+    const [previewAttachment, setPreviewAttachment] = useState<AttachmentItem | null>(null);
+
+    const activeMissingProducts = (order?.недостающие_товары || []).filter((item) => item.статус !== 'получено' && item.недостающее_количество > 0);
+    const closedMissingProducts = (order?.недостающие_товары || []).filter((item) => item.статус === 'получено' || item.недостающее_количество <= 0);
+
+    const canView = Boolean(user?.permissions?.includes('orders.view'));
+    const canEdit = Boolean(user?.permissions?.includes('orders.edit'));
+    const canDelete = Boolean(user?.permissions?.includes('orders.delete'));
+    const canPrint = Boolean(user?.permissions?.includes('orders.print'));
+    const canExportPdf = Boolean(user?.permissions?.includes('orders.export.pdf'));
+    const canExportExcel = Boolean(user?.permissions?.includes('orders.export.excel'));
+    const canExportWord = Boolean(user?.permissions?.includes('orders.export.word'));
+    const canManageMissingProducts = Boolean(user?.permissions?.includes('orders.missing_products.manage'));
+    const canAttachmentsView = Boolean(user?.permissions?.includes('orders.attachments.view'));
+    const canAttachmentsUpload = Boolean(user?.permissions?.includes('orders.attachments.upload'));
+    const canAttachmentsDelete = Boolean(user?.permissions?.includes('orders.attachments.delete'));
+    const canCreatePurchaseFromOrders = Boolean(user?.permissions?.includes('purchases.create'));
+    const canCreateShipment = Boolean(user?.permissions?.includes('shipments.create'));
+    const canAssembleOrder = canEdit;
+    const canCompleteOrder = canEdit;
 
     useEffect(() => {
+        if (authLoading) return;
+        if (!canView) return;
         if (id) {
             fetchOrderDetail();
         }
-    }, [id]);
+    }, [authLoading, canView, id]);
+
+    if (authLoading) {
+        return (
+            <Box p="5">
+                <Text>Загрузка…</Text>
+            </Box>
+        );
+    }
+
+    if (!canView) {
+        return <NoAccessPage />;
+    }
+
+    const fetchAttachments = async (orderId: number) => {
+        try {
+            setAttachmentsLoading(true);
+            setAttachmentsError(null);
+            if (!canAttachmentsView) {
+                setAttachments([]);
+                return;
+            }
+            const res = await fetch(`/api/attachments?entity_type=order&entity_id=${encodeURIComponent(String(orderId))}`);
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data?.error || 'Ошибка загрузки вложений');
+            }
+            const data = (await res.json()) as AttachmentItem[];
+            setAttachments(Array.isArray(data) ? data : []);
+        } catch (e) {
+            console.error(e);
+            setAttachmentsError(e instanceof Error ? e.message : 'Ошибка загрузки вложений');
+        } finally {
+            setAttachmentsLoading(false);
+        }
+    };
+
+    const canPreviewInline = (a: AttachmentItem) => {
+        const mime = (a.mime_type || '').toLowerCase();
+        const name = (a.filename || '').toLowerCase();
+        if (mime.includes('pdf') || name.endsWith('.pdf')) return true;
+        if (mime.startsWith('image/')) return true;
+        if (/\.(png|jpg|jpeg|gif|webp|bmp|svg)$/.test(name)) return true;
+        return false;
+    };
+
+    const openPreview = (a: AttachmentItem) => {
+        if (!canAttachmentsView) {
+            setAttachmentsError('Нет доступа');
+            return;
+        }
+        if (!canPreviewInline(a)) {
+            window.open(`/api/attachments/${encodeURIComponent(a.id)}/download`, '_blank', 'noopener,noreferrer');
+            return;
+        }
+        setPreviewAttachment(a);
+        setIsPreviewOpen(true);
+    };
 
     const fetchOrderDetail = async () => {
         try {
@@ -87,10 +207,172 @@ function OrderDetailPage(): JSX.Element {
             }
 
             setOrder(orderData);
+
+            if (orderData?.id) {
+                await fetchAttachments(Number(orderData.id));
+                await fetchOrderWorkflow(Number(orderData.id));
+            }
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Неизвестная ошибка');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchOrderWorkflow = async (orderId: number) => {
+        try {
+            const response = await fetch(`/api/orders/${orderId}/workflow`);
+            if (!response.ok) {
+                throw new Error('Не удалось загрузить workflow заявки');
+            }
+            const data = await response.json();
+            setWorkflow(data);
+            setOrder((prev) => (prev ? { ...prev, статус: data.currentStatus || prev.статус } : prev));
+        } catch (err) {
+            console.error('Error fetching order workflow:', err);
+            setWorkflow(null);
+        }
+    };
+
+    const handleAssembleOrder = async () => {
+        if (!order) return;
+
+        try {
+            setOperationLoading(true);
+            setError(null);
+
+            const response = await fetch(`/api/orders/${order.id}/assemble`, {
+                method: 'POST',
+            });
+
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                throw new Error(data?.error || 'Не удалось собрать заявку');
+            }
+
+            await fetchOrderDetail();
+        } catch (err) {
+            console.error('Error assembling order:', err);
+            setError(err instanceof Error ? err.message : 'Не удалось собрать заявку');
+        } finally {
+            setOperationLoading(false);
+        }
+    };
+
+    const openCreatePurchaseFromOrder = () => {
+        if (!order) return;
+        const positions = activeMissingProducts.map((missing) => {
+            const orderPosition = order.позиции?.find((position) => position.товар_id === missing.товар_id);
+            return {
+                товар_id: Number(missing.товар_id) || 0,
+                количество: Number(missing.недостающее_количество) || 0,
+                ндс_id: orderPosition?.ндс_id == null ? undefined : Number(orderPosition.ндс_id),
+                цена: Number(orderPosition?.цена) || 0,
+            };
+        }).filter((position) => position.товар_id > 0 && position.количество > 0);
+
+        if (positions.length === 0) {
+            setError('По этой заявке нет активных недостающих позиций для закупки');
+            return;
+        }
+
+        setCreatePurchaseOrderPositions(positions);
+        setCreatePurchaseModalKey((prev) => prev + 1);
+        setIsCreatePurchaseOpen(true);
+    };
+
+    const formatBytes = (bytes: number) => {
+        const b = Number(bytes) || 0;
+        if (b < 1024) return `${b} B`;
+        const kb = b / 1024;
+        if (kb < 1024) return `${kb.toFixed(1)} KB`;
+        const mb = kb / 1024;
+        if (mb < 1024) return `${mb.toFixed(1)} MB`;
+        const gb = mb / 1024;
+        return `${gb.toFixed(1)} GB`;
+    };
+
+    const getVatSummary = (position: OrderPosition) => {
+        if (typeof position.сумма_без_ндс === 'number' && typeof position.сумма_ндс === 'number' && typeof position.сумма_всего === 'number') {
+            return {
+                net: position.сумма_без_ндс,
+                tax: position.сумма_ндс,
+                total: position.сумма_всего,
+                label: position.ндс_название || getVatRateOption(position.ндс_id).label,
+            };
+        }
+
+        const vatOption = getVatRateOption(position.ндс_id);
+        const breakdown = calculateVatAmountsFromLine(position.количество, position.цена, position.ндс_ставка ?? vatOption.rate);
+        return {
+            ...breakdown,
+            label: position.ндс_название || vatOption.label,
+        };
+    };
+
+    const handlePickFile = () => {
+        if (!canAttachmentsUpload) {
+            setAttachmentsError('Нет доступа');
+            return;
+        }
+        fileInputRef.current?.click();
+    };
+
+    const handleUploadFile = async (file: File) => {
+        if (!order) return;
+        if (!canAttachmentsUpload) {
+            setAttachmentsError('Нет доступа');
+            return;
+        }
+        try {
+            setUploadLoading(true);
+            setAttachmentsError(null);
+
+            const form = new FormData();
+            form.append('entity_type', 'order');
+            form.append('entity_id', String(order.id));
+            form.append('file', file);
+
+            const res = await fetch('/api/attachments', {
+                method: 'POST',
+                body: form,
+            });
+
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data?.error || 'Ошибка загрузки файла');
+            }
+
+            await fetchAttachments(order.id);
+        } catch (e) {
+            console.error(e);
+            setAttachmentsError(e instanceof Error ? e.message : 'Ошибка загрузки файла');
+        } finally {
+            setUploadLoading(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
+
+    const handleDeleteAttachment = async (attachmentId: string) => {
+        if (!order) return;
+        if (!canAttachmentsDelete) {
+            setAttachmentsError('Нет доступа');
+            return;
+        }
+        try {
+            setAttachmentsError(null);
+            const res = await fetch(
+                `/api/attachments/${encodeURIComponent(attachmentId)}?entity_type=order&entity_id=${encodeURIComponent(String(order.id))}`,
+                { method: 'DELETE' }
+            );
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data?.error || 'Ошибка удаления вложения');
+            }
+            await fetchAttachments(order.id);
+        } catch (e) {
+            console.error(e);
+            setAttachmentsError(e instanceof Error ? e.message : 'Ошибка удаления вложения');
         }
     };
 
@@ -115,7 +397,9 @@ function OrderDetailPage(): JSX.Element {
         switch (status.toLowerCase()) {
             case 'новая': return '#2196f3';
             case 'в обработке': return '#ff9800';
+            case 'досборка': return '#8d6e63';
             case 'собрана': return '#9c27b0';
+            case 'доотгрузка': return '#00897b';
             case 'отгружена': return '#4caf50';
             case 'выполнена': return '#4caf50';
             case 'отменена': return '#f44336';
@@ -145,6 +429,10 @@ function OrderDetailPage(): JSX.Element {
         if (!order) return;
 
         try {
+            if (!canEdit) {
+                setError('Нет доступа');
+                return;
+            }
             setOperationLoading(true);
             setError(null); // Clear any previous errors
 
@@ -186,6 +474,10 @@ function OrderDetailPage(): JSX.Element {
 
     const handleEditOrder = async (orderData: any) => {
         try {
+            if (!canEdit) {
+                setError('Нет доступа');
+                return;
+            }
             setOperationLoading(true);
             const response = await fetch('/api/orders', {
                 method: 'PUT',
@@ -196,7 +488,8 @@ function OrderDetailPage(): JSX.Element {
             });
 
             if (!response.ok) {
-                throw new Error('Ошибка обновления заявки');
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData?.error || 'Ошибка обновления заявки');
             }
 
             await fetchOrderDetail(); // Refresh order data
@@ -209,44 +502,279 @@ function OrderDetailPage(): JSX.Element {
         }
     };
 
-    const [showExportMenu, setShowExportMenu] = useState(false);
-    const exportMenuRef = useRef<HTMLDivElement>(null);
-
-    // Close the export menu when clicking outside
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
-                setShowExportMenu(false);
-            }
-        };
-
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-        };
-    }, []);
-
     const handleExportExcel = () => {
+        if (!canExportExcel) {
+            setError('Нет доступа');
+            return;
+        }
         if (order) {
             exportToExcel(order);
-            setShowExportMenu(false);
         }
     };
 
     const handleExportWord = () => {
+        if (!canExportWord) {
+            setError('Нет доступа');
+            return;
+        }
         if (order) {
             exportToWord(order);
-            setShowExportMenu(false);
         }
+    };
+
+    const handleDeleteOrder = async () => {
+        if (!order) return;
+
+        try {
+            if (!canDelete) {
+                setError('Нет доступа');
+                return;
+            }
+            setOperationLoading(true);
+            const response = await fetch(`/api/orders?id=${order.id}`, {
+                method: 'DELETE',
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || 'Ошибка удаления заявки');
+            }
+
+            router.push('/orders');
+        } catch (e) {
+            console.error(e);
+            setError(e instanceof Error ? e.message : 'Ошибка удаления заявки');
+        } finally {
+            setOperationLoading(false);
+            setIsDeleteConfirmOpen(false);
+        }
+    };
+
+    const handlePrint = () => {
+        if (!canPrint) {
+            setError('Нет доступа');
+            return;
+        }
+        window.print();
+    };
+
+    const handleExportPdf = () => {
+        if (!canExportPdf) {
+            setError('Нет доступа');
+            return;
+        }
+        if (!order) return;
+
+        const declOfNum = (n: number, titles: [string, string, string]) => {
+            const cases = [2, 0, 1, 1, 1, 2];
+            return titles[(n % 100 > 4 && n % 100 < 20) ? 2 : cases[Math.min(n % 10, 5)]];
+        };
+
+        const numToWordsRu = (value: number, female: boolean) => {
+            const onesMale = ['', 'один', 'два', 'три', 'четыре', 'пять', 'шесть', 'семь', 'восемь', 'девять'];
+            const onesFemale = ['', 'одна', 'две', 'три', 'четыре', 'пять', 'шесть', 'семь', 'восемь', 'девять'];
+            const teens = ['десять', 'одиннадцать', 'двенадцать', 'тринадцать', 'четырнадцать', 'пятнадцать', 'шестнадцать', 'семнадцать', 'восемнадцать', 'девятнадцать'];
+            const tens = ['', '', 'двадцать', 'тридцать', 'сорок', 'пятьдесят', 'шестьдесят', 'семьдесят', 'восемьдесят', 'девяносто'];
+            const hundreds = ['', 'сто', 'двести', 'триста', 'четыреста', 'пятьсот', 'шестьсот', 'семьсот', 'восемьсот', 'девятьсот'];
+            const ones = female ? onesFemale : onesMale;
+
+            const num = Math.floor(value);
+            if (num === 0) return 'ноль';
+
+            const parts: string[] = [];
+            const triadToWords = (n: number, isFemale: boolean) => {
+                const o = isFemale ? onesFemale : onesMale;
+                const res: string[] = [];
+                const h = Math.floor(n / 100);
+                const t = Math.floor((n % 100) / 10);
+                const u = n % 10;
+                if (h) res.push(hundreds[h]);
+                if (t === 1) {
+                    res.push(teens[u]);
+                } else {
+                    if (t) res.push(tens[t]);
+                    if (u) res.push(o[u]);
+                }
+                return res;
+            };
+
+            let rest = num;
+            const billions = Math.floor(rest / 1_000_000_000);
+            rest %= 1_000_000_000;
+            const millions = Math.floor(rest / 1_000_000);
+            rest %= 1_000_000;
+            const thousands = Math.floor(rest / 1_000);
+            rest %= 1_000;
+
+            if (billions) {
+                parts.push(...triadToWords(billions, false));
+                parts.push(declOfNum(billions, ['миллиард', 'миллиарда', 'миллиардов']));
+            }
+            if (millions) {
+                parts.push(...triadToWords(millions, false));
+                parts.push(declOfNum(millions, ['миллион', 'миллиона', 'миллионов']));
+            }
+            if (thousands) {
+                parts.push(...triadToWords(thousands, true));
+                parts.push(declOfNum(thousands, ['тысяча', 'тысячи', 'тысяч']));
+            }
+            if (rest) {
+                parts.push(...triadToWords(rest, female));
+            }
+
+            return parts.filter(Boolean).join(' ');
+        };
+
+        const amountToWordsRub = (amount: number) => {
+            const safe = Number.isFinite(amount) ? amount : 0;
+            const rub = Math.floor(safe + 1e-9);
+            const kop = Math.round((safe - rub) * 100);
+            const rubWords = numToWordsRu(rub, false);
+            const rubTitle = declOfNum(rub, ['рубль', 'рубля', 'рублей']);
+            const kopStr = String(kop).padStart(2, '0');
+            const kopTitle = declOfNum(kop, ['копейка', 'копейки', 'копеек']);
+            return `${rubWords} ${rubTitle} ${kopStr} ${kopTitle}`;
+        };
+
+        // Font embedding (Cyrillic): base64 is generated from `public/fonts/Roboto-Regular.ttf`
+        // and stored in `public/fonts/Roboto-Regular.base64.txt`.
+        // We load it at runtime to avoid bundling a huge base64 string.
+
+        const doc = new jsPDF({
+            orientation: 'p',
+            unit: 'pt',
+            format: 'a4',
+        });
+
+        const loadAndSetFont = async () => {
+            const res = await fetch('/fonts/Roboto-Regular.base64.txt');
+            if (!res.ok) throw new Error('Не удалось загрузить шрифт для PDF');
+
+            // jsPDF VFS expects *base64* content for TTF.
+            // Passing a decoded binary string (atob) breaks Unicode/Cyrillic glyph mapping.
+            const base64 = (await res.text()).trim();
+            doc.addFileToVFS('Roboto-Regular.ttf', base64);
+            doc.addFont('Roboto-Regular.ttf', 'Roboto', 'normal');
+            doc.setFont('Roboto', 'normal');
+        };
+
+        const title = `Заявка #${order.id}`;
+
+
+        (async () => {
+            try {
+                await loadAndSetFont();
+
+                // Load logo
+                const logoRes = await fetch('/logo-icon.png');
+                if (!logoRes.ok) throw new Error('Не удалось загрузить лого');
+                const logoBlob = await logoRes.blob();
+                const logoDataUrl: string = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(String(reader.result));
+                    reader.onerror = () => reject(new Error('Не удалось прочитать лого'));
+                    reader.readAsDataURL(logoBlob);
+                });
+
+                // Header layout (avoid logo overlap)
+                const marginX = 40;
+                const topY = 32;
+                const logoW = 152;
+                const logoH = 82;
+                doc.addImage(logoDataUrl, 'PNG', marginX, topY, logoW, logoH);
+
+                const titleY = topY + logoH + 18;
+                doc.setFontSize(16);
+                doc.text(title, marginX, titleY);
+
+                const metaStartY = titleY + 20;
+                const lineGap = 16;
+                doc.setFontSize(10);
+                doc.text(`Дата создания: ${formatDate(order.дата_создания)}`, marginX, metaStartY);
+                doc.text(`Статус: ${order.статус}`, marginX, metaStartY + lineGap);
+                doc.text(`Клиент: ${order.клиент_название || 'Не указан'}`, marginX, metaStartY + lineGap * 2);
+                doc.text(`Менеджер: ${order.менеджер_фио || 'Не назначен'}`, marginX, metaStartY + lineGap * 3);
+                doc.text(`Адрес доставки: ${order.адрес_доставки || 'Не указан'}`, marginX, metaStartY + lineGap * 4);
+
+                const tableStartY = metaStartY + lineGap * 5 + 12;
+
+                doc.setFont('Roboto', 'normal');
+
+                autoTable(doc, {
+                    startY: tableStartY,
+                    head: [["Товар", "Кол-во", "Ед.", "Цена", "Сумма"]],
+                    body: order.позиции.map((p) => [
+                        p.товар_название,
+                        String(p.количество),
+                        p.товар_единица_измерения,
+                        formatCurrency(p.цена),
+                        formatCurrency(p.сумма),
+                    ]),
+                    theme: 'grid',
+                    styles: {
+                        font: 'Roboto',
+                        fontSize: 9,
+                        cellPadding: 6,
+                    },
+                    headStyles: {
+                        font: 'Roboto',
+                        fillColor: [250, 250, 250],
+                        textColor: [97, 97, 97],
+                        lineColor: [238, 238, 238],
+                        lineWidth: 1,
+                    },
+                    bodyStyles: {
+                        font: 'Roboto',
+                        lineColor: [243, 243, 243],
+                        lineWidth: 1,
+                    },
+                    didParseCell: (data) => {
+                        if (data.section === 'head') {
+                            data.cell.styles.font = 'Roboto';
+                            data.cell.styles.fontStyle = 'normal';
+                        }
+                    },
+                    columnStyles: {
+                        0: { cellWidth: 240 },
+                        1: { halign: 'right' },
+                        2: { cellWidth: 60 },
+                        3: { halign: 'right' },
+                        4: { halign: 'right' },
+                    },
+                });
+
+                const finalY = (doc as any).lastAutoTable?.finalY ?? tableStartY;
+                doc.setFontSize(12);
+                doc.text(`Итого: ${formatCurrency(order.общая_сумма)}`, 40, finalY + 24);
+
+                doc.setFontSize(10);
+                doc.text(amountToWordsRub(order.общая_сумма), 40, finalY + 42);
+
+                // Signatures and stamp placeholders
+                const pageH = doc.internal.pageSize.getHeight();
+                const leftX = 40;
+                const rightX = 320;
+                const boxY = Math.max(finalY + 60, pageH - 170);
+                doc.setFontSize(10);
+                doc.text('Подпись (Исполнитель):', leftX, boxY);
+                doc.line(leftX, boxY + 18, leftX + 220, boxY + 18);
+                doc.text('Подпись (Клиент):', leftX, boxY + 52);
+                doc.line(leftX, boxY + 70, leftX + 220, boxY + 70);
+                doc.text('М.П.', rightX, boxY);
+                //doc.rect(rightX, boxY + 10, 220, 120);
+
+                doc.save(`order-${order.id}.pdf`);
+            } catch (e) {
+                console.error(e);
+                alert(e instanceof Error ? e.message : 'Ошибка экспорта PDF');
+            }
+        })();
     };
 
     if (loading) {
         return (
             <div className={styles.container}>
-                <Htag tag="h1">Загрузка заявки...</Htag>
-                <div className={styles.card}>
-                    <p>Пожалуйста, подождите...</p>
-                </div>
+
             </div>
         );
     }
@@ -271,236 +799,644 @@ function OrderDetailPage(): JSX.Element {
     }
 
     return (
-        <div className={styles.container}>
+        <div className={`${styles.container} print-order-detail`}>
             <div className={styles.header}>
-                <Htag tag="h1">Заявка #{order.id}</Htag>
-                <div className={styles.buttonGroup}>
-                    <button
-                        onClick={() => setIsEditModalOpen(true)}
-                        className={`${styles.button} ${styles.buttonSecondary} noPrint`}
-                    >
-                        Редактировать
-                    </button>
-                    <div className={styles.exportContainer} ref={exportMenuRef}>
-                        <button
-                            onClick={() => setShowExportMenu(!showExportMenu)}
-                            className={`${styles.button} ${styles.buttonPrimary} noPrint`}
-                        >
-                            Экспорт
-                            <svg width="12" height="8" viewBox="0 0 12 8" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ marginLeft: '8px' }}>
-                                <path d="M1 1.5L6 6.5L11 1.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                        </button>
-                        {showExportMenu && (
-                            <div className={styles.exportMenu}>
+                <div className={styles.headerContent}>
+                    <div className={styles.headerLeft}>
+                        <h1 className={styles.title}>Заявка #{order.id}</h1>
+                        <p className={styles.subtitle}>Детали заявки и позиции</p>
+                    </div>
+                    <div className={styles.headerActions}>
+                        <Link href="/orders" className="noPrint" style={{ textDecoration: 'none' }}>
+                            <Button variant="surface" color="gray" highContrast className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}>
+                                <FiArrowLeft className={styles.icon} />
+                                Назад
+                            </Button>
+                        </Link>
+                        {canPrint ? (
+                            <Button
+                                onClick={handlePrint}
+                                variant="surface"
+                                color="gray"
+                                highContrast
+                                className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton} noPrint`}
+                            >
+                                <FiPrinter className={styles.icon} />
+                                Печать
+                            </Button>
+                        ) : null}
 
-                                <button
-                                    onClick={handleExportExcel}
-                                    className={styles.exportButton}
-                                >
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ marginRight: '8px' }}>
-                                        <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" stroke="#2c3e50" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                        <path d="M14 2V8H20" stroke="#2c3e50" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                        <path d="M8 13H16" stroke="#2c3e50" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                        <path d="M8 17H12" stroke="#2c3e50" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                        <path d="M8 9H8.01" stroke="#2c3e50" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                    </svg>
-                                    Сохранить в Excel
-                                </button>
-                                <button
-                                    onClick={handleExportWord}
-                                    className={styles.exportButton}
-                                >
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ marginRight: '8px' }}>
-                                        <path d="M14 2H6C5.46957 2 4.96086 2.21071 4.58579 2.58579C4.21071 2.96086 4 3.46957 4 4V20C4 20.5304 4.21071 21.0391 4.58579 21.4142C4.96086 21.7893 5.46957 22 6 22H18C18.5304 22 19.0391 21.7893 19.4142 21.4142C19.7893 21.0391 20 20.5304 20 20V8L14 2Z" stroke="#2c3e50" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                        <path d="M14 2V8H20" stroke="#2c3e50" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                        <path d="M16 13H8" stroke="#2c3e50" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                        <path d="M16 17H8" stroke="#2c3e50" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                        <path d="M10 9H8" stroke="#2c3e50" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                                    </svg>
-                                    Сохранить в Word
-                                </button>
-                            </div>
-                        )}
+                        {canExportPdf ? (
+                            <Button
+                                onClick={handleExportPdf}
+                                variant="surface"
+                                color="gray"
+                                highContrast
+                                className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton} noPrint`}
+                            >
+                                <FiDownload className={styles.icon} />
+                                PDF
+                            </Button>
+                        ) : null}
+
+                        {canExportExcel ? (
+                            <Button
+                                onClick={handleExportExcel}
+                                variant="surface"
+                                color="gray"
+                                highContrast
+                                className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton} noPrint`}
+                            >
+                                <FiFile className={styles.icon} />
+                                Excel
+                            </Button>
+                        ) : null}
+
+                        {canExportWord ? (
+                            <Button
+                                onClick={handleExportWord}
+                                variant="surface"
+                                color="gray"
+                                highContrast
+                                className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton} noPrint`}
+                            >
+                                <FiFileText className={styles.icon} />
+                                Word
+                            </Button>
+                        ) : null}
+
+                        {canEdit ? (
+                            <Button
+                                onClick={() => setIsEditModalOpen(true)}
+                                variant="surface"
+                                color="gray"
+                                highContrast
+                                className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton} noPrint`}
+                            >
+                                <FiEdit2 className={styles.icon} />
+                                Редактировать
+                            </Button>
+                        ) : null}
+
+                        {canCreatePurchaseFromOrders && (workflow ? workflow.canCreatePurchase : activeMissingProducts.length > 0) ? (
+                            <Button
+                                onClick={openCreatePurchaseFromOrder}
+                                variant="solid"
+                                color="gray"
+                                highContrast
+                                className={`${styles.button} ${styles.primaryButton} noPrint`}
+                            >
+                                <FiShoppingCart className={styles.icon} />
+                                Создать закупку
+                            </Button>
+                        ) : null}
+
+                        {canAssembleOrder && workflow?.canAssemble ? (
+                            <Button
+                                onClick={handleAssembleOrder}
+                                variant="solid"
+                                color="gray"
+                                highContrast
+                                className={`${styles.button} ${styles.primaryButton} noPrint`}
+                                disabled={operationLoading}
+                            >
+                                <FiPackage className={styles.icon} />
+                                {workflow?.nextAssemblyActionLabel || 'Собрать заявку'}
+                            </Button>
+                        ) : null}
+
+                        {canCreateShipment && workflow?.canCreateShipment ? (
+                            <Button
+                                onClick={() => setIsCreateShipmentOpen(true)}
+                                variant="solid"
+                                color="gray"
+                                highContrast
+                                className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton} noPrint`}
+                            >
+                                <FiTruck className={styles.icon} />
+                                {workflow?.nextShipmentActionLabel || 'Создать отгрузку'}
+                            </Button>
+                        ) : null}
+
+                        {canCompleteOrder && workflow?.canComplete && order.статус.toLowerCase() !== 'выполнена' ? (
+                            <Button
+                                onClick={() => handleStatusChange('выполнена')}
+                                variant="solid"
+                                color="gray"
+                                highContrast
+                                className={`${styles.button} ${styles.primaryButton} noPrint`}
+                                disabled={operationLoading}
+                            >
+                                <FiCheckCircle className={styles.icon} />
+                                Завершить заявку
+                            </Button>
+                        ) : null}
+
+                        {canDelete ? (
+                            <Button
+                                onClick={() => setIsDeleteConfirmOpen(true)}
+                                variant="surface"
+                                color="red"
+                                highContrast
+                                className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton} ${styles.orderDeleteButton} noPrint`}
+                            >
+                                <FiTrash2 className={styles.icon} />
+                                Удалить
+                            </Button>
+                        ) : null}
                     </div>
                 </div>
             </div>
 
             <div className={styles.card}>
-                <div className={styles.header}>
-                    <div>
-                        <h2 className={styles.sectionTitle}>Детали заявки</h2>
-                        <p className={styles.infoLabel}>
-                            Заявка от {formatDate(order.дата_создания)}
-                        </p>
-                    </div>
+                <div className={styles.sectionHeader}>
+                    <Text as="div" size="3" weight="bold" className={styles.sectionTitle}>
+                        Детали заявки
+                    </Text>
+                    <Text as="div" size="1" color="gray" className={styles.infoLabel}>
+                        Заявка от {formatDate(order.дата_создания)}
+                    </Text>
                 </div>
 
-                <div className={styles.infoGrid}>
-                    <div>
-                        <h3 className={styles.sectionTitle}>Информация о клиенте</h3>
-                        <div className={styles.infoGroup}>
-                            <p className={styles.infoLabel}>Клиент</p>
-                            <p className={styles.infoValue}>{order.клиент_название || 'Не указан'}</p>
-                        </div>
-                        <div className={styles.infoGroup}>
-                            <p className={styles.infoLabel}>Телефон</p>
-                            <p className={styles.infoValue}>{order.клиент_телефон || 'Не указан'}</p>
-                        </div>
-                        <div className={styles.infoGroup}>
-                            <p className={styles.infoLabel}>Email</p>
-                            <p className={styles.infoValue}>{order.клиент_email || 'Не указан'}</p>
-                        </div>
-                        <div className={styles.infoGroup}>
-                            <p className={styles.infoLabel}>Адрес</p>
-                            <p className={styles.infoValue}>{order.клиент_адрес || 'Не указан'}</p>
-                        </div>
-                    </div>
+                <Grid columns={{ initial: '1', md: '2' }} gap="4">
+                    <Card size="2" variant="surface">
+                        <Flex direction="column" gap="3">
+                            <Text as="div" size="2" weight="bold" className={styles.sectionTitle}>
+                                Информация о клиенте
+                            </Text>
+                            <Separator size="4" />
+                            <Flex direction="column" gap="2">
+                                <Box>
+                                    <Text as="div" size="1" color="gray">Клиент</Text>
+                                    <Text as="div" size="2" weight="medium">{order.клиент_название || 'Не указан'}</Text>
+                                </Box>
+                                <Box>
+                                    <Text as="div" size="1" color="gray">Телефон</Text>
+                                    <Text as="div" size="2">{order.клиент_телефон || 'Не указан'}</Text>
+                                </Box>
+                                <Box>
+                                    <Text as="div" size="1" color="gray">Email</Text>
+                                    <Text as="div" size="2">{order.клиент_email || 'Не указан'}</Text>
+                                </Box>
+                                <Box>
+                                    <Text as="div" size="1" color="gray">Адрес</Text>
+                                    <Text as="div" size="2">{order.клиент_адрес || 'Не указан'}</Text>
+                                </Box>
+                            </Flex>
+                        </Flex>
+                    </Card>
 
-                    <div>
-                        <h3 className={styles.sectionTitle}>Информация о заявке</h3>
-                        <div className={styles.infoGroup}>
-                            <p className={styles.infoLabel}>Статус</p>
-                            <div style={{ display: 'flex', alignItems: 'center' }}>
-                                <span className={`${styles.statusBadge} ${order.статус.toLowerCase() === 'новая' ? styles.statusNew :
-                                        order.статус.toLowerCase() === 'в обработке' ? styles.statusInProgress :
-                                            order.статус.toLowerCase() === 'отгружена' ? styles.statusShipped :
-                                                order.статус.toLowerCase() === 'выполнена' ? styles.statusCompleted :
-                                                    order.статус.toLowerCase() === 'отменена' ? styles.statusCancelled : ''
-                                    }`}>
-                                    {order.статус.toUpperCase()}
-                                </span>
+                    <Card size="2" variant="surface">
+                        <Flex direction="column" gap="3">
+                            <Text as="div" size="2" weight="bold" className={styles.sectionTitle}>
+                                Информация о заявке
+                            </Text>
+                            <Separator size="4" />
+                            <Flex direction="column" gap="2">
+                                <Flex direction="column" align="start" style={{ flexDirection: 'column', alignItems: 'flex-start', }}>
+                                    <Text as="div" size="1" color="gray">Статус</Text>
+                                    <Badge
+                                        color={order.статус.toLowerCase() === 'отменена' ? 'red' : order.статус.toLowerCase() === 'в обработке' || order.статус.toLowerCase() === 'досборка' ? 'amber' : order.статус.toLowerCase() === 'отгружена' || order.статус.toLowerCase() === 'выполнена' || order.статус.toLowerCase() === 'доотгрузка' ? 'green' : 'blue'}
+                                        variant="soft"
+                                        highContrast
+                                        className={`${styles.statusPill} ${order.статус.toLowerCase() === 'отменена'
+                                            ? styles.statusPillRed
+                                            : order.статус.toLowerCase() === 'в обработке' || order.статус.toLowerCase() === 'подтверждена' || order.статус.toLowerCase() === 'досборка'
+                                                ? styles.statusPillOrange
+                                                : order.статус.toLowerCase() === 'отгружена' || order.статус.toLowerCase() === 'выполнена' || order.статус.toLowerCase() === 'доотгрузка'
+                                                    ? styles.statusPillGreen
+                                                    : styles.statusPillBlue
+                                            }`}
+                                    >
+                                        {order.статус.toUpperCase()}
+                                    </Badge>
+                                </Flex>
+                                <Box>
+                                    <Text as="div" size="1" color="gray">Менеджер</Text>
+                                    <Text as="div" size="2">{order.менеджер_фио || 'Не назначен'}</Text>
+                                </Box>
+                                <Box>
+                                    <Text as="div" size="1" color="gray">Адрес доставки</Text>
+                                    <Text as="div" size="2">{order.адрес_доставки || 'Не указан'}</Text>
+                                </Box>
+                                <Box>
+                                    <Text as="div" size="1" color="gray">Дата создания</Text>
+                                    <Text as="div" size="2">{formatDate(order.дата_создания)}</Text>
+                                </Box>
+                                {order.дата_выполнения && (
+                                    <Box>
+                                        <Text as="div" size="1" color="gray">Дата выполнения</Text>
+                                        <Text as="div" size="2">{formatDate(order.дата_выполнения)}</Text>
+                                    </Box>
+                                )}
+                            </Flex>
+                        </Flex>
+                    </Card>
+                </Grid>
+
+                {canAttachmentsView ? (
+                    <div className={styles.sectionBlock}>
+                        <div className={styles.sectionHeaderRow}>
+                            <Text as="div" size="2" weight="bold" className={styles.sectionTitle}>
+                                Документы
+                            </Text>
+                            <div className={styles.buttonGroup}>
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    style={{ display: 'none' }}
+                                    onChange={(e) => {
+                                        const f = e.target.files?.[0];
+                                        if (f) void handleUploadFile(f);
+                                    }}
+                                />
+                                {canAttachmentsUpload ? (
+                                    <Button
+                                        type="button"
+                                        onClick={handlePickFile}
+                                        disabled={uploadLoading}
+                                        variant="surface"
+                                        color="gray"
+                                        highContrast
+                                        className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton} noPrint`}
+                                    >
+                                        <FiUploadCloud className={styles.icon} />
+                                        {uploadLoading ? 'Загрузка…' : 'Загрузить файл'}
+                                    </Button>
+                                ) : null}
                             </div>
                         </div>
-                        <div className={styles.infoGroup}>
-                            <p className={styles.infoLabel}>Менеджер</p>
-                            <p className={styles.infoValue}>{order.менеджер_фио || 'Не назначен'}</p>
-                        </div>
-                        <div className={styles.infoGroup}>
-                            <p className={styles.infoLabel}>Адрес доставки</p>
-                            <p className={styles.infoValue}>{order.адрес_доставки || 'Не указан'}</p>
-                        </div>
-                        <div className={styles.infoGroup}>
-                            <p className={styles.infoLabel}>Дата создания</p>
-                            <p className={styles.infoValue}>{formatDate(order.дата_создания)}</p>
-                        </div>
-                        {order.дата_выполнения && (
-                            <div className={styles.infoGroup}>
-                                <p className={styles.infoLabel}>Дата выполнения</p>
-                                <p className={styles.infoValue}>{formatDate(order.дата_выполнения)}</p>
-                            </div>
+
+                        {attachmentsError ? (
+                            <Text as="div" size="2" color="red" style={{ marginLeft: 16 }}>
+                                {attachmentsError}
+                            </Text>
+                        ) : null}
+
+                        {attachmentsLoading ? (
+                            <Text as="div" size="2" color="gray" style={{ marginLeft: 16 }}>
+                                Загрузка документов…
+                            </Text>
+                        ) : attachments.length === 0 ? (
+                            <Text as="div" size="2" color="gray" style={{ marginLeft: 16 }}>
+                                Нет прикрепленных документов
+                            </Text>
+                        ) : (
+                            <Box style={{ paddingLeft: 16, paddingRight: 16 }}>
+                                <Table.Root variant="surface" className={styles.table}>
+                                    <Table.Header>
+                                        <Table.Row>
+                                            <Table.ColumnHeaderCell>Файл</Table.ColumnHeaderCell>
+                                            <Table.ColumnHeaderCell className={styles.textRight}>Размер</Table.ColumnHeaderCell>
+                                            <Table.ColumnHeaderCell className={styles.textRight}>Действия</Table.ColumnHeaderCell>
+                                        </Table.Row>
+                                    </Table.Header>
+                                    <Table.Body>
+                                        {attachments.map((a) => (
+                                            <Table.Row key={a.id}>
+                                                <Table.Cell>
+                                                    <Flex align="center" gap="2">
+                                                        <FiPaperclip />
+                                                        <Text as="div" size="2" weight="medium">
+                                                            {a.filename}
+                                                        </Text>
+                                                    </Flex>
+                                                    <Text as="div" size="1" color="gray">
+                                                        {a.mime_type}
+                                                    </Text>
+                                                </Table.Cell>
+                                                <Table.Cell className={styles.textRight}>{formatBytes(a.size_bytes)}</Table.Cell>
+                                                <Table.Cell className={styles.textRight}>
+                                                    <Flex justify="end" gap="2" wrap="wrap">
+                                                        <Button
+                                                            type="button"
+                                                            variant="surface"
+                                                            color="gray"
+                                                            highContrast
+                                                            className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton} noPrint`}
+                                                            onClick={() => openPreview(a)}
+                                                        >
+                                                            <FiFile className={styles.icon} />
+                                                            Открыть
+                                                        </Button>
+                                                        <a
+                                                            href={`/api/attachments/${encodeURIComponent(a.id)}/download`}
+                                                            style={{ textDecoration: 'none' }}
+                                                            className="noPrint"
+                                                        >
+                                                            <Button
+                                                                type="button"
+                                                                variant="surface"
+                                                                color="gray"
+                                                                highContrast
+                                                                className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
+                                                            >
+                                                                <FiDownload className={styles.icon} />
+                                                                Скачать
+                                                            </Button>
+                                                        </a>
+                                                        {canAttachmentsDelete ? (
+                                                            <Button
+                                                                type="button"
+                                                                variant="surface"
+                                                                color="red"
+                                                                highContrast
+                                                                className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton} ${styles.orderDeleteButton} noPrint`}
+                                                                onClick={() => void handleDeleteAttachment(a.id)}
+                                                            >
+                                                                <FiTrash2 className={styles.icon} />
+                                                                Удалить
+                                                            </Button>
+                                                        ) : null}
+                                                    </Flex>
+                                                </Table.Cell>
+                                            </Table.Row>
+                                        ))}
+                                    </Table.Body>
+                                </Table.Root>
+                            </Box>
                         )}
                     </div>
-                </div>
+                ) : null}
 
-                <div className={styles.tableContainer}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                        <h3 className={styles.sectionTitle}>Позиции заявки</h3>
-                        <p className={styles.infoValue} style={{ fontSize: '18px', fontWeight: '600' }}>
-                            Итого: {formatCurrency(order.общая_сумма)}
-                        </p>
+                <Dialog.Root open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+                    <Dialog.Content style={{ maxWidth: 980, width: '95vw' }}>
+                        <Dialog.Title>{previewAttachment?.filename || 'Документ'}</Dialog.Title>
+                        <Dialog.Description>
+                            {previewAttachment?.mime_type || ''}
+                        </Dialog.Description>
+
+                        <Box style={{ marginTop: 12 }}>
+                            {previewAttachment && canPreviewInline(previewAttachment) ? (
+                                previewAttachment.mime_type.toLowerCase().startsWith('image/') || /\.(png|jpg|jpeg|gif|webp|bmp|svg)$/i.test(previewAttachment.filename) ? (
+                                    <img
+                                        src={`/api/attachments/${encodeURIComponent(previewAttachment.id)}/inline`}
+                                        alt={previewAttachment.filename}
+                                        style={{ width: '100%', maxHeight: '75vh', objectFit: 'contain' }}
+                                    />
+                                ) : (
+                                    <iframe
+                                        src={`/api/attachments/${encodeURIComponent(previewAttachment.id)}/inline`}
+                                        style={{ width: '100%', height: '75vh', border: '1px solid #eee', borderRadius: 8 }}
+                                        title={previewAttachment.filename}
+                                    />
+                                )
+                            ) : (
+                                <Text as="div" size="2" color="gray">
+                                    Предпросмотр недоступен для этого формата. Используй &quot;Скачать&quot;.
+                                </Text>
+                            )}
+                        </Box>
+
+                        <Flex gap="3" mt="4" justify="end">
+                            {previewAttachment ? (
+                                <a
+                                    href={`/api/attachments/${encodeURIComponent(previewAttachment.id)}/download`}
+                                    style={{ textDecoration: 'none' }}
+                                >
+                                    <Button variant="surface" color="gray" highContrast>
+                                        <FiDownload className={styles.icon} />
+                                        Скачать
+                                    </Button>
+                                </a>
+                            ) : null}
+                            <Dialog.Close>
+                                <Button variant="surface" color="gray" highContrast>
+                                    Закрыть
+                                </Button>
+                            </Dialog.Close>
+                        </Flex>
+                    </Dialog.Content>
+                </Dialog.Root>
+
+                <div className={styles.sectionBlock}>
+                    <div className={styles.sectionHeaderRow}>
+                        <Text as="div" size="2" weight="bold" className={styles.sectionTitle}>
+                            Позиции заявки
+                        </Text>
+
                     </div>
 
                     <div className={styles.tableWrapper}>
-                        <table className={styles.table}>
-                            <thead>
-                                <tr>
-                                    <th>Товар</th>
-                                    <th style={{ textAlign: 'right' }}>Количество</th>
-                                    <th style={{ textAlign: 'right' }}>Цена</th>
-                                    <th style={{ textAlign: 'right' }}>Сумма</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {order.позиции.map((position) => (
-                                    <tr key={position.id}>
-                                        <td>
-                                            <div className={styles.productName}>{position.товар_название}</div>
-                                            <div className={styles.productMeta}>
-                                                {position.товар_артикул} • {position.товар_категория || 'Без категории'}
-                                            </div>
-                                        </td>
-                                        <td style={{ textAlign: 'right' }}>
-                                            {position.количество} {position.товар_единица_измерения}
-                                        </td>
-                                        <td style={{ textAlign: 'right' }}>
-                                            {formatCurrency(position.цена)}
-                                        </td>
-                                        <td style={{ textAlign: 'right', fontWeight: '600' }}>
-                                            {formatCurrency(position.сумма)}
-                                        </td>
-                                    </tr>
-                                ))}
-                                <tr className={styles.totalRow}>
-                                    <td colSpan={3} style={{ textAlign: 'right' }}>Итого:</td>
-                                    <td style={{ textAlign: 'right', fontWeight: '600' }}>
+                        <Table.Root variant="surface" className={styles.table}>
+                            <Table.Header>
+                                <Table.Row>
+                                    <Table.ColumnHeaderCell>Название</Table.ColumnHeaderCell>
+                                    <Table.ColumnHeaderCell className={styles.textRight}>Ед.изм</Table.ColumnHeaderCell>
+                                    <Table.ColumnHeaderCell className={styles.textRight}>Количество</Table.ColumnHeaderCell>
+                                    <Table.ColumnHeaderCell className={styles.textRight}>Цена, ₽</Table.ColumnHeaderCell>
+                                    <Table.ColumnHeaderCell className={styles.textRight}>Сумма без НДС, ₽</Table.ColumnHeaderCell>
+                                    <Table.ColumnHeaderCell className={styles.textRight}>НДС</Table.ColumnHeaderCell>
+                                    <Table.ColumnHeaderCell className={styles.textRight}>Сумма НДС, ₽</Table.ColumnHeaderCell>
+                                    <Table.ColumnHeaderCell className={styles.textRight}>Всего, ₽</Table.ColumnHeaderCell>
+                                </Table.Row>
+                            </Table.Header>
+                            <Table.Body>
+                                {order.позиции.map((position) => {
+                                    const vatSummary = getVatSummary(position);
+
+                                    return (
+                                        <Table.Row key={position.id}>
+                                            <Table.Cell>
+                                                <div className={styles.productName}>{position.товар_название}</div>
+                                                <div className={styles.productMeta}>
+                                                    {position.товар_артикул} • {position.товар_категория || 'Без категории'}
+                                                </div>
+                                            </Table.Cell>
+                                            <Table.Cell className={styles.textRight}>
+                                                {position.товар_единица_измерения || 'шт'}
+                                            </Table.Cell>
+                                            <Table.Cell className={styles.textRight}>
+                                                {position.количество}
+                                            </Table.Cell>
+                                            <Table.Cell className={styles.textRight}>{formatCurrency(position.цена)}</Table.Cell>
+                                            <Table.Cell className={styles.textRight}>{formatCurrency(vatSummary.net)}</Table.Cell>
+                                            <Table.Cell className={styles.textRight}>{vatSummary.label}</Table.Cell>
+                                            <Table.Cell className={styles.textRight}>{formatCurrency(vatSummary.tax)}</Table.Cell>
+                                            <Table.Cell className={styles.textRight} style={{ fontWeight: 600 }}>
+                                                {formatCurrency(vatSummary.total)}
+                                            </Table.Cell>
+                                        </Table.Row>
+                                    );
+                                })}
+                                <Table.Row className={styles.totalRow as any}>
+                                    <Table.Cell className={styles.textRight} colSpan={7}>
+                                        Итого:
+                                    </Table.Cell>
+                                    <Table.Cell className={styles.textRight} style={{ fontWeight: 600, textAlign: 'right' }}>
                                         {formatCurrency(order.общая_сумма)}
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+                                    </Table.Cell>
+                                </Table.Row>
+                            </Table.Body>
+                        </Table.Root>
                     </div>
                 </div>
 
                 {/* Missing Products Section */}
                 {order.недостающие_товары && order.недостающие_товары.length > 0 && (
                     <div className={styles.missingProducts}>
-                        <h3 className={styles.sectionTitle} style={{ color: '#dc3545' }}>Недостающие товары</h3>
+                        <div className={styles.sectionHeaderRow}>
+                            <Text as="div" size="2" weight="bold" className={styles.sectionTitle} style={{ color: '#dc3545' }}>
+                                Недостающие товары
+                            </Text>
+                        </div>
 
-                        <div className={styles.tableContainer}>
-                            <table className={`${styles.table} ${styles.missingTable}`}>
-                                <thead>
-                                    <tr>
-                                        <th>Товар</th>
-                                        <th style={{ textAlign: 'right' }}>Необходимо</th>
-                                        <th style={{ textAlign: 'right' }}>Недостает</th>
-                                        <th style={{ textAlign: 'center' }}>Статус</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {order.недостающие_товары.map((missing) => (
-                                        <tr key={missing.id}>
-                                            <td>
-                                                <div className={styles.productName}>
-                                                    {missing.товар_название || `Товар #${missing.товар_id}`}
-                                                </div>
-                                                {missing.товар_артикул && (
-                                                    <div className={styles.productMeta}>
-                                                        {missing.товар_артикул}
+                        {activeMissingProducts.length > 0 ? (
+                            <div className={styles.tableWrapper}>
+                                <Table.Root variant="surface" className={styles.table}>
+                                    <Table.Header>
+                                        <Table.Row>
+                                            <Table.ColumnHeaderCell>Товар</Table.ColumnHeaderCell>
+                                            <Table.ColumnHeaderCell className={styles.textRight}>Необходимо</Table.ColumnHeaderCell>
+                                            <Table.ColumnHeaderCell className={styles.textRight}>Недостает</Table.ColumnHeaderCell>
+                                            <Table.ColumnHeaderCell style={{ textAlign: 'right' }}>Статус</Table.ColumnHeaderCell>
+                                        </Table.Row>
+                                    </Table.Header>
+                                    <Table.Body>
+                                        {activeMissingProducts.map((missing) => (
+                                            <Table.Row key={missing.id}>
+                                                <Table.Cell>
+                                                    <div className={styles.productName}>
+                                                        {missing.товар_название || `Товар #${missing.товар_id}`}
                                                     </div>
-                                                )}
-                                            </td>
-                                            <td style={{ textAlign: 'right' }}>
-                                                {missing.необходимое_количество}
-                                            </td>
-                                            <td style={{ textAlign: 'right' }}>
-                                                {missing.недостающее_количество}
-                                            </td>
-                                            <td style={{ textAlign: 'center' }}>
-                                                <span className={`${styles.statusBadge} ${missing.статус === 'получено' ? styles.missingStatusReceived :
-                                                        missing.статус === 'в обработке' ? styles.missingStatusInProgress :
-                                                            styles.missingStatus
-                                                    }`}>
-                                                    {getMissingStatusText(missing.статус)}
-                                                </span>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                                                    {missing.товар_артикул ? (
+                                                        <div className={styles.productMeta}>
+                                                            {missing.товар_артикул}
+                                                        </div>
+                                                    ) : null}
+                                                </Table.Cell>
+                                                <Table.Cell className={styles.textRight}>
+                                                    {missing.необходимое_количество}
+                                                </Table.Cell>
+                                                <Table.Cell className={styles.textRight}>
+                                                    {missing.недостающее_количество}
+                                                </Table.Cell>
+                                                <Table.Cell style={{ textAlign: 'right' }}>
+                                                    <Badge
+                                                        variant="soft"
+                                                        highContrast
+                                                        className={`${styles.statusPill} ${missing.статус === 'получено'
+                                                            ? styles.statusPillGreen
+                                                            : missing.статус === 'в обработке'
+                                                                ? styles.statusPillBlue
+                                                                : styles.statusPillOrange
+                                                            }`}
+                                                    >
+                                                        {getMissingStatusText(missing.статус)}
+                                                    </Badge>
+                                                </Table.Cell>
+                                            </Table.Row>
+                                        ))}
+                                    </Table.Body>
+                                </Table.Root>
+                            </div>
+                        ) : (
+                            <Text as="div" size="2" color="gray" style={{ paddingLeft: 16 }}>Активных недостающих товаров по этой заявке сейчас нет.</Text>
+                        )}
 
-                        <div className={styles.actions}>
-                            <Link
-                                href="/missing-products"
-                                className={`${styles.button} ${styles.buttonDanger}`}
-                            >
-                                Перейти к управлению недостающими товарами
-                            </Link>
-                        </div>
+                        {closedMissingProducts.length > 0 ? (
+                            <>
+                                <div className={styles.sectionHeaderRow} style={{ marginTop: '20px' }}>
+                                    <Text as="div" size="2" weight="bold" className={styles.sectionTitle}>
+                                        Закрытые недостачи
+                                    </Text>
+                                </div>
+
+                                <div className={styles.tableWrapper}>
+                                    <Table.Root variant="surface" className={styles.table}>
+                                        <Table.Header>
+                                            <Table.Row>
+                                                <Table.ColumnHeaderCell>Товар</Table.ColumnHeaderCell>
+                                                <Table.ColumnHeaderCell className={styles.textRight}>Необходимо</Table.ColumnHeaderCell>
+                                                <Table.ColumnHeaderCell className={styles.textRight}>Недостает</Table.ColumnHeaderCell>
+                                                <Table.ColumnHeaderCell style={{ textAlign: 'right' }}>Статус</Table.ColumnHeaderCell>
+                                            </Table.Row>
+                                        </Table.Header>
+                                        <Table.Body>
+                                            {closedMissingProducts.map((missing) => (
+                                                <Table.Row key={`closed-${missing.id}`}>
+                                                    <Table.Cell>
+                                                        <div className={styles.productName}>
+                                                            {missing.товар_название || `Товар #${missing.товар_id}`}
+                                                        </div>
+                                                        {missing.товар_артикул ? (
+                                                            <div className={styles.productMeta}>
+                                                                {missing.товар_артикул}
+                                                            </div>
+                                                        ) : null}
+                                                    </Table.Cell>
+                                                    <Table.Cell className={styles.textRight}>
+                                                        {missing.необходимое_количество}
+                                                    </Table.Cell>
+                                                    <Table.Cell className={styles.textRight}>
+                                                        {missing.недостающее_количество}
+                                                    </Table.Cell>
+                                                    <Table.Cell style={{ textAlign: 'right' }}>
+                                                        <Badge
+                                                            variant="soft"
+                                                            highContrast
+                                                            className={`${styles.statusPill} ${styles.statusPillGreen}`}
+                                                        >
+                                                            {getMissingStatusText(missing.статус)}
+                                                        </Badge>
+                                                    </Table.Cell>
+                                                </Table.Row>
+                                            ))}
+                                        </Table.Body>
+                                    </Table.Root>
+                                </div>
+                            </>
+                        ) : null}
+
+                        {canManageMissingProducts ? (
+                            <Flex className={styles.actions} justify="end">
+                                <Link href={`/missing-products?orderId=${order.id}`} className="noPrint" style={{ textDecoration: 'none' }}>
+                                    <Button variant="soft" color="gray" highContrast className={styles.surfaceButton}>
+                                        Перейти к управлению недостающими товарами
+                                    </Button>
+                                </Link>
+                            </Flex>
+                        ) : null}
                     </div>
                 )}
             </div>
+
+            <CreatePurchaseModal
+                key={`order-detail-purchase-${createPurchaseModalKey}`}
+                isOpen={isCreatePurchaseOpen}
+                onClose={() => {
+                    setIsCreatePurchaseOpen(false);
+                    setCreatePurchaseOrderPositions([]);
+                }}
+                onPurchaseCreated={async () => {
+                    setIsCreatePurchaseOpen(false);
+                    setCreatePurchaseOrderPositions([]);
+                    await fetchOrderDetail();
+                }}
+                поставщик_id={0}
+                поставщик_название=""
+                заявка_id={order?.id}
+                initialOrderPositions={createPurchaseOrderPositions}
+            />
+
+            <CreateShipmentModal
+                isOpen={isCreateShipmentOpen}
+                onClose={() => setIsCreateShipmentOpen(false)}
+                onCreated={async () => {
+                    setIsCreateShipmentOpen(false);
+                    await fetchOrderDetail();
+                }}
+                initialOrderId={order?.id ?? null}
+                lockOrderId
+            />
+
+            <DeleteConfirmation
+                isOpen={isDeleteConfirmOpen}
+                onClose={() => setIsDeleteConfirmOpen(false)}
+                onConfirm={handleDeleteOrder}
+                order={order as any}
+                loading={operationLoading}
+            />
 
             <EditOrderModal
                 isOpen={isEditModalOpen}
@@ -508,7 +1444,7 @@ function OrderDetailPage(): JSX.Element {
                 order={order}
                 onSubmit={handleEditOrder}
             />
-        </div>
+        </div >
     );
 }
 

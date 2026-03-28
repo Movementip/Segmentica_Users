@@ -1,249 +1,261 @@
-import { useState, useEffect } from 'react';
-import styles from '../styles/Modal.module.css';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Button, Dialog, Flex, Text, TextField, Select, Box } from '@radix-ui/themes';
+import styles from './WarehouseMovementModal.module.css';
 
 interface Product {
-  id: number;
-  название: string;
-  артикул: string;
-  категория: string;
-  единица_измерения: string;
-  минимальный_остаток: number;
-  цена_закупки: number;
-  цена_продажи: number;
+    id: number;
+    название: string;
+    артикул: string;
+    категория?: string;
+    единица_измерения: string;
+    минимальный_остаток: number;
+    цена_закупки?: number;
+    цена_продажи: number;
 }
 
 interface EditProductModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onProductUpdated: () => void;
-  product: Product | null;
+    isOpen: boolean;
+    onClose: () => void;
+    onProductUpdated: () => void;
+    product: Product | null;
 }
 
 export const EditProductModal: React.FC<EditProductModalProps> = ({
-  isOpen,
-  onClose,
-  onProductUpdated,
-  product
+    isOpen,
+    onClose,
+    onProductUpdated,
+    product
 }) => {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [formData, setFormData] = useState({
-    название: '',
-    артикул: '',
-    категория: '',
-    единица_измерения: '',
-    минимальный_остаток: '',
-    цена_закупки: '',
-    цена_продажи: ''
-  });
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [formData, setFormData] = useState({
+        название: '',
+        артикул: '',
+        категория: '',
+        единица_измерения: 'шт',
+        минимальный_остаток: '0',
+        цена_закупки: '0',
+        цена_продажи: '0'
+    });
 
-  useEffect(() => {
-    if (product) {
-      setFormData({
-        название: product.название || '',
-        артикул: product.артикул || '',
-        категория: product.категория || '',
-        единица_измерения: product.единица_измерения || '',
-        минимальный_остаток: product.минимальный_остаток?.toString() || '0',
-        цена_закупки: product.цена_закупки?.toString() || '0',
-        цена_продажи: product.цена_продажи?.toString() || '0'
-      });
-    }
-  }, [product]);
+    useEffect(() => {
+        if (!isOpen) return;
+        setError(null);
+        setLoading(false);
+    }, [isOpen]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!product) return;
+    useEffect(() => {
+        if (product) {
+            setFormData({
+                название: product.название || '',
+                артикул: product.артикул || '',
+                категория: product.категория || '',
+                единица_измерения: product.единица_измерения || 'шт',
+                минимальный_остаток: product.минимальный_остаток?.toString() || '0',
+                цена_закупки: product.цена_закупки?.toString() || '0',
+                цена_продажи: product.цена_продажи?.toString() || '0'
+            });
+        }
+    }, [product]);
 
-    setLoading(true);
-    setError(null);
+    const canSubmit = useMemo(() => {
+        if (loading) return false;
+        if (!formData.название.trim()) return false;
+        if (!formData.артикул.trim()) return false;
+        if (!formData.цена_продажи || parseFloat(formData.цена_продажи) <= 0) return false;
+        return true;
+    }, [formData.артикул, formData.название, formData.цена_продажи, loading]);
 
-    try {
-      const response = await fetch('/api/warehouse', {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          id: product.id,
-          название: formData.название,
-          артикул: formData.артикул,
-          категория: formData.категория,
-          единица_измерения: formData.единица_измерения,
-          минимальный_остаток: parseInt(formData.минимальный_остаток) || 0,
-          цена_закупки: parseFloat(formData.цена_закупки) || 0,
-          цена_продажи: parseFloat(formData.цена_продажи) || 0
-        }),
-      });
+    const handleSubmit = async () => {
+        if (!product) return;
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Ошибка обновления товара');
-      }
+        setLoading(true);
+        setError(null);
 
-      onProductUpdated();
-      handleClose();
-    } catch (error: any) {
-      console.error('Error updating product:', error);
-      setError(error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
+        try {
+            const response = await fetch('/api/products', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    id: product.id,
+                    название: formData.название,
+                    артикул: formData.артикул,
+                    категория: formData.категория,
+                    единица_измерения: formData.единица_измерения,
+                    минимальный_остаток: parseInt(formData.минимальный_остаток) || 0,
+                    цена_закупки: parseFloat(formData.цена_закупки) || 0,
+                    цена_продажи: parseFloat(formData.цена_продажи) || 0
+                }),
+            });
 
-  const handleClose = () => {
-    setError(null);
-    onClose();
-  };
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Ошибка обновления товара');
+            }
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
+            onProductUpdated();
+            handleClose();
+        } catch (e) {
+            console.error('Error updating product:', e);
+            setError(e instanceof Error ? e.message : 'Неизвестная ошибка');
+        } finally {
+            setLoading(false);
+        }
+    };
 
-  if (!isOpen || !product) return null;
+    const handleClose = () => {
+        setError(null);
+        setLoading(false);
+        onClose();
+    };
 
-  return (
-    <div className={styles.modalOverlay}>
-      <div className={styles.modalContent}>
-        <div className={styles.modalHeader}>
-          <h2>Редактировать товар</h2>
-          <button onClick={handleClose} className={styles.closeButton}>×</button>
-        </div>
+    if (!isOpen || !product) return null;
 
-        <form onSubmit={handleSubmit} className={styles.modalForm}>
-          <div className={styles.formGroup}>
-            <label htmlFor="название">Название товара *</label>
-            <input
-              type="text"
-              id="название"
-              name="название"
-              value={formData.название}
-              onChange={handleInputChange}
-              required
-              placeholder="Введите название товара"
-            />
-          </div>
+    return (
+        <Dialog.Root open={isOpen} onOpenChange={(open) => (!open ? handleClose() : undefined)}>
+            <Dialog.Content className={styles.modalContent}>
+                <Dialog.Title>Редактировать товар</Dialog.Title>
 
-          <div className={styles.formRow}>
-            <div className={styles.formGroup}>
-              <label htmlFor="артикул">Артикул *</label>
-              <input
-                type="text"
-                id="артикул"
-                name="артикул"
-                value={formData.артикул}
-                onChange={handleInputChange}
-                required
-                placeholder="Введите артикул"
-              />
-            </div>
-            <div className={styles.formGroup}>
-              <label htmlFor="категория">Категория *</label>
-              <input
-                type="text"
-                id="категория"
-                name="категория"
-                value={formData.категория}
-                onChange={handleInputChange}
-                required
-                placeholder="Введите категорию"
-              />
-            </div>
-          </div>
 
-          <div className={styles.formRow}>
-            <div className={styles.formGroup}>
-              <label htmlFor="единица_измерения">Единица измерения *</label>
-              <select
-                id="единица_измерения"
-                name="единица_измерения"
-                value={formData.единица_измерения}
-                onChange={handleInputChange}
-                required
-              >
-                <option value="">Выберите единицу</option>
-                <option value="шт">шт (штуки)</option>
-                <option value="кг">кг (килограммы)</option>
-                <option value="л">л (литры)</option>
-                <option value="м">м (метры)</option>
-                <option value="м²">м² (квадратные метры)</option>
-                <option value="м³">м³ (кубические метры)</option>
-                <option value="упак">упак (упаковки)</option>
-                <option value="комп">комп (комплекты)</option>
-              </select>
-            </div>
-            <div className={styles.formGroup}>
-              <label htmlFor="минимальный_остаток">Минимальный остаток</label>
-              <input
-                type="number"
-                id="минимальный_остаток"
-                name="минимальный_остаток"
-                value={formData.минимальный_остаток}
-                onChange={handleInputChange}
-                min="0"
-                placeholder="0"
-              />
-            </div>
-          </div>
+                {error ? (
+                    <Box className={styles.error}>
+                        <Text size="2">{error}</Text>
+                    </Box>
+                ) : null}
 
-          <div className={styles.formRow}>
-            <div className={styles.formGroup}>
-              <label htmlFor="цена_закупки">Цена закупки (₽)</label>
-              <input
-                type="number"
-                id="цена_закупки"
-                name="цена_закупки"
-                value={formData.цена_закупки}
-                onChange={handleInputChange}
-                min="0"
-                step="0.01"
-                placeholder="0.00"
-              />
-            </div>
-            <div className={styles.formGroup}>
-              <label htmlFor="цена_продажи">Цена продажи (₽)</label>
-              <input
-                type="number"
-                id="цена_продажи"
-                name="цена_продажи"
-                value={formData.цена_продажи}
-                onChange={handleInputChange}
-                min="0"
-                step="0.01"
-                placeholder="0.00"
-              />
-            </div>
-          </div>
+                <Flex direction="column" gap="4" className={styles.form} mt="4">
+                    <Flex direction="column" gap="1">
+                        <Text as="label" size="2" weight="medium">Название товара *</Text>
+                        <TextField.Root
+                            value={formData.название}
+                            onChange={(e) => setFormData((p) => ({ ...p, название: e.target.value }))}
+                            placeholder="Введите название товара"
+                            variant="surface"
+                            radius="large"
+                            size="3"
+                            className={styles.textField}
+                        />
+                    </Flex>
 
-          {error && (
-            <div className={styles.errorMessage}>
-              {error}
-            </div>
-          )}
+                    <Flex gap="3" wrap="wrap">
+                        <Flex direction="column" gap="1" style={{ flex: '1 1 240px' }}>
+                            <Text as="label" size="2" weight="medium">Артикул *</Text>
+                            <TextField.Root
+                                value={formData.артикул}
+                                onChange={(e) => setFormData((p) => ({ ...p, артикул: e.target.value }))}
+                                placeholder="Введите артикул"
+                                variant="surface"
+                                radius="large"
+                                size="3"
+                                className={styles.textField}
+                            />
+                        </Flex>
+                        <Flex direction="column" gap="1" style={{ flex: '1 1 240px' }}>
+                            <Text as="label" size="2" weight="medium">Категория *</Text>
+                            <TextField.Root
+                                value={formData.категория}
+                                onChange={(e) => setFormData((p) => ({ ...p, категория: e.target.value }))}
+                                placeholder="Введите категорию"
+                                variant="surface"
+                                radius="large"
+                                size="3"
+                                className={styles.textField}
+                            />
+                        </Flex>
+                    </Flex>
 
-          <div className={styles.modalActions}>
-            <button
-              type="button"
-              onClick={handleClose}
-              className={styles.cancelButton}
-              disabled={loading}
-            >
-              Отмена
-            </button>
-            <button
-              type="submit"
-              className={styles.submitButton}
-              disabled={loading}
-            >
-              {loading ? 'Сохранение...' : 'Сохранить изменения'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
+                    <Flex gap="3" wrap="wrap">
+                        <Flex direction="column" gap="1" style={{ flex: '1 1 240px' }}>
+                            <Text as="label" size="2" weight="medium">Единица измерения *</Text>
+                            <Select.Root value={formData.единица_измерения} onValueChange={(v) => setFormData((p) => ({ ...p, единица_измерения: v }))}>
+                                <Select.Trigger
+                                    variant="surface"
+                                    color="gray"
+                                    radius="large"
+                                    className={styles.selectFullWidth}
+                                />
+                                <Select.Content position="popper" variant="solid" color="gray" highContrast>
+                                    <Select.Item value="шт">шт</Select.Item>
+                                    <Select.Item value="кг">кг</Select.Item>
+                                    <Select.Item value="л">л</Select.Item>
+                                    <Select.Item value="м">м</Select.Item>
+                                    <Select.Item value="м²">м²</Select.Item>
+                                    <Select.Item value="м³">м³</Select.Item>
+                                    <Select.Item value="упак">упак</Select.Item>
+                                    <Select.Item value="комп">комп</Select.Item>
+                                </Select.Content>
+                            </Select.Root>
+                        </Flex>
+                        <Flex direction="column" gap="1" style={{ flex: '1 1 240px' }}>
+                            <Text as="label" size="2" weight="medium">Минимальный остаток</Text>
+                            <TextField.Root
+                                value={formData.минимальный_остаток}
+                                onChange={(e) => setFormData((p) => ({ ...p, минимальный_остаток: e.target.value }))}
+                                placeholder="0"
+                                type="number"
+                                min={0}
+                                step={1}
+                                variant="surface"
+                                radius="large"
+                                size="3"
+                                className={styles.textField}
+                            />
+                        </Flex>
+                    </Flex>
+
+                    <Flex gap="3" wrap="wrap">
+                        <Flex direction="column" gap="1" style={{ flex: '1 1 240px' }}>
+                            <Text as="label" size="2" weight="medium">Цена закупки (₽)</Text>
+                            <TextField.Root
+                                value={formData.цена_закупки}
+                                onChange={(e) => setFormData((p) => ({ ...p, цена_закупки: e.target.value }))}
+                                placeholder="0"
+                                type="number"
+                                min={0}
+                                step={0.01}
+                                variant="surface"
+                                radius="large"
+                                size="3"
+                                className={styles.textField}
+                            />
+                        </Flex>
+                        <Flex direction="column" gap="1" style={{ flex: '1 1 240px' }}>
+                            <Text as="label" size="2" weight="medium">Цена продажи (₽) *</Text>
+                            <TextField.Root
+                                value={formData.цена_продажи}
+                                onChange={(e) => setFormData((p) => ({ ...p, цена_продажи: e.target.value }))}
+                                placeholder="0"
+                                type="number"
+                                min={0}
+                                step={0.01}
+                                variant="surface"
+                                radius="large"
+                                size="3"
+                                className={styles.textField}
+                            />
+                        </Flex>
+                    </Flex>
+
+                    <Flex justify="end" gap="3" className={styles.modalActions}>
+                        <Button type="button" variant="surface" color="gray" highContrast onClick={handleClose} disabled={loading}>
+                            Отмена
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="solid"
+                            color="gray"
+                            highContrast
+                            onClick={handleSubmit}
+                            disabled={!canSubmit}
+                            loading={loading}
+                        >
+                            {loading ? 'Сохранение…' : 'Сохранить изменения'}
+                        </Button>
+                    </Flex>
+                </Flex>
+            </Dialog.Content>
+        </Dialog.Root>
+    );
 };

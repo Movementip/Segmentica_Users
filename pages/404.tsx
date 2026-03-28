@@ -1,13 +1,10 @@
 import React from 'react';
-//import { Htag } from '../components';
-//import { withLayout } from '../layout/Layout';
 
-export function Error404(): JSX.Element {
+export default function NotFoundPage(): JSX.Element {
     return (
-        <>
-            <Htag tag='h1'>Ошибка 404</Htag>
-        </>
+        <div style={{ textAlign: 'center', padding: '50px' }}>
+            <h1>404 - Страница не найдена</h1>
+            <p>Извините, но запрашиваемая вами страница не существует.</p>
+        </div>
     );
 }
-
-//export default withLayout(Error404);

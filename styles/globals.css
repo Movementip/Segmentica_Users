@@ -1,10 +1,243 @@
 // Global styles for Segmentica CRM
 body {
   margin: 0;
+  padding: 0;
   font-family: 'Segoe UI', Arial, sans-serif;
   background: #f7f8fa;
   color: #222;
 }
+
+:where(.radix-themes) button:focus:not(.rt-SelectTrigger):not(.rt-BaseSelectTrigger),
+:where(.radix-themes) button:focus-visible:not(.rt-SelectTrigger):not(.rt-BaseSelectTrigger),
+:where(.radix-themes) .rt-BaseButton:focus,
+:where(.radix-themes) .rt-BaseButton:focus-visible,
+:where(.radix-themes) .rt-Button:focus,
+:where(.radix-themes) .rt-Button:focus-visible {
+  outline: none !important;
+}
+
+:where(.radix-themes) .rt-BaseButton:where(.rt-variant-surface):focus,
+:where(.radix-themes) .rt-Button:where(.rt-variant-surface):focus {
+  border: 1px solid #e0e0e0 !important;
+  box-shadow: inset 0 0 0 1px var(--gray-a7) !important;
+  background: #ffffff;
+}
+
+:where(.radix-themes) .rt-BaseButton:where(.rt-variant-surface),
+:where(.radix-themes) .rt-Button:where(.rt-variant-surface) {
+  border: 1px solid #e0e0e0 !important;
+  border-style: solid !important;
+  box-shadow: inset 0 0 0 1px var(--gray-a7) !important;
+  background: #ffffff !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+}
+
+:where(.radix-themes) .rt-BaseButton:where(.rt-variant-surface)::before,
+:where(.radix-themes) .rt-BaseButton:where(.rt-variant-surface)::after,
+:where(.radix-themes) .rt-Button:where(.rt-variant-surface)::before,
+:where(.radix-themes) .rt-Button:where(.rt-variant-surface)::after {
+  border: 1px solid #e0e0e0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+:where(.radix-themes) .rt-BaseButton:where(.rt-variant-surface):focus-visible,
+:where(.radix-themes) .rt-Button:where(.rt-variant-surface):focus-visible {
+  border-color: #000000 !important;
+  box-shadow: none !important;
+  background: #f5f5f5 !important;
+}
+
+:where(.radix-themes) .rt-TextFieldRoot:focus-within,
+:where(.radix-themes) .rt-TextFieldRoot[data-focus-visible],
+:where(.radix-themes) .rt-TextFieldRoot:has(:focus-visible),
+:where(.radix-themes) .rt-TextAreaRoot:focus,
+:where(.radix-themes) .rt-TextAreaRoot:focus-visible,
+:where(.radix-themes) .rt-TextAreaRoot:focus-within,
+:where(.radix-themes) .rt-TextAreaRoot[data-focus-visible],
+:where(.radix-themes) .rt-TextAreaRoot:has(:focus-visible) {
+  outline: none !important;
+  border-color: rgba(0, 0, 0, 0.45) !important;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35) !important;
+}
+
+:where(.radix-themes) .rt-TextAreaInput:focus,
+:where(.radix-themes) .rt-TextAreaInput:focus-visible {
+  outline: none !important;
+}
+
+:where(.radix-themes) .rt-SelectTrigger,
+:where(.radix-themes) .rt-BaseSelectTrigger {
+  background: #ffffff !important;
+
+  border: 1px solid #e0e0e0 !important;
+  box-shadow: inset 0 0 0 1px var(--gray-a7) !important;
+
+}
+
+:where(.radix-themes) .rt-SelectTrigger:where(:hover),
+:where(.radix-themes) .rt-BaseSelectTrigger:where(:hover) {
+  background: #f5f5f5 !important;
+}
+
+:where(.radix-themes) .rt-SelectTrigger:where(:focus-visible),
+:where(.radix-themes) .rt-BaseSelectTrigger:where(:focus-visible),
+:where(.radix-themes) .rt-SelectTrigger[aria-expanded='true'],
+:where(.radix-themes) .rt-BaseSelectTrigger[aria-expanded='true'] {
+  outline: none !important;
+  border-color: #000000 !important;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12) !important;
+  background: #f5f5f5 !important;
+}
+
+:where(.radix-themes) .menuButton {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  color: #212121;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+:where(.radix-themes) .menuButton:hover {
+
+}
+
+:where(.radix-themes) .rt-Card:where(.rt-variant-surface) {
+  --card-border-width: 0px !important;
+}
+
+:where(.radix-themes) .rt-Card:where(.rt-variant-surface)::after {
+  box-shadow: none !important;
+  border: none !important;
+  outline: none !important;
+}
+
+:where(.radix-themes) .rt-TabsTrigger::before,
+:where(.radix-themes) .rt-TabsTrigger::after,
+:where(.radix-themes) .rt-BaseTabListTrigger::before,
+:where(.radix-themes) .rt-BaseTabListTrigger::after {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+:where(.radix-themes) .rt-TabsTriggerInner,
+:where(.radix-themes) .rt-BaseTabListTriggerInner,
+:where(.radix-themes) .rt-TabsTriggerInnerHidden,
+:where(.radix-themes) .rt-BaseTabListTriggerInnerHidden {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+:where(.radix-themes) .rt-TabsIndicator {
+  display: none !important;
+}
+
+:where(.radix-themes) .rt-DropdownMenuContent,
+:where(.radix-themes) .rt-BaseMenuContent,
+:where(.radix-themes) .rt-DropdownMenuViewport,
+:where(.radix-themes) .rt-BaseMenuViewport {
+  border-radius: 10px;
+  border: 1px solid #e0e0e0;
+  background: #ffffff;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+  padding: 8px !important;
+  min-width: 220px !important;
+}
+
+:where(.radix-themes) .rt-DropdownMenuItem,
+:where(.radix-themes) .rt-BaseMenuItem {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 10px 12px !important;
+  border-radius: 8px !important;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1;
+  color: #212121;
+  background-color: transparent;
+  outline: none;
+}
+
+:where(.radix-themes) .rt-DropdownMenuItem svg,
+:where(.radix-themes) .rt-BaseMenuItem svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+:where(.radix-themes) .rt-BaseMenuSeparator,
+:where(.radix-themes) .rt-DropdownMenuSeparator {
+  height: 1px;
+  background: #f0f0f0;
+  margin: 6px 0;
+}
+
+:where(.radix-themes) .rt-DropdownMenuItem:hover,
+:where(.radix-themes) .rt-BaseMenuItem:hover {
+  background-color: #f5f5f5;
+}
+
+:where(.radix-themes) .rt-DropdownMenuItem[data-highlighted],
+:where(.radix-themes) .rt-BaseMenuItem[data-highlighted],
+:where(.radix-themes) [data-radix-menu-content] [data-highlighted] {
+  background-color: #f5f5f5 !important;
+  color: #212121 !important;
+  box-shadow: none !important;
+}
+
+:where(.radix-themes) .rt-DropdownMenuItem[data-highlighted] svg,
+:where(.radix-themes) .rt-BaseMenuItem[data-highlighted] svg,
+:where(.radix-themes) [data-radix-menu-content] [data-highlighted] svg {
+  color: #757575 !important;
+}
+
+:where(.radix-themes) .rt-DropdownMenuItem[data-accent-color='red'],
+:where(.radix-themes) .rt-BaseMenuItem[data-accent-color='red'] {
+  color: #d32f2f;
+}
+
+:where(.radix-themes) .rt-DropdownMenuItem[data-accent-color='red'][data-highlighted],
+:where(.radix-themes) .rt-BaseMenuItem[data-accent-color='red'][data-highlighted] {
+  color: #d32f2f !important;
+}
+
+.rt-DialogOverlay,
+[data-radix-dialog-overlay] {
+  background: rgba(17, 17, 17, 0.25) !important;
+  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: blur(5px);
+}
+
+
+@media print {
+  body {
+    background: #fff !important;
+  }
+
+  body * {
+    visibility: hidden;
+  }
+
+  .print-order-detail,
+  .print-order-detail * {
+    visibility: visible;
+  }
+
+  .print-order-detail {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+}
 h1 {
-  color: #2e5aac;
+  color: #000000;
 }

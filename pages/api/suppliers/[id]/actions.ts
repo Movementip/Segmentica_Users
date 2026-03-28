@@ -1,134 +1,141 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { query } from '../../../../lib/db';
+import { requireAuth, requirePermission } from '../../../../lib/auth';
 
 export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
+    req: NextApiRequest,
+    res: NextApiResponse
 ) {
-  const { id } = req.query; // supplier id
+    const { id } = req.query; // supplier id
 
-  if (req.method === 'POST') {
-    // Add product to supplier's assortment
-    try {
-      const { товар_id, цена, срок_поставки } = req.body;
+    if (req.method === 'POST') {
+        // Add product to supplier's assortment
+        const actor = await requirePermission(req, res, 'suppliers.edit');
+        if (!actor) return;
+        try {
+            const { товар_id, цена, срок_поставки } = req.body;
 
-      // Validate required fields
-      if (!товар_id || !цена || !срок_поставки) {
-        return res.status(400).json({ 
-          error: 'Товар, цена и срок поставки обязательны' 
-        });
-      }
+            // Validate required fields
+            if (!товар_id || !цена || !срок_поставки) {
+                return res.status(400).json({
+                    error: 'Товар, цена и срок поставки обязательны'
+                });
+            }
 
-      // Validate supplier exists
-      const supplierCheck = await query(
-        'SELECT id FROM "Поставщики" WHERE id = $1',
-        [id]
-      );
+            // Validate supplier exists
+            const supplierCheck = await query(
+                'SELECT id FROM "Поставщики" WHERE id = $1',
+                [id]
+            );
 
-      if (supplierCheck.rows.length === 0) {
-        return res.status(404).json({ error: 'Поставщик не найден' });
-      }
+            if (supplierCheck.rows.length === 0) {
+                return res.status(404).json({ error: 'Поставщик не найден' });
+            }
 
-      // Validate product exists
-      const productCheck = await query(
-        'SELECT id FROM "Товары" WHERE id = $1',
-        [товар_id]
-      );
+            // Validate product exists
+            const productCheck = await query(
+                'SELECT id FROM "Товары" WHERE id = $1',
+                [товар_id]
+            );
 
-      if (productCheck.rows.length === 0) {
-        return res.status(400).json({ error: 'Товар не найден' });
-      }
+            if (productCheck.rows.length === 0) {
+                return res.status(400).json({ error: 'Товар не найден' });
+            }
 
-      // Check if this product is already in supplier's assortment
-      const existingAssortment = await query(
-        'SELECT id FROM "Ассортимент_поставщиков" WHERE "поставщик_id" = $1 AND "товар_id" = $2',
-        [id, товар_id]
-      );
+            // Check if this product is already in supplier's assortment
+            const existingAssortment = await query(
+                'SELECT id FROM "Ассортимент_поставщиков" WHERE "поставщик_id" = $1 AND "товар_id" = $2',
+                [id, товар_id]
+            );
 
-      if (existingAssortment.rows.length > 0) {
-        return res.status(400).json({ 
-          error: 'Этот товар уже есть в ассортименте поставщика' 
-        });
-      }
+            if (existingAssortment.rows.length > 0) {
+                return res.status(400).json({
+                    error: 'Этот товар уже есть в ассортименте поставщика'
+                });
+            }
 
-      // Add product to supplier's assortment
-      await query(`
+            // Add product to supplier's assortment
+            await query(`
         INSERT INTO "Ассортимент_поставщиков" (
           "поставщик_id", "товар_id", "цена", "срок_поставки"
         ) VALUES ($1, $2, $3, $4)
       `, [id, товар_id, цена, срок_поставки]);
 
-      res.status(201).json({ 
-        message: 'Товар успешно добавлен в ассортимент поставщика' 
-      });
-    } catch (error) {
-      console.error('Error adding product to supplier:', error);
-      res.status(500).json({ 
-        error: 'Ошибка добавления товара: ' + (error instanceof Error ? error.message : 'Неизвестная ошибка')
-      });
+            res.status(201).json({
+                message: 'Товар успешно добавлен в ассортимент поставщика'
+            });
+        } catch (error) {
+            console.error('Error adding product to supplier:', error);
+            res.status(500).json({
+                error: 'Ошибка добавления товара: ' + (error instanceof Error ? error.message : 'Неизвестная ошибка')
+            });
+        }
+    } else if (req.method === 'DELETE') {
+        // Remove product from supplier's assortment
+        const actor = await requirePermission(req, res, 'suppliers.edit');
+        if (!actor) return;
+        try {
+            const { товар_id } = req.query;
+
+            if (!товар_id) {
+                return res.status(400).json({ error: 'ID товара обязателен' });
+            }
+
+            // Remove product from supplier's assortment
+            const result = await query(
+                'DELETE FROM "Ассортимент_поставщиков" WHERE "поставщик_id" = $1 AND "товар_id" = $2',
+                [id, товар_id]
+            );
+
+            if (result.rowCount === 0) {
+                return res.status(404).json({
+                    error: 'Товар не найден в ассортименте поставщика'
+                });
+            }
+
+            res.status(200).json({
+                message: 'Товар успешно удален из ассортимента поставщика'
+            });
+        } catch (error) {
+            console.error('Error removing product from supplier:', error);
+            res.status(500).json({
+                error: 'Ошибка удаления товара: ' + (error instanceof Error ? error.message : 'Неизвестная ошибка')
+            });
+        }
+    } else if (req.method === 'PUT') {
+        // Update supplier rating
+        const actor = await requirePermission(req, res, 'suppliers.edit');
+        if (!actor) return;
+        try {
+            const { рейтинг } = req.body;
+
+            if (!рейтинг || рейтинг < 1 || рейтинг > 5) {
+                return res.status(400).json({
+                    error: 'Рейтинг должен быть от 1 до 5'
+                });
+            }
+
+            // Update supplier rating
+            const result = await query(
+                'UPDATE "Поставщики" SET "рейтинг" = $1 WHERE id = $2',
+                [рейтинг, id]
+            );
+
+            if (result.rowCount === 0) {
+                return res.status(404).json({ error: 'Поставщик не найден' });
+            }
+
+            res.status(200).json({
+                message: 'Рейтинг поставщика успешно обновлен'
+            });
+        } catch (error) {
+            console.error('Error updating supplier rating:', error);
+            res.status(500).json({
+                error: 'Ошибка обновления рейтинга: ' + (error instanceof Error ? error.message : 'Неизвестная ошибка')
+            });
+        }
+    } else {
+        res.setHeader('Allow', ['POST', 'DELETE', 'PUT']);
+        res.status(405).json({ error: `Метод ${req.method} не поддерживается` });
     }
-  } else if (req.method === 'DELETE') {
-    // Remove product from supplier's assortment
-    try {
-      const { товар_id } = req.query;
-
-      if (!товар_id) {
-        return res.status(400).json({ error: 'ID товара обязателен' });
-      }
-
-      // Remove product from supplier's assortment
-      const result = await query(
-        'DELETE FROM "Ассортимент_поставщиков" WHERE "поставщик_id" = $1 AND "товар_id" = $2',
-        [id, товар_id]
-      );
-
-      if (result.rowCount === 0) {
-        return res.status(404).json({ 
-          error: 'Товар не найден в ассортименте поставщика' 
-        });
-      }
-
-      res.status(200).json({ 
-        message: 'Товар успешно удален из ассортимента поставщика' 
-      });
-    } catch (error) {
-      console.error('Error removing product from supplier:', error);
-      res.status(500).json({ 
-        error: 'Ошибка удаления товара: ' + (error instanceof Error ? error.message : 'Неизвестная ошибка')
-      });
-    }
-  } else if (req.method === 'PUT') {
-    // Update supplier rating
-    try {
-      const { рейтинг } = req.body;
-
-      if (!рейтинг || рейтинг < 1 || рейтинг > 5) {
-        return res.status(400).json({ 
-          error: 'Рейтинг должен быть от 1 до 5' 
-        });
-      }
-
-      // Update supplier rating
-      const result = await query(
-        'UPDATE "Поставщики" SET "рейтинг" = $1 WHERE id = $2',
-        [рейтинг, id]
-      );
-
-      if (result.rowCount === 0) {
-        return res.status(404).json({ error: 'Поставщик не найден' });
-      }
-
-      res.status(200).json({ 
-        message: 'Рейтинг поставщика успешно обновлен' 
-      });
-    } catch (error) {
-      console.error('Error updating supplier rating:', error);
-      res.status(500).json({ 
-        error: 'Ошибка обновления рейтинга: ' + (error instanceof Error ? error.message : 'Неизвестная ошибка')
-      });
-    }
-  } else {
-    res.setHeader('Allow', ['POST', 'DELETE', 'PUT']);
-    res.status(405).json({ error: `Метод ${req.method} не поддерживается` });
-  }
 }

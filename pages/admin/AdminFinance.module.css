@@ -1,0 +1,275 @@
+.container {
+  padding: 2rem 1.5rem;
+  padding-top: 81px;
+  min-height: 100vh;
+  background: #fafafa;
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.title {
+  margin: 0;
+  font-size: 32px;
+  line-height: 1.1;
+  font-weight: 700;
+  color: #212121;
+}
+
+.subtitle {
+  margin-top: 6px;
+  color: #757575;
+  font-size: 15px;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.periodSelect:global(.rt-SelectTrigger),
+.fieldSelect:global(.rt-SelectTrigger),
+.dialogInput:global(.rt-TextFieldRoot),
+.rateInput:global(.rt-TextFieldRoot),
+.searchInput :global(.rt-TextFieldRoot),
+.dialogTextArea:global(.rt-TextAreaRoot) {
+  border-radius: 15px !important;
+  border: 1px solid #e0e0e0 !important;
+  background: #ffffff !important;
+  box-shadow: inset 0 0 0 1px rgba(1, 7, 49, 0.06) !important;
+}
+
+.periodSelect:global(.rt-SelectTrigger),
+.fieldSelect:global(.rt-SelectTrigger) {
+  min-height: 44px !important;
+}
+
+.surfaceButton {
+  border-radius: 9999px !important;
+  border: 1px solid #e0e0e0 !important;
+  background: #ffffff !important;
+  box-shadow: inset 0 0 0 1px rgba(1, 7, 49, 0.06) !important;
+}
+
+.surfaceButton:global(.rt-Button):hover,
+.surfaceButton:global(.rt-BaseButton):hover {
+  background: #f5f5f5 !important;
+}
+
+.actionButton,
+.primaryButton,
+.payButton,
+.inlineButton {
+  border-radius: 9999px !important;
+}
+
+.actionButton {
+  min-height: 44px;
+  padding-inline: 18px !important;
+}
+
+.primaryButton {
+  min-height: 44px;
+  padding-inline: 20px !important;
+}
+
+.payButton {
+  min-height: 42px;
+  padding-inline: 18px !important;
+}
+
+.inlineButton {
+  min-height: 38px;
+  padding-inline: 14px !important;
+}
+
+.icon {
+  width: 16px;
+  height: 16px;
+}
+
+.metricsGrid {
+  margin-bottom: 18px;
+}
+
+.metricCard:global(.rt-Card) {
+  border-radius: 22px;
+  border: 1px solid #ececec;
+  box-shadow: 0 16px 40px rgba(17, 17, 17, 0.04);
+}
+
+.statusBadge {
+  margin-top: 14px;
+}
+
+.scheduleCard:global(.rt-Card),
+.tableCard:global(.rt-Card) {
+  border-radius: 24px;
+  border: 1px solid #ececec;
+  box-shadow: 0 16px 40px rgba(17, 17, 17, 0.04);
+  margin-bottom: 18px;
+}
+
+.scheduleCard,
+.tableCard {
+  padding: 20px;
+}
+
+.sectionTitleRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tableToolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.searchInput {
+  width: min(100%, 580px);
+}
+
+.searchInput :global(.rt-TextFieldRoot) {
+  height: 44px !important;
+}
+
+.searchInput :global(.rt-TextFieldInput) {
+  font-size: 16px;
+}
+
+.tableWrapper {
+  overflow-x: auto;
+}
+
+.table:global(.rt-TableRoot) {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.table :global(.rt-TableRootTable) {
+  width: 100%;
+  border-collapse: collapse;
+  background: #ffffff;
+}
+
+.table :global(.rt-TableColumnHeaderCell),
+.table :global(.rt-TableCell) {
+  padding: 18px 16px;
+  border-bottom: 1px solid #eef0f4;
+}
+
+.table :global(.rt-TableColumnHeaderCell) {
+  font-size: 18px;
+  font-weight: 700;
+  color: #444444;
+}
+
+.table :global(.rt-TableCell) {
+  font-size: 15px;
+}
+
+.employeeName {
+  font-weight: 700;
+  color: #212121;
+}
+
+.employeeMeta {
+  margin-top: 4px;
+  color: #757575;
+  font-size: 13px;
+}
+
+.rateEditor {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 250px;
+}
+
+.rateInput:global(.rt-TextFieldRoot) {
+  max-width: 150px;
+}
+
+.actionsCell {
+  text-align: right;
+}
+
+.errorBanner,
+.successBanner {
+  border-radius: 18px;
+  padding: 12px 16px;
+  margin-bottom: 14px;
+  font-size: 14px;
+}
+
+.errorBanner,
+.inlineError {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.successBanner {
+  background: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
+.paymentDialog:global(.rt-DialogContent) {
+  width: min(560px, calc(100vw - 32px)) !important;
+  border-radius: 24px !important;
+}
+
+.dialogForm {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.dialogTextArea:global(.rt-TextAreaRoot) {
+  min-height: 120px;
+}
+
+@media (max-width: 900px) {
+  .container {
+    padding-inline: 1rem;
+  }
+
+  .table :global(.rt-TableColumnHeaderCell),
+  .table :global(.rt-TableCell) {
+    padding: 14px 12px;
+  }
+
+  .rateEditor {
+    min-width: 220px;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .actionsCell {
+    text-align: left;
+  }
+}

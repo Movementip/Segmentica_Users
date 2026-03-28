@@ -1,54 +1,113 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { query } from '../../lib/db';
+import { requirePermission } from '../../lib/auth';
+import { calculateVatAmountsFromLine, DEFAULT_VAT_RATE_ID, getVatRateOption, isValidVatRateId, normalizeVatRateId } from '../../lib/vat';
+import { syncOrderWorkflowStatus } from '../../lib/orderWorkflow';
+import { checkAndCreateMissingProducts, syncMissingProductsFromPurchases } from '../../lib/missingProductsHelper';
+import { syncOrderPositionsFromLinkedPurchases } from '../../lib/orderFulfillment';
+
+const calculatePurchaseTotal = (positions: Array<{ количество: number; цена: number; ндс_id?: number }>) => (
+    positions.reduce((sum, item) => {
+        const vatRate = getVatRateOption(item?.ндс_id ?? DEFAULT_VAT_RATE_ID).rate;
+        return sum + calculateVatAmountsFromLine(Number(item?.количество), Number(item?.цена), vatRate).total;
+    }, 0)
+);
 
 export interface CreatePurchaseRequest {
-  поставщик_id: number;
-  заявка_id?: number;
-  дата_поступления?: string;
-  статус: string;
-  позиции: {
-    товар_id: number;
-    количество: number;
-    цена: number;
-  }[];
+    create_token?: string;
+    поставщик_id: number;
+    заявка_id?: number;
+    дата_поступления?: string;
+    статус: string;
+    позиции: {
+        товар_id: number;
+        количество: number;
+        цена: number;
+        ндс_id?: number;
+    }[];
 }
 
 interface UpdatePurchaseRequest {
-  id: number;
-  статус?: string;
-  дата_поступления?: string;
+    id: number;
+    статус?: string;
+    дата_поступления?: string;
+    поставщик_id?: number;
+    заявка_id?: number | null;
+    позиции?: {
+        товар_id: number;
+        количество: number;
+        цена: number;
+        ндс_id?: number;
+    }[];
 }
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-  const { id } = req.query;
+const normalizePositionFingerprint = (positions: CreatePurchaseRequest['позиции']) => (
+    positions
+        .map((position) => ({
+            товар_id: Number(position.товар_id),
+            количество: Number(position.количество),
+            цена: Number(position.цена),
+            ндс_id: normalizeVatRateId(position.ндс_id),
+        }))
+        .sort((a, b) => a.товар_id - b.товар_id || a.цена - b.цена || a.количество - b.количество || a.ндс_id - b.ндс_id)
+);
 
-  if (req.method === 'GET') {
-    try {
-      // If ID is provided, fetch single purchase with positions
-      if (id) {
-        // Get single purchase with supplier information
-        const purchaseResult = await query(`
+const arePositionFingerprintsEqual = (
+    left: ReturnType<typeof normalizePositionFingerprint>,
+    right: ReturnType<typeof normalizePositionFingerprint>
+) => (
+    left.length === right.length
+    && left.every((item, index) => (
+        item.товар_id === right[index].товар_id
+        && item.количество === right[index].количество
+        && item.цена === right[index].цена
+        && item.ндс_id === right[index].ндс_id
+    ))
+);
+
+export default async function handler(
+    req: NextApiRequest,
+    res: NextApiResponse
+) {
+    const { id } = req.query;
+
+    if (req.method === 'GET') {
+        const actor = await requirePermission(req, res, id ? 'purchases.view' : 'purchases.list');
+        if (!actor) return;
+        try {
+            // If ID is provided, fetch single purchase with positions
+            if (id) {
+                // Get single purchase with supplier information
+                const purchaseResult = await query(`
           SELECT 
             з.*,
+            COALESCE(NULLIF(з."общая_сумма", 0), totals.total_amount, 0) as "общая_сумма",
             п."название" as поставщик_название,
             п."телефон" as поставщик_телефон,
             п."email" as поставщик_email
           FROM "Закупки" з
           LEFT JOIN "Поставщики" п ON з."поставщик_id" = п.id
+          LEFT JOIN (
+            SELECT
+              пз."закупка_id",
+              SUM(
+                COALESCE(пз."количество", 0) * COALESCE(пз."цена", 0) * (1 + COALESCE(ндс."ставка", 0) / 100.0)
+              )::numeric as total_amount
+            FROM "Позиции_закупки" пз
+            LEFT JOIN "Ставки_НДС" ндс ON ндс.id = пз."ндс_id"
+            GROUP BY пз."закупка_id"
+          ) totals ON totals."закупка_id" = з.id
           WHERE з.id = $1
         `, [id]);
 
-        if (purchaseResult.rows.length === 0) {
-          return res.status(404).json({ error: 'Закупка не найдена' });
-        }
+                if (purchaseResult.rows.length === 0) {
+                    return res.status(404).json({ error: 'Закупка не найдена' });
+                }
 
-        const purchase = purchaseResult.rows[0];
+                const purchase = purchaseResult.rows[0];
 
-        // Get purchase positions with product information
-        const positionsResult = await query(`
+                // Get purchase positions with product information
+                const positionsResult = await query(`
           SELECT 
             пз.*,
             т."название" as товар_название,
@@ -58,80 +117,169 @@ export default async function handler(
           WHERE пз."закупка_id" = $1
         `, [id]);
 
-        // Add calculated sum field to positions
-        const positions = positionsResult.rows.map(position => ({
-          ...position,
-          сумма: position.количество * position.цена
-        }));
+                // Add calculated sum field to positions
+                const positions = positionsResult.rows.map(position => ({
+                    ...position,
+                    ндс_id: position.ндс_id == null ? null : Number(position.ндс_id),
+                    сумма: position.количество * position.цена
+                }));
 
-        // Return purchase with positions
-        res.status(200).json({
-          ...purchase,
-          позиции: positions
-        });
-      } else {
-        // Get all purchases with supplier information
-        const result = await query(`
+                // Return purchase with positions
+                res.status(200).json({
+                    ...purchase,
+                    позиции: positions
+                });
+            } else {
+                // Get all purchases with supplier information
+                const result = await query(`
           SELECT 
             з.*,
+            COALESCE(NULLIF(з."общая_сумма", 0), totals.total_amount, 0) as "общая_сумма",
             п."название" as поставщик_название,
             п."телефон" as поставщик_телефон,
             п."email" as поставщик_email
           FROM "Закупки" з
           LEFT JOIN "Поставщики" п ON з."поставщик_id" = п.id
+          LEFT JOIN (
+            SELECT
+              пз."закупка_id",
+              SUM(
+                COALESCE(пз."количество", 0) * COALESCE(пз."цена", 0) * (1 + COALESCE(ндс."ставка", 0) / 100.0)
+              )::numeric as total_amount
+            FROM "Позиции_закупки" пз
+            LEFT JOIN "Ставки_НДС" ндс ON ндс.id = пз."ндс_id"
+            GROUP BY пз."закупка_id"
+          ) totals ON totals."закупка_id" = з.id
           ORDER BY з."дата_заказа" DESC
         `);
 
-        res.status(200).json(result.rows);
-      }
-    } catch (error) {
-      console.error('Error fetching purchases:', error);
-      res.status(500).json({ error: 'Failed to fetch purchases' });
-    }
-  } else if (req.method === 'POST') {
-    try {
-      const { поставщик_id, заявка_id, дата_поступления, статус, позиции }: CreatePurchaseRequest = req.body;
-
-      // Validate required fields
-      if (!поставщик_id || !статус || !позиции || позиции.length === 0) {
-        return res.status(400).json({ 
-          error: 'Поставщик, статус и позиции обязательны' 
-        });
-      }
-
-      // Validate supplier exists
-      const supplierCheck = await query(
-        'SELECT id FROM "Поставщики" WHERE id = $1',
-        [поставщик_id]
-      );
-
-      if (supplierCheck.rows.length === 0) {
-        return res.status(400).json({ error: 'Поставщик не найден' });
-      }
-
-      // Validate all products exist
-      for (const position of позиции) {
-        const productCheck = await query(
-          'SELECT id FROM "Товары" WHERE id = $1',
-          [position.товар_id]
-        );
-
-        if (productCheck.rows.length === 0) {
-          return res.status(400).json({ 
-            error: `Товар с ID ${position.товар_id} не найден` 
-          });
+                res.status(200).json(result.rows);
+            }
+        } catch (error) {
+            console.error('Error fetching purchases:', error);
+            res.status(500).json({ error: 'Failed to fetch purchases' });
         }
-      }
+    } else if (req.method === 'POST') {
+        const actor = await requirePermission(req, res, 'purchases.create');
+        if (!actor) return;
+        try {
+            const sourceHeader = String(req.headers['x-purchase-create-source'] || '').trim().toLowerCase();
+            if (sourceHeader !== 'manual-modal') {
+                return res.status(409).json({
+                    error: 'Создание закупки отклонено: обнаружен устаревший или неподдерживаемый источник запроса. Обновите страницу и попробуйте снова.'
+                });
+            }
 
-      // Calculate total amount
-      const общая_сумма = позиции.reduce((sum, pos) => sum + (pos.количество * pos.цена), 0);
+            const { create_token, поставщик_id, заявка_id, дата_поступления, статус, позиции }: CreatePurchaseRequest = req.body;
 
-      // Start transaction
-      await query('BEGIN');
+            if (!create_token || typeof create_token !== 'string') {
+                return res.status(409).json({
+                    error: 'Создание закупки отклонено: отсутствует одноразовый токен формы. Обновите страницу и откройте модалку заново.'
+                });
+            }
 
-      try {
-        // Create purchase
-        const purchaseResult = await query(`
+            const tokenKey = `purchase_create_token:${create_token}`;
+            const tokenResult = await query(
+                'SELECT key, updated_at FROM app_settings WHERE key = $1',
+                [tokenKey]
+            );
+
+            if (tokenResult.rows.length === 0) {
+                return res.status(409).json({
+                    error: 'Создание закупки отклонено: токен формы не найден или уже использован. Обновите страницу и попробуйте снова.'
+                });
+            }
+
+            const tokenUpdatedAt = tokenResult.rows[0]?.updated_at ? new Date(tokenResult.rows[0].updated_at).getTime() : 0;
+            const tokenAgeMs = Date.now() - tokenUpdatedAt;
+
+            if (!Number.isFinite(tokenAgeMs) || tokenAgeMs < 0 || tokenAgeMs > 10 * 60 * 1000) {
+                await query('DELETE FROM app_settings WHERE key = $1', [tokenKey]);
+                return res.status(409).json({
+                    error: 'Создание закупки отклонено: токен формы устарел. Обновите страницу и откройте модалку заново.'
+                });
+            }
+
+            await query('DELETE FROM app_settings WHERE key = $1', [tokenKey]);
+
+            // Validate required fields
+            if (!поставщик_id || !статус || !позиции || позиции.length === 0) {
+                return res.status(400).json({
+                    error: 'Поставщик, статус и позиции обязательны'
+                });
+            }
+
+            // Validate supplier exists
+            const supplierCheck = await query(
+                'SELECT id FROM "Поставщики" WHERE id = $1',
+                [поставщик_id]
+            );
+
+            if (supplierCheck.rows.length === 0) {
+                return res.status(400).json({ error: 'Поставщик не найден' });
+            }
+
+            // Validate all products exist
+            for (const position of позиции) {
+                const productCheck = await query(
+                    'SELECT id FROM "Товары" WHERE id = $1',
+                    [position.товар_id]
+                );
+
+                if (productCheck.rows.length === 0) {
+                    return res.status(400).json({
+                        error: `Товар с ID ${position.товар_id} не найден`
+                    });
+                }
+
+                if (!isValidVatRateId(position?.ндс_id ?? DEFAULT_VAT_RATE_ID)) {
+                    return res.status(400).json({ error: 'Некорректная ставка НДС в позициях закупки' });
+                }
+            }
+
+            // Calculate total amount
+            const общая_сумма = calculatePurchaseTotal(позиции);
+            const incomingFingerprint = normalizePositionFingerprint(позиции);
+
+            const duplicateCandidates = await query(`
+              SELECT
+                id,
+                "общая_сумма"
+              FROM "Закупки"
+              WHERE "поставщик_id" = $1
+                AND COALESCE("заявка_id", 0) = COALESCE($2, 0)
+                AND COALESCE("статус", 'заказано') = $3
+                AND COALESCE("статус", 'заказано') != 'отменено'
+              ORDER BY id DESC
+            `, [поставщик_id, заявка_id || null, статус]);
+
+            for (const candidate of duplicateCandidates.rows) {
+                const candidateTotal = Number(candidate.общая_сумма) || 0;
+                if (Math.abs(candidateTotal - общая_сумма) > 0.01) continue;
+
+                const candidatePositionsResult = await query(`
+                  SELECT "товар_id", "количество", "цена", "ндс_id"
+                  FROM "Позиции_закупки"
+                  WHERE "закупка_id" = $1
+                  ORDER BY id
+                `, [candidate.id]);
+
+                const candidateFingerprint = normalizePositionFingerprint(candidatePositionsResult.rows as any);
+                if (arePositionFingerprintsEqual(incomingFingerprint, candidateFingerprint)) {
+                    return res.status(200).json({
+                        message: 'Закупка уже была создана',
+                        purchaseId: candidate.id,
+                        общая_сумма: candidateTotal
+                    });
+                }
+            }
+
+            // Start transaction
+            await query('BEGIN');
+
+            try {
+                // Create purchase
+                const purchaseResult = await query(`
           INSERT INTO "Закупки" (
             "поставщик_id", "заявка_id", "дата_заказа", "дата_поступления", 
             "статус", "общая_сумма"
@@ -139,230 +287,360 @@ export default async function handler(
           RETURNING id
         `, [поставщик_id, заявка_id, дата_поступления, статус, общая_сумма]);
 
-        const purchaseId = purchaseResult.rows[0].id;
+                const purchaseId = purchaseResult.rows[0].id;
 
-        // Create purchase positions
-        for (const position of позиции) {
-          await query(`
+                // Create purchase positions
+                for (const position of позиции) {
+                    await query(`
             INSERT INTO "Позиции_закупки" (
-              "закупка_id", "товар_id", "количество", "цена"
-            ) VALUES ($1, $2, $3, $4)
-          `, [purchaseId, position.товар_id, position.количество, position.цена]);
+              "закупка_id", "товар_id", "количество", "цена", "ндс_id"
+            ) VALUES ($1, $2, $3, $4, $5)
+          `, [purchaseId, position.товар_id, position.количество, position.цена, normalizeVatRateId(position.ндс_id)]);
 
-          // If purchase is received, update warehouse
-          if (статус === 'получено') {
-            // Check if product exists in warehouse
-            const warehouseCheck = await query(
-              'SELECT * FROM "Склад" WHERE "товар_id" = $1',
-              [position.товар_id]
-            );
+                    // If purchase is received, update warehouse
+                    if (статус === 'получено') {
+                        // Check if product exists in warehouse
+                        const warehouseCheck = await query(
+                            'SELECT * FROM "Склад" WHERE "товар_id" = $1',
+                            [position.товар_id]
+                        );
 
-            if (warehouseCheck.rows.length > 0) {
-              // Update existing warehouse record
-              await query(`
+                        if (warehouseCheck.rows.length > 0) {
+                            // Update existing warehouse record
+                            await query(`
                 UPDATE "Склад" 
                 SET "количество" = "количество" + $1,
                     "дата_последнего_поступления" = CURRENT_TIMESTAMP
                 WHERE "товар_id" = $2
               `, [position.количество, position.товар_id]);
-            } else {
-              // Create new warehouse record
-              await query(`
+                        } else {
+                            // Create new warehouse record
+                            await query(`
                 INSERT INTO "Склад" ("товар_id", "количество", "дата_последнего_поступления")
                 VALUES ($1, $2, CURRENT_TIMESTAMP)
               `, [position.товар_id, position.количество]);
-            }
+                        }
 
-            // Create warehouse movement record
-            await query(`
+                        // Create warehouse movement record
+                        await query(`
               INSERT INTO "Движения_склада" (
                 "товар_id", "тип_операции", "количество", "дата_операции", "закупка_id"
               ) VALUES ($1, 'приход', $2, CURRENT_TIMESTAMP, $3)
             `, [position.товар_id, position.количество, purchaseId]);
-          }
-        }
+                    }
+                }
 
-        // If this purchase is for a specific order, update missing products status
-        if (заявка_id) {
-          // Update status of missing products for this order
-          for (const position of позиции) {
-            // If purchase is received, update missing product status to "получено"
-            if (статус === 'получено') {
-              await query(`
-                UPDATE "Недостающие_товары"
-                SET "статус" = 'получено'
-                WHERE "заявка_id" = $1 AND "товар_id" = $2
-              `, [заявка_id, position.товар_id]);
-            } 
-            // If purchase is ordered, update missing product status to "заказано"
-            else if (статус === 'заказано') {
-              await query(`
-                UPDATE "Недостающие_товары"
-                SET "статус" = 'заказано'
-                WHERE "заявка_id" = $1 AND "товар_id" = $2
-              `, [заявка_id, position.товар_id]);
+                // Commit transaction
+                await query('COMMIT');
+
+                if (заявка_id) {
+                    await syncOrderPositionsFromLinkedPurchases(query, Number(заявка_id));
+                    await checkAndCreateMissingProducts(Number(заявка_id));
+                    await syncMissingProductsFromPurchases(Number(заявка_id));
+                    await syncOrderWorkflowStatus(Number(заявка_id));
+                }
+
+                res.status(201).json({
+                    message: 'Закупка успешно создана',
+                    purchaseId,
+                    общая_сумма
+                });
+            } catch (transactionError) {
+                // Rollback transaction on error
+                await query('ROLLBACK');
+                throw transactionError;
             }
-          }
+        } catch (error) {
+            console.error('Error creating purchase:', error);
+            res.status(500).json({
+                error: 'Ошибка создания закупки: ' + (error instanceof Error ? error.message : 'Неизвестная ошибка')
+            });
         }
+    } else if (req.method === 'PUT') {
+        const actor = await requirePermission(req, res, 'purchases.edit');
+        if (!actor) return;
+        try {
+            const { статус, дата_поступления, поставщик_id, заявка_id, позиции }: UpdatePurchaseRequest = req.body;
+            const existingPurchaseResult = await query(
+                'SELECT id, "заявка_id" FROM "Закупки" WHERE id = $1',
+                [id]
+            );
 
-        // Commit transaction
-        await query('COMMIT');
+            if (existingPurchaseResult.rows.length === 0) {
+                return res.status(404).json({ error: 'Закупка не найдена' });
+            }
 
-        res.status(201).json({ 
-          message: 'Закупка успешно создана',
-          purchaseId,
-          общая_сумма
-        });
-      } catch (transactionError) {
-        // Rollback transaction on error
-        await query('ROLLBACK');
-        throw transactionError;
-      }
-    } catch (error) {
-      console.error('Error creating purchase:', error);
-      res.status(500).json({ 
-        error: 'Ошибка создания закупки: ' + (error instanceof Error ? error.message : 'Неизвестная ошибка')
-      });
-    }
-  } else if (req.method === 'PUT') {
-    try {
-      const { статус, дата_поступления }: UpdatePurchaseRequest = req.body;
+            const previousOrderId = existingPurchaseResult.rows[0].заявка_id == null ? null : Number(existingPurchaseResult.rows[0].заявка_id);
 
-      if (!id) {
-        return res.status(400).json({ error: 'ID закупки обязателен' });
-      }
+            if (!id) {
+                return res.status(400).json({ error: 'ID закупки обязателен' });
+            }
 
-      // Validate that either status or date is provided
-      if (!статус && !дата_поступления) {
-        return res.status(400).json({ error: 'Статус или дата поступления обязательны' });
-      }
+            // Validate that at least one field is provided
+            if (
+                !статус &&
+                !дата_поступления &&
+                typeof поставщик_id === 'undefined' &&
+                typeof заявка_id === 'undefined' &&
+                typeof позиции === 'undefined'
+            ) {
+                return res.status(400).json({ error: 'Нет данных для обновления' });
+            }
 
-      // Start transaction
-      await query('BEGIN');
+            // Start transaction
+            await query('BEGIN');
 
-      try {
-        // Update purchase
-        const updateFields: string[] = [];
-        const values: any[] = [];
-        let paramCount = 1;
+            try {
+                // If supplier_id provided, validate supplier exists
+                if (typeof поставщик_id !== 'undefined') {
+                    const supplierCheck = await query('SELECT id FROM "Поставщики" WHERE id = $1', [поставщик_id]);
+                    if (supplierCheck.rows.length === 0) {
+                        await query('ROLLBACK');
+                        return res.status(400).json({ error: 'Поставщик не найден' });
+                    }
+                }
 
-        if (статус) {
-          updateFields.push(`"статус" = $${paramCount}`);
-          values.push(статус);
-          paramCount++;
-        }
+                // If positions provided, validate all products exist and are valid
+                if (typeof позиции !== 'undefined') {
+                    if (!Array.isArray(позиции) || позиции.length === 0) {
+                        await query('ROLLBACK');
+                        return res.status(400).json({ error: 'Позиции обязательны' });
+                    }
 
-        if (дата_поступления) {
-          updateFields.push(`"дата_поступления" = $${paramCount}`);
-          values.push(дата_поступления);
-          paramCount++;
-        }
+                    for (const pos of позиции) {
+                        if (!pos || !pos.товар_id || pos.количество <= 0 || pos.цена <= 0) {
+                            await query('ROLLBACK');
+                            return res.status(400).json({ error: 'Позиции содержат некорректные данные' });
+                        }
 
-        values.push(id);
+                        if (!isValidVatRateId(pos?.ндс_id ?? DEFAULT_VAT_RATE_ID)) {
+                            await query('ROLLBACK');
+                            return res.status(400).json({ error: 'Позиции содержат некорректную ставку НДС' });
+                        }
 
-        const purchaseResult = await query(`
+                        const productCheck = await query('SELECT id FROM "Товары" WHERE id = $1', [pos.товар_id]);
+                        if (productCheck.rows.length === 0) {
+                            await query('ROLLBACK');
+                            return res.status(400).json({ error: `Товар с ID ${pos.товар_id} не найден` });
+                        }
+                    }
+                }
+
+                // Update purchase
+                const updateFields: string[] = [];
+                const values: any[] = [];
+                let paramCount = 1;
+
+                if (статус) {
+                    updateFields.push(`"статус" = $${paramCount}`);
+                    values.push(статус);
+                    paramCount++;
+                }
+
+                if (дата_поступления) {
+                    updateFields.push(`"дата_поступления" = $${paramCount}`);
+                    values.push(дата_поступления);
+                    paramCount++;
+                }
+
+                if (typeof поставщик_id !== 'undefined') {
+                    updateFields.push(`"поставщик_id" = $${paramCount}`);
+                    values.push(поставщик_id);
+                    paramCount++;
+                }
+
+                if (typeof заявка_id !== 'undefined') {
+                    updateFields.push(`"заявка_id" = $${paramCount}`);
+                    values.push(заявка_id);
+                    paramCount++;
+                }
+
+                if (typeof позиции !== 'undefined') {
+                    const общая_сумма = calculatePurchaseTotal(позиции);
+                    updateFields.push(`"общая_сумма" = $${paramCount}`);
+                    values.push(общая_сумма);
+                    paramCount++;
+                }
+
+                values.push(id);
+
+                const purchaseResult = await query(`
           UPDATE "Закупки"
           SET ${updateFields.join(', ')}
           WHERE id = $${paramCount}
           RETURNING *
         `, values);
 
-        if (purchaseResult.rows.length === 0) {
-          await query('ROLLBACK');
-          return res.status(404).json({ error: 'Закупка не найдена' });
-        }
+                if (purchaseResult.rows.length === 0) {
+                    await query('ROLLBACK');
+                    return res.status(404).json({ error: 'Закупка не найдена' });
+                }
 
-        const updatedPurchase = purchaseResult.rows[0];
+                const updatedPurchase = purchaseResult.rows[0];
 
-        // If status changed to "получено", update warehouse and missing products
-        if (статус === 'получено') {
-          // Get purchase positions
-          const positionsResult = await query(`
+                // Replace positions if provided
+                if (typeof позиции !== 'undefined') {
+                    await query('DELETE FROM "Позиции_закупки" WHERE "закупка_id" = $1', [id]);
+                    for (const pos of позиции) {
+                        await query(`
+              INSERT INTO "Позиции_закупки" ("закупка_id", "товар_id", "количество", "цена", "ндс_id")
+              VALUES ($1, $2, $3, $4, $5)
+            `, [id, pos.товар_id, pos.количество, pos.цена, normalizeVatRateId(pos.ндс_id)]);
+                    }
+                }
+
+                // If status is "получено", update warehouse and missing products
+                if (статус === 'получено') {
+                    // Get purchase positions
+                    const positionsResult = await query(`
             SELECT "товар_id", "количество"
             FROM "Позиции_закупки"
             WHERE "закупка_id" = $1
           `, [id]);
 
-          // Update warehouse for each position
-          for (const position of positionsResult.rows) {
-            // Check if product exists in warehouse
-            const warehouseCheck = await query(
-              'SELECT * FROM "Склад" WHERE "товар_id" = $1',
-              [position.товар_id]
-            );
+                    // Update warehouse for each position
+                    for (const position of positionsResult.rows) {
+                        // Check if product exists in warehouse
+                        const warehouseCheck = await query(
+                            'SELECT * FROM "Склад" WHERE "товар_id" = $1',
+                            [position.товар_id]
+                        );
 
-            if (warehouseCheck.rows.length > 0) {
-              // Update existing warehouse record
-              await query(`
+                        if (warehouseCheck.rows.length > 0) {
+                            // Update existing warehouse record
+                            await query(`
                 UPDATE "Склад" 
                 SET "количество" = "количество" + $1,
                     "дата_последнего_поступления" = CURRENT_TIMESTAMP
                 WHERE "товар_id" = $2
               `, [position.количество, position.товар_id]);
-            } else {
-              // Create new warehouse record
-              await query(`
+                        } else {
+                            // Create new warehouse record
+                            await query(`
                 INSERT INTO "Склад" ("товар_id", "количество", "дата_последнего_поступления")
                 VALUES ($1, $2, CURRENT_TIMESTAMP)
               `, [position.товар_id, position.количество]);
-            }
+                        }
 
-            // Create warehouse movement record
-            await query(`
+                        // Create warehouse movement record
+                        await query(`
               INSERT INTO "Движения_склада" (
                 "товар_id", "тип_операции", "количество", "дата_операции", "закупка_id"
               ) VALUES ($1, 'приход', $2, CURRENT_TIMESTAMP, $3)
             `, [position.товар_id, position.количество, id]);
 
-            // Update missing product status to "получено" if this purchase is for a specific order
-            if (updatedPurchase.заявка_id) {
-              await query(`
-                UPDATE "Недостающие_товары"
-                SET "статус" = 'получено'
-                WHERE "заявка_id" = $1 AND "товар_id" = $2
-              `, [updatedPurchase.заявка_id, position.товар_id]);
+                    }
+                }
+
+                // Commit transaction
+                await query('COMMIT');
+
+                const nextOrderId = updatedPurchase.заявка_id == null ? null : Number(updatedPurchase.заявка_id);
+                const orderIdsToSync = [previousOrderId, nextOrderId].filter(
+                    (value, index, array): value is number => value != null && array.indexOf(value) === index
+                );
+
+                for (let index = 0; index < orderIdsToSync.length; index += 1) {
+                    await syncOrderPositionsFromLinkedPurchases(query, orderIdsToSync[index]);
+                    await checkAndCreateMissingProducts(orderIdsToSync[index]);
+                    await syncMissingProductsFromPurchases(orderIdsToSync[index]);
+                    await syncOrderWorkflowStatus(orderIdsToSync[index]);
+                }
+
+                res.status(200).json(updatedPurchase);
+            } catch (transactionError) {
+                // Rollback transaction on error
+                await query('ROLLBACK');
+                throw transactionError;
             }
-          }
+        } catch (error) {
+            console.error('Error updating purchase:', error);
+            res.status(500).json({
+                error: 'Ошибка обновления закупки: ' + (error instanceof Error ? error.message : 'Неизвестная ошибка')
+            });
         }
+    } else if (req.method === 'DELETE') {
+        const actor = await requirePermission(req, res, 'purchases.delete');
+        if (!actor) return;
+        try {
+            if (!id) {
+                return res.status(400).json({ error: 'ID закупки обязателен' });
+            }
 
-        // Commit transaction
-        await query('COMMIT');
+            const purchaseResult = await query(
+                'SELECT id, "заявка_id", COALESCE("статус", \'заказано\') as "статус" FROM "Закупки" WHERE id = $1',
+                [id]
+            );
 
-        res.status(200).json(updatedPurchase);
-      } catch (transactionError) {
-        // Rollback transaction on error
-        await query('ROLLBACK');
-        throw transactionError;
-      }
-    } catch (error) {
-      console.error('Error updating purchase:', error);
-      res.status(500).json({ 
-        error: 'Ошибка обновления закупки: ' + (error instanceof Error ? error.message : 'Неизвестная ошибка')
-      });
+            if (purchaseResult.rows.length === 0) {
+                return res.status(404).json({ error: 'Закупка не найдена' });
+            }
+
+            const orderId = purchaseResult.rows[0].заявка_id == null ? null : Number(purchaseResult.rows[0].заявка_id);
+            const purchaseStatus = String(purchaseResult.rows[0].статус || '').toLowerCase();
+            const purchaseId = Number(id);
+
+            await query('BEGIN');
+
+            try {
+                const positionsResult = await query(
+                    'SELECT "товар_id", COALESCE("количество", 0)::integer as quantity FROM "Позиции_закупки" WHERE "закупка_id" = $1',
+                    [purchaseId]
+                );
+
+                if (purchaseStatus === 'получено') {
+                    for (const position of positionsResult.rows) {
+                        const productId = Number(position.товар_id);
+                        const quantity = Number(position.quantity) || 0;
+
+                        const warehouseResult = await query(
+                            'SELECT COALESCE("количество", 0)::integer as quantity FROM "Склад" WHERE "товар_id" = $1',
+                            [productId]
+                        );
+
+                        const currentQty = Number(warehouseResult.rows[0]?.quantity) || 0;
+                        if (currentQty < quantity) {
+                            await query('ROLLBACK');
+                            return res.status(409).json({
+                                error: 'Нельзя удалить полученную закупку: часть товара уже использована в складе или других операциях'
+                            });
+                        }
+
+                        await query(
+                            'UPDATE "Склад" SET "количество" = "количество" - $1 WHERE "товар_id" = $2',
+                            [quantity, productId]
+                        );
+                    }
+                }
+
+                await query('DELETE FROM "Финансы_компании" WHERE "закупка_id" = $1', [purchaseId]);
+                await query('DELETE FROM "Движения_склада" WHERE "закупка_id" = $1', [purchaseId]);
+                await query('DELETE FROM "Позиции_закупки" WHERE "закупка_id" = $1', [purchaseId]);
+                const result = await query('DELETE FROM "Закупки" WHERE id = $1 RETURNING *', [purchaseId]);
+
+                await query('COMMIT');
+
+                if (orderId) {
+                    await checkAndCreateMissingProducts(orderId);
+                    await syncMissingProductsFromPurchases(orderId);
+                    await syncOrderWorkflowStatus(orderId);
+                }
+
+                res.status(200).json({ message: 'Закупка успешно удалена', deletedPurchase: result.rows[0] });
+            } catch (txError) {
+                await query('ROLLBACK');
+                throw txError;
+            }
+        } catch (error) {
+            console.error('Error deleting purchase:', error);
+            res.status(500).json({
+                error: 'Ошибка удаления закупки: ' + (error instanceof Error ? error.message : 'Неизвестная ошибка')
+            });
+        }
+    } else if (req.method === 'HEAD') {
+        res.status(405).end();
+    } else {
+        res.setHeader('Allow', ['GET', 'POST', 'PUT', 'DELETE']);
+        res.status(405).json({ error: `Метод ${req.method} не поддерживается` });
     }
-  } else if (req.method === 'DELETE') {
-    try {
-      if (!id) {
-        return res.status(400).json({ error: 'ID закупки обязателен' });
-      }
-
-      // Delete purchase positions first (foreign key constraint)
-      await query('DELETE FROM "Позиции_закупки" WHERE "закупка_id" = $1', [id]);
-      
-      // Delete purchase
-      const result = await query('DELETE FROM "Закупки" WHERE id = $1 RETURNING *', [id]);
-      
-      if (result.rows.length === 0) {
-        return res.status(404).json({ error: 'Закупка не найдена' });
-      }
-
-      res.status(200).json({ message: 'Закупка успешно удалена' });
-    } catch (error) {
-      console.error('Error deleting purchase:', error);
-      res.status(500).json({ error: 'Ошибка удаления закупки' });
-    }
-  } else {
-    res.setHeader('Allow', ['GET', 'POST', 'PUT', 'DELETE']);
-    res.status(405).json({ error: `Метод ${req.method} не поддерживается` });
-  }
 }

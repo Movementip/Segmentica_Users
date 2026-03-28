@@ -1,5 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { query } from '../../../lib/db';
+import { requirePermission } from '../../../lib/auth';
+import { REPORT_ALLOWED_VIEWS, REPORT_VIEW_PERMISSIONS } from '../../../lib/reportsRbac';
 
 type ErrorResponse = {
   error: string;
@@ -16,20 +18,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     }
 
     // Список разрешенных представлений для предотвращения SQL-инъекций
-    const allowedViews = [
-        'анализ_клиентов',
-        'анализ_недостач',
-        'анализ_поставщиков',
-        'движения_склада_детализированные',
-        'продажи_по_периодам',
-        'статистика_транспортных_компаний',
-        'финансовый_обзор',
-        'эффективность_сотрудников'
-    ];
+    const allowedViews = REPORT_ALLOWED_VIEWS;
 
     if (!allowedViews.includes(viewName)) {
         return res.status(400).json({ error: 'Указано недопустимое представление' });
     }
+
+    const actor = await requirePermission(req, res, REPORT_VIEW_PERMISSIONS[viewName]);
+    if (!actor) return;
 
     try {
         // Используем параметризованный запрос с экранированием имени представления

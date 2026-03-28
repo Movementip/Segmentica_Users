@@ -1,0 +1,338 @@
+/* Keep client detail aligned with OrderDetail.module.css */
+
+.container {
+  padding: 2rem 1.5rem;
+  padding-top: 81px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background-color: #fafafa;
+  min-height: 100vh;
+}
+
+.container :global(.rt-Card:where(.rt-r-size-3)) {
+  --card-padding: 0px;
+}
+
+.header {
+  margin-bottom: 16px;
+  padding: 16px 20px;
+}
+
+.headerContent {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.headerLeft {
+  display: flex;
+  flex-direction: column;
+}
+
+.headerActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.surfaceButton {
+  background-color: #ffffff;
+  color: #424242;
+  border: 1px solid;
+  border-color: #e0e0e0;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1px var(--accent-a7);
+}
+
+.dangerButton {
+  background-color: #ffffff;
+  color: #d32f2f;
+  border: 1px solid;
+  border-color: rgba(211, 47, 47, 0.25);
+  border-radius: 6px;
+}
+
+/* Buttons (match OrderDetail.module.css) */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid;
+  gap: 6px;
+  text-decoration: none;
+}
+
+.primaryButton {
+  background-color: #000000;
+  color: white;
+  border-color: #000000;
+}
+
+.primaryButton:hover {
+  background-color: #333333;
+  border-color: #333333;
+}
+
+.secondaryButton {
+  background-color: #ffffff;
+  color: #424242;
+  border-color: #e0e0e0;
+}
+
+.secondaryButton:hover {
+  background-color: #f5f5f5;
+  border-color: #d0d0d0;
+}
+
+.surfaceButton:hover {
+  background-color: #f5f5f5 !important;
+  border-color: #d0d0d0;
+}
+
+.orderDeleteButton:global(.rt-Button),
+.orderDeleteButton:global(.rt-Button):where(.rt-variant-surface) {
+  color: #dc2626 !important;
+  border-color: #f1d4d4 !important;
+}
+
+.orderDeleteButton:global(.rt-Button:hover),
+.orderDeleteButton:global(.rt-Button):where(.rt-variant-surface):hover {
+  background: #dc2626 !important;
+  border-color: #dc2626 !important;
+  color: #ffffff !important;
+}
+
+.secondaryButton:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.icon {
+  width: 16px;
+  height: 16px;
+}
+
+.title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #212121;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.subtitle {
+  color: #757575;
+  margin: 2px 0 0;
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.sectionTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: #212121;
+  margin: 0;
+}
+
+.sectionHeader {
+  padding-left: 20px;
+  padding-right: 20px;
+  padding-top: 20px;
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+}
+
+.sectionBlock {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.sectionHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  margin-left: 16px;
+}
+
+.buttonGroup {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.sectionTotal {
+  font-size: 14px;
+  font-weight: 600;
+  color: #212121;
+  text-align: right;
+}
+
+.infoLabel {
+  margin: 0;
+  font-size: 12px;
+  color: #757575;
+}
+
+.infoValue {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: #212121;
+  font-weight: 500;
+}
+
+.tableWrapper {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  background-color: #ffffff;
+  border: none;
+}
+
+.table :global(.rt-TableRootTable) {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  background-color: #ffffff;
+}
+
+.table :global(.rt-TableHeader) {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.container .table :global(.rt-TableRoot.rt-variant-surface) {
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+.table :global(.rt-TableColumnHeaderCell) {
+  font-weight: 600;
+  font-size: 12px;
+  text-align: left;
+  padding: 10px 14px;
+  border-bottom: 1px solid #eeeeee;
+  white-space: nowrap;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background-color: #ffffff;
+}
+
+.table :global(.rt-TableCell) {
+  padding: 12px 16px;
+  vertical-align: middle;
+  color: #424242;
+  font-size: 14px;
+  border-bottom: 1px solid #f3f3f3;
+  text-align: left;
+}
+
+.table :global(.rt-TableRow) > :global(.rt-TableCell):not(:first-child) {
+  text-align: right;
+}
+
+.table :global(.rt-TableRow) {
+  background-color: #ffffff;
+  transition: background-color 0.2s;
+}
+
+.table :global(.rt-TableBody) :global(.rt-TableRow):hover {
+  background-color: #f9fafb;
+}
+
+.table :global(.rt-TableBody) :global(.rt-TableRow):last-child :global(.rt-TableCell) {
+  border-bottom: none;
+}
+
+.textRight {
+  text-align: right !important;
+}
+
+.actionsCellHeader {
+  text-align: right;
+}
+
+.actionsCellRight {
+  text-align: right;
+}
+
+.statusPill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 12px;
+  padding: 5px 12px;
+  border: 1px solid rgba(97, 97, 97, 0.25);
+}
+
+.statusPillBlue {
+  background-color: rgba(25, 118, 210, 0.082);
+  color: rgb(25, 118, 210);
+  border-color: rgba(25, 118, 210, 0.25);
+}
+
+.statusPillGreen {
+  background-color: rgba(56, 142, 60, 0.082);
+  color: rgb(56, 142, 60);
+  border-color: rgba(56, 142, 60, 0.25);
+}
+
+.statusPillOrange {
+  background-color: rgba(245, 124, 0, 0.082);
+  color: rgb(245, 124, 0);
+  border-color: rgba(245, 124, 0, 0.25);
+}
+
+.statusPillRed {
+  background-color: rgba(211, 47, 47, 0.082);
+  color: rgb(211, 47, 47);
+  border-color: rgba(211, 47, 47, 0.25);
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 16px;
+  }
+  
+  .infoGrid {
+    grid-template-columns: 1fr;
+  }
+  
+  .infoItem {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    text-align: left;
+  }
+  
+  .infoValue {
+    text-align: left;
+  }
+  
+  .infoLabel {
+    min-width: auto;
+  }
+  
+  .table {
+    font-size: 14px;
+  }
+  
+  .table th,
+  .table td {
+    padding: 8px 12px;
+  }
+}

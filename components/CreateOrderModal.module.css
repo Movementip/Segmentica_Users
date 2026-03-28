@@ -1,219 +1,405 @@
-.modalOverlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
-}
-
 .modalContent {
-    margin-left: 270px;
-  background: white;
-  border-radius: 8px;
-  width: 90%;
-  max-width: 1200px;
+  width: min(1480px, calc(100vw - 32px));
+  max-width: 1480px;
   max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-}
-
-.modalHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 24px;
-  border-bottom: 1px solid #eee;
-}
-
-.modalHeader h2 {
-  margin: 0;
-  color: #333;
-  font-size: 1.5rem;
+  overflow: auto;
 }
 
 .closeButton {
-  background: none;
-  border: none;
-  font-size: 24px;
-  cursor: pointer;
-  color: #666;
-  padding: 0;
-  width: 30px;
-  height: 30px;
-  display: flex;
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 50%;
+  border-radius: 9999px;
+  border: 1px solid #e0e0e0;
+  background: #ffffff;
+  cursor: pointer;
+  color: transparent;
 }
 
 .closeButton:hover {
-  background-color: #f5f5f5;
-  color: #333;
+  border-color: #000000;
+}
+
+.closeButton::before {
+  content: '×';
+  color: #111111;
+  font-size: 20px;
+  line-height: 1;
 }
 
 .form {
-  padding: 24px;
+  margin-top: 16px;
 }
 
 .formGroup {
   margin-bottom: 20px;
 }
 
-.formGroup label {
+.formGroup :global(.rt-Text),
+.formGroup :global(label) {
   display: block;
   margin-bottom: 8px;
   font-weight: 500;
   color: #333;
 }
 
-.formGroup input,
-.formGroup select {
+.selectTrigger,
+.positionSelectTrigger,
+.vatField,
+.textField,
+.qtyField,
+.priceField,
+.priceFieldInvalid {
   width: 100%;
-  padding: 12px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 14px;
-  transition: border-color 0.3s;
 }
 
-.formGroup input:focus,
-.formGroup select:focus {
-  outline: none;
-  border-color: #000000;
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.2);
+.selectTrigger:global(.rt-SelectTrigger),
+.positionSelectTrigger:global(.rt-SelectTrigger),
+.vatField:global(.rt-SelectTrigger) {
+  height: 40px;
+  border-radius: 15px;
+  border: 1px solid #e0e0e0;
+  background: #ffffff;
+  color: #424242;
+  line-height: 1;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
 }
 
-.formGroup input:hover,
-.formGroup select:hover {
-  border-color: #000000;
+.selectTrigger:global(.rt-SelectTrigger):where(:hover),
+.positionSelectTrigger:global(.rt-SelectTrigger):where(:hover),
+.vatField:global(.rt-SelectTrigger):where(:hover) {
+  background: #f5f5f5;
+  border-color: #d0d0d0;
 }
 
-.formGroup select {
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23000000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-  background-size: 16px;
-  padding-right: 36px;
+.textField:global(.rt-TextFieldRoot),
+.qtyField:global(.rt-TextFieldRoot),
+.priceField:global(.rt-TextFieldRoot),
+.priceFieldInvalid:global(.rt-TextFieldRoot) {
+  height: 40px;
+  border-radius: 15px;
+  border: 1px solid #e0e0e0;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+
+.textField:global(.rt-TextFieldRoot):where(:hover),
+.qtyField:global(.rt-TextFieldRoot):where(:hover),
+.priceField:global(.rt-TextFieldRoot):where(:hover),
+.priceFieldInvalid:global(.rt-TextFieldRoot):where(:hover) {
+  background: #f5f5f5;
+  border-color: #d0d0d0;
+}
+
+.priceFieldInvalid:global(.rt-TextFieldRoot) {
+  border-color: #dc3545;
+}
+
+.selectTrigger:global(.rt-SelectTrigger):focus-visible,
+.positionSelectTrigger:global(.rt-SelectTrigger):focus-visible,
+.vatField:global(.rt-SelectTrigger):focus-visible,
+.textField:global(.rt-TextFieldRoot):focus-within,
+.qtyField:global(.rt-TextFieldRoot):focus-within,
+.priceField:global(.rt-TextFieldRoot):focus-within,
+.priceFieldInvalid:global(.rt-TextFieldRoot):focus-within {
+  outline: none !important;
+  border-color: #000000 !important ;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12) !important;
 }
 
 .positionsSection {
-  margin: 24px 0;
-  padding: 20px;
-  background-color: #f8f9fa;
-  border-radius: 6px;
+  margin-top: 6px;
+  --positions-grid: minmax(220px, 2.2fr) 72px 92px 124px 156px 108px 138px 138px 40px;
+}
+
+.positionsTable {
+  overflow-x: auto;
+  padding-bottom: 4px;
 }
 
 .positionsHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
+  padding-top: 6px;
 }
 
-.positionsHeader h3 {
-  margin: 0;
-  color: #333;
-  font-size: 1.2rem;
-}
-
-.addButton {
-  background-color: #000000;
-  color: white;
-  border: none;
-  padding: 8px 16px;
-  border-radius: 4px;
-  cursor: pointer;
+.positionsHeader :global(.rt-BaseButton),
+.positionsHeader :global(.rt-Button),
+.modalActions :global(.rt-BaseButton),
+.modalActions :global(.rt-Button) {
+  height: 40px;
+  border-radius: 15px;
+  padding: 0 16px;
   font-size: 14px;
-  transition: all 0.2s;
+border: 1px solid #e0e0e0;
+box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
 }
 
-.addButton:hover {
-  background-color: #333333;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  transform: translateY(-1px);
+.positionsHeader :global(.rt-BaseButton):where(.rt-variant-surface),
+.positionsHeader :global(.rt-Button):where(.rt-variant-surface),
+.modalActions :global(.rt-BaseButton):where(.rt-variant-surface),
+.modalActions :global(.rt-Button):where(.rt-variant-surface) {
+  border: 1px solid #e0e0e0;
+  background: #ffffff;
+  color: #424242;
+box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+  
+}
+
+.positionsHeader :global(.rt-BaseButton.rt-variant-surface):hover,
+.positionsHeader :global(.rt-Button.rt-variant-surface):hover,
+.modalActions :global(.rt-BaseButton.rt-variant-surface):hover,
+.modalActions :global(.rt-Button.rt-variant-surface):hover {
+  background: #f5f5f5 !important;
+  border-color: #d0d0d0 !important;
+}
+
+.modalActions :global(.rt-BaseButton.rt-variant-surface):not(:disabled):not([data-disabled]):hover,
+.modalActions :global(.rt-Button.rt-variant-surface):not(:disabled):not([data-disabled]):hover {
+  background: #f5f5f5 !important;
+  border-color: #d0d0d0 !important;
+}
+
+.modalActions :global(.rt-BaseButton.rt-variant-surface):disabled,
+.modalActions :global(.rt-Button.rt-variant-surface):disabled,
+.modalActions :global(.rt-BaseButton.rt-variant-surface)[data-disabled],
+.modalActions :global(.rt-Button.rt-variant-surface)[data-disabled],
+.modalActions :global(.rt-BaseButton.rt-variant-solid):disabled,
+.modalActions :global(.rt-Button.rt-variant-solid):disabled,
+.modalActions :global(.rt-BaseButton.rt-variant-solid)[data-disabled],
+.modalActions :global(.rt-Button.rt-variant-solid)[data-disabled] {
+  opacity: 0.55 !important;
+  filter: none !important;
+  cursor: not-allowed;
+}
+
+.modalActions :global(.rt-BaseButton.rt-variant-surface):disabled:hover,
+.modalActions :global(.rt-Button.rt-variant-surface):disabled:hover,
+.modalActions :global(.rt-BaseButton.rt-variant-surface)[data-disabled]:hover,
+.modalActions :global(.rt-Button.rt-variant-surface)[data-disabled]:hover {
+  background: #ffffff !important;
+  border-color: #e0e0e0 !important;
+}
+
+.modalActions :global(.rt-BaseButton.rt-variant-surface):disabled:hover::before,
+.modalActions :global(.rt-BaseButton.rt-variant-surface):disabled:hover::after,
+.modalActions :global(.rt-Button.rt-variant-surface):disabled:hover::before,
+.modalActions :global(.rt-Button.rt-variant-surface):disabled:hover::after,
+.modalActions :global(.rt-BaseButton.rt-variant-surface)[data-disabled]:hover::before,
+.modalActions :global(.rt-BaseButton.rt-variant-surface)[data-disabled]:hover::after,
+.modalActions :global(.rt-Button.rt-variant-surface)[data-disabled]:hover::before,
+.modalActions :global(.rt-Button.rt-variant-surface)[data-disabled]:hover::after {
+  background: #ffffff !important;
+}
+
+.positionsHeader :global(.rt-BaseButton.rt-variant-surface):hover::before,
+.positionsHeader :global(.rt-BaseButton.rt-variant-surface):hover::after,
+.positionsHeader :global(.rt-Button.rt-variant-surface):hover::before,
+.positionsHeader :global(.rt-Button.rt-variant-surface):hover::after,
+.modalActions :global(.rt-BaseButton.rt-variant-surface):hover::before,
+.modalActions :global(.rt-BaseButton.rt-variant-surface):hover::after,
+.modalActions :global(.rt-Button.rt-variant-surface):hover::before,
+.modalActions :global(.rt-Button.rt-variant-surface):hover::after {
+  background: #f5f5f5 !important;
+}
+
+.surfaceActionButton:global(.rt-BaseButton),
+.surfaceActionButton:global(.rt-Button) {
+  height: 40px;
+  border-radius: 15px;
+  padding: 0 16px;
+  font-size: 14px;
+  border: 1px solid #e0e0e0;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+
+.surfaceActionButton:global(.rt-BaseButton):where(.rt-variant-surface),
+.surfaceActionButton:global(.rt-Button):where(.rt-variant-surface) {
+  border: 1px solid #e0e0e0;
+  background: #ffffff;
+  color: #424242;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+
+.surfaceActionButton:global(.rt-BaseButton.rt-variant-surface):hover,
+.surfaceActionButton:global(.rt-Button.rt-variant-surface):hover {
+  background: #f5f5f5 !important;
+  border-color: #d0d0d0 !important;
+}
+
+.surfaceActionButton:global(.rt-BaseButton.rt-variant-surface):hover::before,
+.surfaceActionButton:global(.rt-BaseButton.rt-variant-surface):hover::after,
+.surfaceActionButton:global(.rt-Button.rt-variant-surface):hover::before,
+.surfaceActionButton:global(.rt-Button.rt-variant-surface):hover::after {
+  background: #f5f5f5 !important;
+}
+
+.positionRow :global(.rt-BaseButton):where(.rt-variant-surface),
+.positionRow :global(.rt-Button):where(.rt-variant-surface) {
+  border: 1px solid #e0e0e0;
+  background: #ffffff;
+  color: #424242;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+
+.positionRow :global(.rt-BaseButton.rt-variant-surface):hover,
+.positionRow :global(.rt-Button.rt-variant-surface):hover {
+  background: #f5f5f5 !important;
+  border-color: #d0d0d0 !important;
+}
+
+.positionRow :global(.rt-BaseButton.rt-variant-surface):hover::before,
+.positionRow :global(.rt-BaseButton.rt-variant-surface):hover::after,
+.positionRow :global(.rt-Button.rt-variant-surface):hover::before,
+.positionRow :global(.rt-Button.rt-variant-surface):hover::after {
+  background: #f5f5f5 !important;
+}
+
+.modalActions :global(.rt-Button):where(.rt-variant-solid) {
+  background: #000000;
+  border: 1px solid #000000;
+  color: #ffffff;
+  box-shadow: none;
+}
+
+.modalActions :global(.rt-BaseButton):where(.rt-variant-solid) {
+  background: #000000;
+  border: 1px solid #000000;
+  color: #ffffff;
+  box-shadow: none;
+}
+
+.modalActions :global(.rt-Button):where(.rt-variant-solid):hover {
+  background: #333333;
+  border-color: #333333;
+}
+
+.modalActions :global(.rt-Button):where(.rt-variant-solid):not(:disabled):not([data-disabled]):hover {
+  background: #333333;
+  border-color: #333333;
+}
+
+.modalActions :global(.rt-BaseButton.rt-variant-solid):disabled:hover,
+.modalActions :global(.rt-Button.rt-variant-solid):disabled:hover,
+.modalActions :global(.rt-BaseButton.rt-variant-solid)[data-disabled]:hover,
+.modalActions :global(.rt-Button.rt-variant-solid)[data-disabled]:hover {
+  background: #000000;
+  border-color: #000000;
+}
+
+.modalActions :global(.rt-BaseButton.rt-variant-solid):disabled,
+.modalActions :global(.rt-Button.rt-variant-solid):disabled,
+.modalActions :global(.rt-BaseButton.rt-variant-solid)[data-disabled],
+.modalActions :global(.rt-Button.rt-variant-solid)[data-disabled] {
+  background: #000000 !important;
+  border-color: #000000 !important;
+  color: #ffffff !important;
+  box-shadow: none !important;
+}
+
+.modalActions :global(.rt-BaseButton.rt-variant-solid):disabled:hover::before,
+.modalActions :global(.rt-BaseButton.rt-variant-solid):disabled:hover::after,
+.modalActions :global(.rt-Button.rt-variant-solid):disabled:hover::before,
+.modalActions :global(.rt-Button.rt-variant-solid):disabled:hover::after,
+.modalActions :global(.rt-BaseButton.rt-variant-solid)[data-disabled]:hover::before,
+.modalActions :global(.rt-BaseButton.rt-variant-solid)[data-disabled]:hover::after,
+.modalActions :global(.rt-Button.rt-variant-solid)[data-disabled]:hover::before,
+.modalActions :global(.rt-Button.rt-variant-solid)[data-disabled]:hover::after {
+  background: #000000 !important;
+}
+
+.positionHeaderRow {
+  display: grid;
+  grid-template-columns: var(--positions-grid);
+  gap: 10px;
+  padding: 12px;
+  min-width: 1160px;
+}
+
+.positionHeaderCell {
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.positionHeaderCellRight {
+  justify-content: flex-end;
+}
+
+.positionHeaderCellCenter {
+  justify-content: center;
 }
 
 .positionRow {
   display: grid;
-  grid-template-columns: 2fr 100px 120px 120px 40px;
-  gap: 12px;
-  align-items: center;
-  margin-bottom: 12px;
+  grid-template-columns: var(--positions-grid);
+  gap: 10px;
+  align-items: start;
   padding: 12px;
-  background: white;
-  border-radius: 4px;
+  background: #ffffff;
+  border-radius: 12px;
   border: 1px solid #e0e0e0;
+  min-width: 1160px;
+  box-sizing: border-box;
 }
 
-.positionRow input,
-.positionRow select {
-  padding: 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
+.positionRow :global(.rt-TextFieldRoot) {
+  display: flex;
+  align-items: stretch;
 }
 
-.positionRow input:focus,
-.positionRow select:focus {
-  outline: none;
-  border-color: #000000;
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.2);
-}
-
-.positionRow input:hover,
-.positionRow select:hover {
-  border-color: #000000;
-}
-
-.positionRow select {
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23000000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 8px center;
-  background-size: 14px;
-  padding-right: 30px;
+.positionRow :global(.rt-TextFieldInput) {
+  height: 40px;
+  line-height: 40px;
 }
 
 .positionTotal {
-  font-weight: 500;
-  color: #333;
-  text-align: right;
-}
-
-.removeButton {
-  background-color: #000000;
-  color: white;
-  border: none;
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  cursor: pointer;
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  transition: all 0.2s;
+  justify-content: flex-end;
+  height: 40px;
 }
 
-.removeButton:hover {
-  background-color: #333333;
-  transform: scale(1.1);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+.positionMetric {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 40px;
+  text-align: right;
 }
+
+.unitValue {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  color: #4b5563;
+}
+
+.minPriceHint {
+  min-height: 16px;
+}
+
+.removePositionButton:global(.rt-BaseButton),
+.removePositionButton:global(.rt-Button) {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  padding: 0;
+  justify-self: end;
+  align-self: start;
+}
+
 
 .totalAmount {
-  margin-top: 16px;
-  padding: 12px;
-  background-color: #e9ecef;
-  border-radius: 4px;
-  text-align: right;
-  font-size: 1.1rem;
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: #f5f5f5;
+  border-radius: 12px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .error {
@@ -226,57 +412,13 @@
 }
 
 .modalActions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 24px;
-  padding-top: 20px;
-  border-top: 1px solid #eee;
-}
-
-.cancelButton {
-  background-color: #6c757d;
-  color: white;
-  border: 1px solid #6c757d;
-  padding: 12px 24px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: background-color 0.3s;
-}
-
-.cancelButton:hover {
-  background-color: #5a6268;
-  border-color: #5a6268;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  transform: translateY(-1px);
-}
-
-.submitButton {
-  background-color: #000000;
-  color: white;
-  border: 1px solid #000000;
-  padding: 12px 24px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: background-color 0.3s;
-  min-width: 140px;
-}
-
-.submitButton:hover:not(:disabled) {
-  background-color: #b0b0b0;
-}
-
-.submitButton:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+  padding-top: 4px;
 }
 
 @media (max-width: 768px) {
   .modalContent {
-    width: 95%;
-    margin: 10px;
+    width: 95vw;
+    max-width: none;
   }
   
   .positionRow {
