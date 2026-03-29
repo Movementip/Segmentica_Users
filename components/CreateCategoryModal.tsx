@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Button, Dialog, Flex, Select, Text, TextArea, TextField } from '@radix-ui/themes';
+import { Button, Dialog, Flex, Text, TextArea, TextField } from '@radix-ui/themes';
+import OrderSearchSelect from './OrderSearchSelect';
 import styles from './Modal.module.css';
 
 interface Category {
@@ -61,7 +62,13 @@ export function CreateCategoryModal({ isOpen, onClose, onCategoryCreated }: Crea
         };
 
         walk(null, 0);
-        return result;
+        return [
+            { value: 'root', label: 'Основная категория' },
+            ...result.map((category) => ({
+                value: String(category.id),
+                label: `${'— '.repeat(category.depth)}${category.название}`,
+            })),
+        ];
     }, [categories]);
 
     const fetchCategories = async () => {
@@ -165,20 +172,16 @@ export function CreateCategoryModal({ isOpen, onClose, onCategoryCreated }: Crea
                     </div>
 
                     <div className={styles.radixField}>
-                        <Text as="label" size="2" weight="medium" htmlFor="родительская_категория_id">
+                        <Text as="label" size="2" weight="medium">
                             Родительская категория
                         </Text>
-                        <Select.Root value={родительская_категория_id || 'root'} onValueChange={(value) => setРодительскаяКатегорияId(value === 'root' ? '' : value)}>
-                            <Select.Trigger id="родительская_категория_id" placeholder="Выберите родительскую категорию" className={styles.radixSelectTrigger} />
-                            <Select.Content position="popper" className={styles.radixSelectContent}>
-                                <Select.Item value="root">Основная категория</Select.Item>
-                                {categoryOptions.map((category) => (
-                                    <Select.Item key={category.id} value={String(category.id)}>
-                                        {`${'— '.repeat(category.depth)}${category.название}`}
-                                    </Select.Item>
-                                ))}
-                            </Select.Content>
-                        </Select.Root>
+                        <OrderSearchSelect
+                            value={родительская_категория_id || 'root'}
+                            options={categoryOptions}
+                            onValueChange={(value) => setРодительскаяКатегорияId(value === 'root' ? '' : value)}
+                            placeholder="Выберите родительскую категорию"
+                            emptyText="Ничего не найдено"
+                        />
                         <Text as="div" size="1" color="gray">
                             Можно выбрать любую категорию, чтобы продолжить ветку глубже.
                         </Text>

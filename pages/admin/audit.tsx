@@ -13,6 +13,8 @@ type AuditApiResponse = {
     items: AuditItem[];
     page: number;
     limit: number;
+    total: number;
+    totalPages: number;
     columns: string[];
 };
 
@@ -183,6 +185,29 @@ function prettyJson(v: any): string {
     }
 }
 
+function buildPagination(currentPage: number, totalPages: number): Array<number | 'ellipsis'> {
+    if (totalPages <= 7) {
+        return Array.from({ length: totalPages }, (_, index) => index + 1);
+    }
+
+    const pages = new Set<number>([1, totalPages, currentPage - 1, currentPage, currentPage + 1]);
+    const normalized = Array.from(pages)
+        .filter((page) => page >= 1 && page <= totalPages)
+        .sort((a, b) => a - b);
+
+    const result: Array<number | 'ellipsis'> = [];
+    for (let index = 0; index < normalized.length; index += 1) {
+        const page = normalized[index];
+        const previous = normalized[index - 1];
+        if (index > 0 && previous != null && page - previous > 1) {
+            result.push('ellipsis');
+        }
+        result.push(page);
+    }
+
+    return result;
+}
+
 function AuditPage(): JSX.Element {
     const router = useRouter();
     const { user, loading } = useAuth();
@@ -209,6 +234,7 @@ function AuditPage(): JSX.Element {
     const [query, setQuery] = useState('');
     const [debouncedQuery, setDebouncedQuery] = useState('');
     const [limit] = useState(50);
+    const [currentPage, setCurrentPage] = useState(1);
 
     const [filters, setFilters] = useState({
         method: 'all',
@@ -326,6 +352,7 @@ function AuditPage(): JSX.Element {
         const method = typeof router.query.method === 'string' ? router.query.method : 'all';
         const entityType = typeof router.query.entity_type === 'string' ? router.query.entity_type : '';
         const actor = typeof router.query.actor === 'string' ? router.query.actor : '';
+        const page = Math.max(1, Number(typeof router.query.page === 'string' ? router.query.page : Array.isArray(router.query.page) ? router.query.page[0] : 1) || 1);
         setQuery(q);
         setFilters({
             method: method || 'all',
@@ -334,6 +361,7 @@ function AuditPage(): JSX.Element {
         });
         setEntityQuery(entityType);
         setActorQuery(actor);
+        setCurrentPage(page);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [router.isReady]);
 
@@ -419,8 +447,9 @@ function AuditPage(): JSX.Element {
         if (filters.method && filters.method !== 'all') nextQuery.method = filters.method;
         if (filters.entityType.trim()) nextQuery.entity_type = filters.entityType.trim();
         if (filters.actor.trim()) nextQuery.actor = filters.actor.trim();
+        if (currentPage > 1) nextQuery.page = currentPage;
         router.replace({ pathname: router.pathname, query: nextQuery }, undefined, { shallow: true });
-    }, [debouncedQuery, filters.actor, filters.entityType, filters.method, router]);
+    }, [currentPage, debouncedQuery, filters.actor, filters.entityType, filters.method, router]);
 
     useEffect(() => {
         if (!canView || loading) return;
@@ -430,7 +459,7 @@ function AuditPage(): JSX.Element {
             try {
                 setIsFetching(true);
                 setError(null);
-                const url = `/api/admin/audit?q=${encodeURIComponent(debouncedQuery)}&page=1&limit=${encodeURIComponent(String(limit))}&method=${encodeURIComponent(String(filters.method || 'all'))}&entity_type=${encodeURIComponent(String(filters.entityType || ''))}&actor=${encodeURIComponent(String(filters.actor || ''))}`;
+                const url = `/api/admin/audit?q=${encodeURIComponent(debouncedQuery)}&page=${encodeURIComponent(String(currentPage))}&limit=${encodeURIComponent(String(limit))}&method=${encodeURIComponent(String(filters.method || 'all'))}&entity_type=${encodeURIComponent(String(filters.entityType || ''))}&actor=${encodeURIComponent(String(filters.actor || ''))}`;
                 const res = await fetch(url);
                 const json = (await res.json().catch(() => ({}))) as any;
                 if (!res.ok) throw new Error(json?.error || 'Ошибка загрузки');
@@ -444,9 +473,12 @@ function AuditPage(): JSX.Element {
         };
 
         void load();
-    }, [canView, debouncedQuery, limit, loading, refreshClickKey, filters.method, filters.entityType, filters.actor]);
+    }, [canView, currentPage, debouncedQuery, limit, loading, refreshClickKey, filters.method, filters.entityType, filters.actor]);
 
     const rows = data?.items || [];
+    const total = data?.total || 0;
+    const totalPages = Math.max(1, data?.totalPages || Math.ceil(total / limit) || 1);
+    const paginationItems = useMemo(() => buildPagination(currentPage, totalPages), [currentPage, totalPages]);
 
     const columns = useMemo(() => {
         const set = new Set(data?.columns || []);
@@ -496,6 +528,7 @@ function AuditPage(): JSX.Element {
                             value={query}
                             onChange={(e) => {
                                 setQuery((e.target as HTMLInputElement).value);
+                                setCurrentPage(1);
                             }}
                         >
                             <TextField.Slot side="left">
@@ -542,6 +575,7 @@ function AuditPage(): JSX.Element {
                                                         onOpenChange={setIsMethodSelectOpen}
                                                         onValueChange={(v) => {
                                                             setFilters((p) => ({ ...p, method: v }));
+                                                            setCurrentPage(1);
                                                         }}
                                                     >
                                                         <Select.Trigger variant="surface" color="gray" className={styles.selectTrigger} />
@@ -572,6 +606,7 @@ function AuditPage(): JSX.Element {
                                                             const v = (e.target as HTMLTextAreaElement).value;
                                                             setEntityQuery(v);
                                                             setFilters((p) => ({ ...p, entityType: v }));
+                                                            setCurrentPage(1);
                                                         }}
                                                         className={styles.filterTextArea}
                                                     />
@@ -588,6 +623,7 @@ function AuditPage(): JSX.Element {
                                                                         onClick={() => {
                                                                             setEntityQuery(name);
                                                                             setFilters((p) => ({ ...p, entityType: name }));
+                                                                            setCurrentPage(1);
                                                                         }}
                                                                     >
                                                                         {name}
@@ -617,6 +653,7 @@ function AuditPage(): JSX.Element {
                                                             const v = (e.target as HTMLTextAreaElement).value;
                                                             setActorQuery(v);
                                                             setFilters((p) => ({ ...p, actor: v }));
+                                                            setCurrentPage(1);
                                                         }}
                                                         className={styles.filterTextArea}
                                                     />
@@ -633,6 +670,7 @@ function AuditPage(): JSX.Element {
                                                                         onClick={() => {
                                                                             setActorQuery(name);
                                                                             setFilters((p) => ({ ...p, actor: name }));
+                                                                            setCurrentPage(1);
                                                                         }}
                                                                     >
                                                                         {name}
@@ -655,6 +693,9 @@ function AuditPage(): JSX.Element {
                                                 highContrast
                                                 onClick={() => {
                                                     setFilters({ method: 'all', entityType: '', actor: '' });
+                                                    setEntityQuery('');
+                                                    setActorQuery('');
+                                                    setCurrentPage(1);
                                                 }}
                                             >
                                                 Сбросить
@@ -708,66 +749,121 @@ function AuditPage(): JSX.Element {
                         <Text color="gray">Записей не найдено</Text>
                     </Box>
                 ) : (
-                    <div className={styles.tableContainer} key={tableKey}>
-                        <Table.Root variant="surface" className={styles.table}>
-                            <Table.Header>
-                                <Table.Row>
-                                    <Table.ColumnHeaderCell>Дата</Table.ColumnHeaderCell>
-                                    <Table.ColumnHeaderCell>Пользователь</Table.ColumnHeaderCell>
-                                    <Table.ColumnHeaderCell>Действие</Table.ColumnHeaderCell>
-                                    <Table.ColumnHeaderCell>Сущность</Table.ColumnHeaderCell>
+                    <>
+                        <div className={styles.tableContainer} key={tableKey}>
+                            <Table.Root variant="surface" className={styles.table}>
+                                <Table.Header>
+                                    <Table.Row>
+                                        <Table.ColumnHeaderCell>Дата</Table.ColumnHeaderCell>
+                                        <Table.ColumnHeaderCell>Пользователь</Table.ColumnHeaderCell>
+                                        <Table.ColumnHeaderCell>Действие</Table.ColumnHeaderCell>
+                                        <Table.ColumnHeaderCell>Сущность</Table.ColumnHeaderCell>
 
-                                    <Table.ColumnHeaderCell>Детали</Table.ColumnHeaderCell>
-                                </Table.Row>
-                            </Table.Header>
-                            <Table.Body>
-                                {rows.map((r, idx) => {
-                                    const dt = columns.hasCreatedAt ? formatDateTime(r[columns.hasCreatedAt]) : '';
-                                    const actor = r.actor_fio || pickCell(r, ['actor', 'user', 'username']);
-                                    const act = columns.hasAction ? String(r[columns.hasAction] ?? '') : '';
-                                    const ent = columns.hasEntityType ? String(r[columns.hasEntityType] ?? '') : '';
-                                    const entId = columns.hasEntityId ? String(r[columns.hasEntityId] ?? '') : '';
-                                    const ip = columns.hasIp ? String(r[columns.hasIp] ?? '') : '';
+                                        <Table.ColumnHeaderCell>Детали</Table.ColumnHeaderCell>
+                                    </Table.Row>
+                                </Table.Header>
+                                <Table.Body>
+                                    {rows.map((r, idx) => {
+                                        const dt = columns.hasCreatedAt ? formatDateTime(r[columns.hasCreatedAt]) : '';
+                                        const actor = r.actor_fio || pickCell(r, ['actor', 'user', 'username']);
+                                        const act = columns.hasAction ? String(r[columns.hasAction] ?? '') : '';
+                                        const ent = columns.hasEntityType ? String(r[columns.hasEntityType] ?? '') : '';
+                                        const entId = columns.hasEntityId ? String(r[columns.hasEntityId] ?? '') : '';
+                                        const ip = columns.hasIp ? String(r[columns.hasIp] ?? '') : '';
 
-                                    const detailsRaw = pickCell(r, ['details', 'meta', 'payload', 'data']);
-                                    const detailsObj = normalizeDetails(detailsRaw);
-                                    const detailsTextFull = typeof detailsObj === 'string' ? detailsObj : detailsObj ? JSON.stringify(detailsObj) : '';
-                                    const detailsTextShort = summarizeDetails(detailsObj) || detailsTextFull;
+                                        const detailsRaw = pickCell(r, ['details', 'meta', 'payload', 'data']);
+                                        const detailsObj = normalizeDetails(detailsRaw);
+                                        const detailsTextFull = typeof detailsObj === 'string' ? detailsObj : detailsObj ? JSON.stringify(detailsObj) : '';
+                                        const detailsTextShort = summarizeDetails(detailsObj) || detailsTextFull;
 
-                                    return (
-                                        <Table.Row
-                                            key={String(r.id ?? idx)}
-                                            className={styles.row}
-                                            onClick={() => {
-                                                setSelectedRow(r);
-                                                setIsDetailsOpen(true);
-                                            }}
-                                        >
-                                            <Table.Cell className={styles.cell}>{dt}</Table.Cell>
-                                            <Table.Cell className={styles.cell}>{actor || '—'}</Table.Cell>
-                                            <Table.Cell className={styles.cell}>{act || '—'}</Table.Cell>
-                                            <Table.Cell className={styles.cell}>
-                                                {ent ? (
-                                                    <span>
-                                                        {ent}
-                                                        {entId ? ` #${entId}` : ''}
+                                        return (
+                                            <Table.Row
+                                                key={String(r.id ?? idx)}
+                                                className={styles.row}
+                                                onClick={() => {
+                                                    setSelectedRow(r);
+                                                    setIsDetailsOpen(true);
+                                                }}
+                                            >
+                                                <Table.Cell className={styles.cell}>{dt}</Table.Cell>
+                                                <Table.Cell className={styles.cell}>{actor || '—'}</Table.Cell>
+                                                <Table.Cell className={styles.cell}>{act || '—'}</Table.Cell>
+                                                <Table.Cell className={styles.cell}>
+                                                    {ent ? (
+                                                        <span>
+                                                            {ent}
+                                                            {entId ? ` #${entId}` : ''}
+                                                        </span>
+                                                    ) : (
+                                                        '—'
+                                                    )}
+                                                </Table.Cell>
+
+                                                <Table.Cell className={styles.cell}>
+                                                    <span className={styles.details} title={detailsTextFull}>
+                                                        {detailsTextShort || '—'}
                                                     </span>
-                                                ) : (
-                                                    '—'
-                                                )}
-                                            </Table.Cell>
+                                                </Table.Cell>
+                                            </Table.Row>
+                                        );
+                                    })}
+                                </Table.Body>
+                            </Table.Root>
+                        </div>
 
-                                            <Table.Cell className={styles.cell}>
-                                                <span className={styles.details} title={detailsTextFull}>
-                                                    {detailsTextShort || '—'}
-                                                </span>
-                                            </Table.Cell>
-                                        </Table.Row>
-                                    );
-                                })}
-                            </Table.Body>
-                        </Table.Root>
-                    </div>
+                        {totalPages > 1 ? (
+                            <Flex direction="column" align="center" gap="3" className={styles.pagination}>
+                                <Text size="2" color="gray" className={styles.paginationSummary}>
+                                    Всего записей: {total}
+                                </Text>
+
+                                <Flex align="center" justify="center" gap="2" wrap="wrap" className={styles.paginationControls}>
+                                    <Button
+                                        type="button"
+                                        variant="surface"
+                                        color="gray"
+                                        highContrast
+                                        className={styles.paginationButton}
+                                        disabled={currentPage <= 1 || isFetching}
+                                        onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                                    >
+                                        Назад
+                                    </Button>
+
+                                    {paginationItems.map((item, index) => (
+                                        item === 'ellipsis' ? (
+                                            <span key={`ellipsis-${index}`} className={styles.paginationEllipsis}>…</span>
+                                        ) : (
+                                            <Button
+                                                key={item}
+                                                type="button"
+                                                variant={item === currentPage ? 'solid' : 'surface'}
+                                                color="gray"
+                                                highContrast
+                                                className={styles.paginationButton}
+                                                disabled={isFetching}
+                                                onClick={() => setCurrentPage(item)}
+                                            >
+                                                {item}
+                                            </Button>
+                                        )
+                                    ))}
+
+                                    <Button
+                                        type="button"
+                                        variant="surface"
+                                        color="gray"
+                                        highContrast
+                                        className={styles.paginationButton}
+                                        disabled={currentPage >= totalPages || isFetching}
+                                        onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                                    >
+                                        Вперёд
+                                    </Button>
+                                </Flex>
+                            </Flex>
+                        ) : null}
+                    </>
                 )}
             </div>
 

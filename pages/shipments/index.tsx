@@ -12,6 +12,7 @@ import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
 import { calculateVatAmountsFromLine, DEFAULT_VAT_RATE_ID, getVatRateOption, VAT_RATE_OPTIONS } from '../../lib/vat';
 import { getShipmentDeliveryLabel } from '../../lib/logisticsDeliveryLabels';
+import OrderSearchSelect from '../../components/OrderSearchSelect';
 
 const EMPTY_SELECT_VALUE = '__empty__';
 
@@ -197,6 +198,20 @@ function ShipmentsPage(): JSX.Element {
             || selectedManualProductIds.has(product.id)
         ));
     }, [formData.без_учета_склада, products, selectedManualProductIds, warehouseStockByProductId]);
+
+    const orderSelectOptions = useMemo(() => (
+        [{ value: '', label: 'Без заявки' }, ...orders.map((order) => ({
+            value: String(order.id),
+            label: `Заявка #${order.id}`,
+        }))]
+    ), [orders]);
+
+    const transportSelectOptions = useMemo(() => (
+        transports.map((transport) => ({
+            value: String(transport.id),
+            label: transport.название,
+        }))
+    ), [transports]);
 
     const normalizedManualPositions = useMemo(() => (
         manualPositions.filter((position) => (
@@ -1199,10 +1214,12 @@ function ShipmentsPage(): JSX.Element {
                                     resetShipmentEditor();
                                     setShowAddModal(true);
                                 }}
-                                className={styles.addShipmentButton}
+                                className={styles.createShipmentButton}
                             >
-                                <FiPlus size={14} /> Добавить отгрузку
+                                <FiPlus className={styles.icon} />
+                                Добавить отгрузку
                             </Button>
+
                         ) : null}
                     </div>
                 </div>
@@ -1593,27 +1610,17 @@ function ShipmentsPage(): JSX.Element {
 
                             <Box className={modalStyles.radixField}>
                                 <Text as="label" size="2" weight="medium">Заявка</Text>
-                                <Select.Root
-                                    value={formData.заявка_id ? String(formData.заявка_id) : EMPTY_SELECT_VALUE}
-                                    onValueChange={(v) => setFormData((p) => ({
+                                <OrderSearchSelect
+                                    value={formData.заявка_id ? String(formData.заявка_id) : ''}
+                                    onValueChange={(nextValue) => setFormData((p) => ({
                                         ...p,
-                                        заявка_id: v === EMPTY_SELECT_VALUE ? 0 : Number(v) || 0,
-                                        без_учета_склада: v === EMPTY_SELECT_VALUE ? p.без_учета_склада : false,
+                                        заявка_id: nextValue ? Number(nextValue) || 0 : 0,
+                                        без_учета_склада: nextValue ? false : p.без_учета_склада,
                                     }))}
+                                    options={orderSelectOptions}
+                                    placeholder="Без заявки"
                                     disabled={!canOrdersList}
-                                >
-                                    <Select.Trigger variant="surface" color="gray" className={modalStyles.radixSelectTrigger} placeholder="Выберите заявку" />
-                                    <Select.Content position="popper" className={modalStyles.radixSelectContent}>
-                                        <Select.Item value={EMPTY_SELECT_VALUE}>
-                                            Без заявки
-                                        </Select.Item>
-                                        {orders.map((o) => (
-                                            <Select.Item key={o.id} value={String(o.id)}>
-                                                Заявка #{o.id}
-                                            </Select.Item>
-                                        ))}
-                                    </Select.Content>
-                                </Select.Root>
+                                />
                                 {!formData.заявка_id ? (
                                     <Text as="div" size="1" color="gray">
                                         Если заявку не выбирать, отгрузка будет оформлена как самостоятельная отгрузка со склада.
@@ -1654,22 +1661,15 @@ function ShipmentsPage(): JSX.Element {
                                 <>
                                     <Box className={modalStyles.radixField}>
                                         <Text as="label" size="2" weight="medium">Транспортная компания</Text>
-                                        <Select.Root
-                                            value={formData.транспорт_id ? String(formData.транспорт_id) : EMPTY_SELECT_VALUE}
-                                            onValueChange={(v) => setFormData((p) => ({ ...p, транспорт_id: v === EMPTY_SELECT_VALUE ? 0 : Number(v) || 0 }))}
-                                        >
-                                            <Select.Trigger variant="surface" color="gray" className={modalStyles.radixSelectTrigger} placeholder="Выберите ТК" />
-                                            <Select.Content position="popper" className={modalStyles.radixSelectContent}>
-                                                <Select.Item value={EMPTY_SELECT_VALUE} disabled>
-                                                    Выберите ТК
-                                                </Select.Item>
-                                                {transports.map((t) => (
-                                                    <Select.Item key={t.id} value={String(t.id)}>
-                                                        {t.название}
-                                                    </Select.Item>
-                                                ))}
-                                            </Select.Content>
-                                        </Select.Root>
+                                        <OrderSearchSelect
+                                            value={formData.транспорт_id ? String(formData.транспорт_id) : ''}
+                                            onValueChange={(nextValue) => setFormData((p) => ({
+                                                ...p,
+                                                транспорт_id: nextValue ? Number(nextValue) || 0 : 0,
+                                            }))}
+                                            options={transportSelectOptions}
+                                            placeholder="Выберите ТК"
+                                        />
                                     </Box>
 
                                     <Box className={modalStyles.radixField}>
@@ -1711,10 +1711,10 @@ function ShipmentsPage(): JSX.Element {
                                             color="gray"
                                             highContrast
                                             onClick={addManualPosition}
-                                            className={styles.surfaceButton}
+                                            className={styles.shipmentAddPositionButton}
                                             disabled={manualPositionsLoading}
                                         >
-                                            <FiPlus size={14} /> Добавить позицию
+                                            Добавить позицию
                                         </Button>
                                     ) : null}
                                 </Flex>
@@ -1750,52 +1750,49 @@ function ShipmentsPage(): JSX.Element {
                                         {!manualPositionsLoading ? (
                                             <>
                                                 <div className={styles.modalPreviewTableWrap}>
-                                                    <Table.Root variant="surface" className={styles.modalPreviewTable}>
-                                                        <Table.Header>
-                                                            <Table.Row>
-                                                                <Table.ColumnHeaderCell>Товар</Table.ColumnHeaderCell>
-                                                                <Table.ColumnHeaderCell>Ед.изм</Table.ColumnHeaderCell>
-                                                                <Table.ColumnHeaderCell>Кол-во</Table.ColumnHeaderCell>
-                                                                <Table.ColumnHeaderCell className={styles.textRight}>Цена, ₽</Table.ColumnHeaderCell>
-                                                                <Table.ColumnHeaderCell>НДС</Table.ColumnHeaderCell>
-                                                                <Table.ColumnHeaderCell className={styles.textRight}>Всего, ₽</Table.ColumnHeaderCell>
-                                                                <Table.ColumnHeaderCell />
-                                                            </Table.Row>
-                                                        </Table.Header>
-                                                        <Table.Body>
-                                                            {manualPositions.map((position, index) => {
-                                                                const selectedProduct = productsById.get(position.товар_id);
-                                                                const total = calculateVatAmountsFromLine(
-                                                                    position.количество,
-                                                                    position.цена,
-                                                                    getVatRateOption(position.ндс_id).rate
-                                                                ).total;
+                                                    <div className={styles.shipmentPositionsScroller}>
+                                                        <Box className={styles.shipmentPositionsTable}>
+                                                            {manualPositions.length > 0 ? (
+                                                                <Box className={styles.shipmentPositionHeaderRow}>
+                                                                    <Text as="span" size="1" color="gray" className={styles.shipmentPositionHeaderCell}>Товар</Text>
+                                                                    <Text as="span" size="1" color="gray" className={styles.shipmentPositionHeaderCell}>Ед.изм</Text>
+                                                                    <Text as="span" size="1" color="gray" className={styles.shipmentPositionHeaderCell}>Кол-во</Text>
+                                                                    <Text as="span" size="1" color="gray" className={styles.shipmentPositionHeaderCell}>Цена, ₽</Text>
+                                                                    <Text as="span" size="1" color="gray" className={styles.shipmentPositionHeaderCell}>НДС</Text>
+                                                                    <Text as="span" size="1" color="gray" className={`${styles.shipmentPositionHeaderCell} ${styles.shipmentPositionHeaderCellRight}`}>Всего, ₽</Text>
+                                                                    <Text as="span" size="1" color="gray" className={`${styles.shipmentPositionHeaderCell} ${styles.shipmentPositionHeaderCellCenter}`} />
+                                                                </Box>
+                                                            ) : null}
 
-                                                                return (
-                                                                    <Table.Row key={position.id ?? `manual-${index}`}>
-                                                                        <Table.Cell>
-                                                                            <Select.Root
-                                                                                value={position.товар_id ? String(position.товар_id) : EMPTY_SELECT_VALUE}
-                                                                                onValueChange={(value) => handleManualPositionChange(index, 'товар_id', value === EMPTY_SELECT_VALUE ? 0 : Number(value) || 0)}
-                                                                            >
-                                                                                <Select.Trigger
-                                                                                    variant="surface"
-                                                                                    color="gray"
-                                                                                    className={`${modalStyles.radixSelectTrigger} ${styles.manualPositionSelect}`}
-                                                                                    placeholder="Выберите товар"
-                                                                                />
-                                                                                <Select.Content position="popper" className={modalStyles.radixSelectContent}>
-                                                                                    <Select.Item value={EMPTY_SELECT_VALUE}>Выберите товар</Select.Item>
-                                                                                    {availableManualProducts.map((product) => (
-                                                                                        <Select.Item key={product.id} value={String(product.id)}>
-                                                                                            {product.артикул} - {product.название}{!formData.без_учета_склада ? ` · в наличии: ${warehouseStockByProductId.get(product.id) || 0}` : ''}
-                                                                                        </Select.Item>
-                                                                                    ))}
-                                                                                </Select.Content>
-                                                                            </Select.Root>
-                                                                        </Table.Cell>
-                                                                        <Table.Cell>{selectedProduct?.единица_измерения || 'шт'}</Table.Cell>
-                                                                        <Table.Cell>
+                                                            <Flex direction="column" gap="2">
+                                                                {manualPositions.map((position, index) => {
+                                                                    const selectedProduct = productsById.get(position.товар_id);
+                                                                    const total = calculateVatAmountsFromLine(
+                                                                        position.количество,
+                                                                        position.цена,
+                                                                        getVatRateOption(position.ндс_id).rate
+                                                                    ).total;
+                                                                    const productOptions = availableManualProducts.map((product) => ({
+                                                                        value: String(product.id),
+                                                                        label: `${product.артикул} - ${product.название}${!formData.без_учета_склада ? ` · в наличии: ${warehouseStockByProductId.get(product.id) || 0}` : ''}`,
+                                                                    }));
+
+                                                                    return (
+                                                                        <Box key={position.id ?? `manual-${index}`} className={styles.shipmentPositionRow}>
+                                                                            <OrderSearchSelect
+                                                                                value={position.товар_id ? String(position.товар_id) : ''}
+                                                                                onValueChange={(nextValue) => handleManualPositionChange(index, 'товар_id', nextValue ? Number(nextValue) : 0)}
+                                                                                options={productOptions}
+                                                                                placeholder="Выберите товар"
+                                                                                compact
+                                                                                inputClassName={styles.shipmentPositionSearchSelectInput}
+                                                                                menuClassName={styles.shipmentPositionSearchSelectMenu}
+                                                                            />
+
+                                                                            <Text as="span" size="2" className={styles.shipmentUnitValue}>
+                                                                                {selectedProduct?.единица_измерения || 'шт'}
+                                                                            </Text>
+
                                                                             <TextField.Root
                                                                                 type="number"
                                                                                 min={1}
@@ -1803,10 +1800,9 @@ function ShipmentsPage(): JSX.Element {
                                                                                 value={String(position.количество)}
                                                                                 onChange={(event) => handleManualPositionChange(index, 'количество', event.target.value)}
                                                                                 size="2"
-                                                                                className={styles.manualPositionInput}
+                                                                                className={styles.shipmentPositionInput}
                                                                             />
-                                                                        </Table.Cell>
-                                                                        <Table.Cell className={styles.textRight}>
+
                                                                             <TextField.Root
                                                                                 type="number"
                                                                                 min={0}
@@ -1814,18 +1810,17 @@ function ShipmentsPage(): JSX.Element {
                                                                                 value={String(position.цена)}
                                                                                 onChange={(event) => handleManualPositionChange(index, 'цена', event.target.value)}
                                                                                 size="2"
-                                                                                className={styles.manualPositionInput}
+                                                                                className={styles.shipmentPositionInput}
                                                                             />
-                                                                        </Table.Cell>
-                                                                        <Table.Cell>
+
                                                                             <Select.Root
                                                                                 value={String(position.ндс_id || DEFAULT_VAT_RATE_ID)}
-                                                                                onValueChange={(value) => handleManualPositionChange(index, 'ндс_id', Number(value) || DEFAULT_VAT_RATE_ID)}
+                                                                                onValueChange={(nextValue) => handleManualPositionChange(index, 'ндс_id', Number(nextValue) || DEFAULT_VAT_RATE_ID)}
                                                                             >
                                                                                 <Select.Trigger
                                                                                     variant="surface"
                                                                                     color="gray"
-                                                                                    className={`${modalStyles.radixSelectTrigger} ${styles.manualVatSelect}`}
+                                                                                    className={`${modalStyles.radixSelectTrigger} ${styles.shipmentVatField}`}
                                                                                 />
                                                                                 <Select.Content position="popper" className={modalStyles.radixSelectContent}>
                                                                                     {VAT_RATE_OPTIONS.map((option) => (
@@ -1835,11 +1830,11 @@ function ShipmentsPage(): JSX.Element {
                                                                                     ))}
                                                                                 </Select.Content>
                                                                             </Select.Root>
-                                                                        </Table.Cell>
-                                                                        <Table.Cell className={styles.textRight}>
-                                                                            {total.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' })}
-                                                                        </Table.Cell>
-                                                                        <Table.Cell className={styles.manualPositionActions}>
+
+                                                                            <Text as="span" size="2" weight="medium" className={styles.shipmentPositionTotal}>
+                                                                                {total.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' })}
+                                                                            </Text>
+
                                                                             <Button
                                                                                 type="button"
                                                                                 variant="surface"
@@ -1847,16 +1842,16 @@ function ShipmentsPage(): JSX.Element {
                                                                                 highContrast
                                                                                 onClick={() => removeManualPosition(index)}
                                                                                 disabled={manualPositions.length === 1}
-                                                                                className={styles.manualPositionRemoveButton}
+                                                                                className={styles.shipmentRemovePositionButton}
                                                                             >
                                                                                 ×
                                                                             </Button>
-                                                                        </Table.Cell>
-                                                                    </Table.Row>
-                                                                );
-                                                            })}
-                                                        </Table.Body>
-                                                    </Table.Root>
+                                                                        </Box>
+                                                                    );
+                                                                })}
+                                                            </Flex>
+                                                        </Box>
+                                                    </div>
                                                 </div>
 
                                                 <Flex justify="end" className={styles.modalPreviewTotal}>

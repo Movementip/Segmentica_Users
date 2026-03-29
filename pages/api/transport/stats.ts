@@ -19,13 +19,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             SELECT
               тк.*,
               COALESCE(COUNT(о.id), 0)::integer as общее_количество_отгрузок,
-              COALESCE(COUNT(CASE WHEN з."статус" IN ('новая', 'в обработке', 'подтверждена', 'в работе', 'собрана', 'отгружена') THEN 1 END), 0)::integer as активные_отгрузки,
-              COALESCE(COUNT(CASE WHEN з."статус" IN ('выполнена', 'отменена') THEN 1 END), 0)::integer as завершенные_отгрузки,
+              COALESCE(COUNT(CASE WHEN COALESCE(о."статус", 'в пути') NOT IN ('доставлено', 'отменено') THEN 1 END), 0)::integer as активные_отгрузки,
+              COALESCE(COUNT(CASE WHEN COALESCE(о."статус", 'в пути') = 'доставлено' THEN 1 END), 0)::integer as завершенные_отгрузки,
               COALESCE(AVG(о."стоимость_доставки"), 0) as средняя_стоимость,
               COALESCE(SUM(о."стоимость_доставки"), 0) as общая_выручка
             FROM "Транспортные_компании" тк
             LEFT JOIN "Отгрузки" о ON тк.id = о."транспорт_id"
-            LEFT JOIN "Заявки" з ON о."заявка_id" = з.id
             WHERE тк.id = $1
             GROUP BY тк.id, тк."название", тк."телефон", тк.email, тк."тариф", тк.created_at
             LIMIT 1
@@ -50,18 +49,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               SELECT
                 DATE_TRUNC('month', о."дата_отгрузки")::date as месяц,
                 COALESCE(COUNT(о.id), 0)::integer as количество_отгрузок,
-                COALESCE(COUNT(CASE WHEN з."статус" = 'выполнена' THEN 1 END), 0)::integer as успешные_доставки,
+                COALESCE(COUNT(CASE WHEN COALESCE(о."статус", 'в пути') = 'доставлено' THEN 1 END), 0)::integer as успешные_доставки,
                 COALESCE(AVG(о."стоимость_доставки"), 0) as средняя_стоимость,
                 COALESCE(SUM(о."стоимость_доставки"), 0) as общая_выручка
               FROM "Отгрузки" о
-              JOIN "Заявки" з ON о."заявка_id" = з.id
               WHERE о."транспорт_id" = $1
                 AND о."дата_отгрузки" >= (date_trunc('month', now()) - interval '11 months')
                 AND о."дата_отгрузки" < (date_trunc('month', now()) + interval '1 month')
               GROUP BY 1
             )
             SELECT
-              m.месяц,
+              TO_CHAR(m.месяц, 'YYYY-MM-01') as месяц,
               COALESCE(a.количество_отгрузок, 0)::integer as количество_отгрузок,
               COALESCE(a.успешные_доставки, 0)::integer as успешные_доставки,
               COALESCE(a.средняя_стоимость, 0) as средняя_стоимость,
@@ -77,11 +75,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             `
             SELECT
               COALESCE(COUNT(о.id), 0)::integer as количество_отгрузок,
-              COALESCE(COUNT(CASE WHEN з."статус" = 'выполнена' THEN 1 END), 0)::integer as успешные_доставки,
+              COALESCE(COUNT(CASE WHEN COALESCE(о."статус", 'в пути') = 'доставлено' THEN 1 END), 0)::integer as успешные_доставки,
               COALESCE(AVG(о."стоимость_доставки"), 0) as средняя_стоимость,
               COALESCE(SUM(о."стоимость_доставки"), 0) as общая_выручка
             FROM "Отгрузки" о
-            JOIN "Заявки" з ON о."заявка_id" = з.id
             WHERE о."транспорт_id" = $1
               AND о."дата_отгрузки" >= (date_trunc('month', now()) - interval '11 months')
               AND о."дата_отгрузки" < (date_trunc('month', now()) + interval '1 month')

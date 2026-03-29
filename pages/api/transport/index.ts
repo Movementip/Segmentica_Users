@@ -15,13 +15,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         SELECT 
           тк.*,
           COALESCE(COUNT(о.id), 0)::integer as общее_количество_отгрузок,
-          COALESCE(COUNT(CASE WHEN з."статус" IN ('новая', 'в обработке', 'подтверждена', 'в работе', 'собрана', 'отгружена') THEN 1 END), 0)::integer as активные_отгрузки,
-          COALESCE(COUNT(CASE WHEN з."статус" IN ('выполнена', 'отменена') THEN 1 END), 0)::integer as завершенные_отгрузки,
+          COALESCE(COUNT(CASE WHEN COALESCE(о."статус", 'в пути') NOT IN ('доставлено', 'отменено') THEN 1 END), 0)::integer as активные_отгрузки,
+          COALESCE(COUNT(CASE WHEN COALESCE(о."статус", 'в пути') = 'доставлено' THEN 1 END), 0)::integer as завершенные_отгрузки,
           COALESCE(AVG(о."стоимость_доставки"), 0) as средняя_стоимость,
           COALESCE(SUM(о."стоимость_доставки"), 0) as общая_выручка
         FROM "Транспортные_компании" тк
         LEFT JOIN "Отгрузки" о ON тк.id = о."транспорт_id"
-        LEFT JOIN "Заявки" з ON о."заявка_id" = з.id
         GROUP BY тк.id, тк."название", тк."телефон", тк.email, тк."тариф", тк.created_at
         ORDER BY общее_количество_отгрузок DESC, тк."название" ASC
       `);
@@ -32,12 +31,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           о.*,
           тк."название" as транспорт_название,
           з."id" as заявка_номер,
-          к."название" as клиент_название,
-          з."статус" as заявка_статус
+          COALESCE(к."название", 'Самостоятельная отгрузка') as клиент_название,
+          COALESCE(о."статус", з."статус", 'в пути') as заявка_статус
         FROM "Отгрузки" о
         JOIN "Транспортные_компании" тк ON о."транспорт_id" = тк.id
-        JOIN "Заявки" з ON о."заявка_id" = з.id
-        JOIN "Клиенты" к ON з."клиент_id" = к.id
+        LEFT JOIN "Заявки" з ON о."заявка_id" = з.id
+        LEFT JOIN "Клиенты" к ON з."клиент_id" = к.id
         ORDER BY о."дата_отгрузки" DESC
         LIMIT 50
       `)
@@ -49,13 +48,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           о.*,
           тк."название" as транспорт_название,
           з."id" as заявка_номер,
-          к."название" as клиент_название,
-          з."статус" as заявка_статус
+          COALESCE(к."название", 'Самостоятельная отгрузка') as клиент_название,
+          COALESCE(о."статус", з."статус", 'в пути') as заявка_статус
         FROM "Отгрузки" о
         JOIN "Транспортные_компании" тк ON о."транспорт_id" = тк.id
-        JOIN "Заявки" з ON о."заявка_id" = з.id
-        JOIN "Клиенты" к ON з."клиент_id" = к.id
-        WHERE з."статус" IN ('новая', 'в обработке', 'подтверждена', 'в работе', 'собрана', 'отгружена')
+        LEFT JOIN "Заявки" з ON о."заявка_id" = з.id
+        LEFT JOIN "Клиенты" к ON з."клиент_id" = к.id
+        WHERE COALESCE(о."статус", 'в пути') NOT IN ('доставлено', 'отменено')
         ORDER BY о."дата_отгрузки" DESC
       `)
                 : { rows: [] as any[] };

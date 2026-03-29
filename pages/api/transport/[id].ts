@@ -18,8 +18,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         SELECT 
           тк.*,
           COUNT(о.id) as общее_количество_отгрузок,
-          COUNT(CASE WHEN о."статус" = 'в пути' THEN 1 END) as активные_отгрузки,
-          COUNT(CASE WHEN о."статус" = 'доставлено' THEN 1 END) as завершенные_отгрузки,
+          COUNT(CASE WHEN COALESCE(о."статус", 'в пути') NOT IN ('доставлено', 'отменено') THEN 1 END) as активные_отгрузки,
+          COUNT(CASE WHEN COALESCE(о."статус", 'в пути') = 'доставлено' THEN 1 END) as завершенные_отгрузки,
           COALESCE(AVG(о."стоимость_доставки"), 0) as средняя_стоимость,
           COALESCE(SUM(о."стоимость_доставки"), 0) as общая_выручка
         FROM "Транспортные_компании" тк
@@ -40,13 +40,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         SELECT 
           о.*,
           з."id" as заявка_номер,
-          к."название" as клиент_название,
+          COALESCE(к."название", 'Самостоятельная отгрузка') as клиент_название,
           з."адрес_доставки" as адрес_доставки,
           з."общая_сумма" as сумма_заявки,
-          з."статус" as заявка_статус
+          COALESCE(о."статус", з."статус", 'в пути') as заявка_статус
         FROM "Отгрузки" о
-        JOIN "Заявки" з ON о."заявка_id" = з.id
-        JOIN "Клиенты" к ON з."клиент_id" = к.id
+        LEFT JOIN "Заявки" з ON о."заявка_id" = з.id
+        LEFT JOIN "Клиенты" к ON з."клиент_id" = к.id
         WHERE о."транспорт_id" = $1
         ORDER BY о."дата_отгрузки" DESC
         LIMIT 100
@@ -57,7 +57,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             const performanceResult = canMonthsView
                 ? await query(`
         SELECT 
-          DATE_TRUNC('month', о."дата_отгрузки") as месяц,
+          TO_CHAR(DATE_TRUNC('month', о."дата_отгрузки"), 'YYYY-MM-01') as месяц,
           COUNT(*) as количество_отгрузок,
           COALESCE(AVG(о."стоимость_доставки"), 0) as средняя_стоимость,
           COALESCE(SUM(о."стоимость_доставки"), 0) as общая_выручка,
@@ -75,14 +75,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         SELECT 
           о.*,
           з."id" as заявка_номер,
-          к."название" as клиент_название,
+          COALESCE(к."название", 'Самостоятельная отгрузка') as клиент_название,
           з."адрес_доставки" as адрес_доставки,
-          з."статус" as заявка_статус
+          COALESCE(о."статус", з."статус", 'в пути') as заявка_статус
         FROM "Отгрузки" о
-        JOIN "Заявки" з ON о."заявка_id" = з.id
-        JOIN "Клиенты" к ON з."клиент_id" = к.id
+        LEFT JOIN "Заявки" з ON о."заявка_id" = з.id
+        LEFT JOIN "Клиенты" к ON з."клиент_id" = к.id
         WHERE о."транспорт_id" = $1
-        AND о."статус" IN ('в пути', 'в обработке')
+        AND COALESCE(о."статус", 'в пути') NOT IN ('доставлено', 'отменено')
         ORDER BY о."дата_отгрузки" DESC
       `, [id])
                 : { rows: [] as any[] };

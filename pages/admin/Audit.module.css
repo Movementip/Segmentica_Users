@@ -718,6 +718,33 @@ padding: 2rem 1.5rem;
 
 .pagination {
   margin-top: 12px;
+  padding-top: 4px;
+  width: 100%;
+}
+
+.paginationSummary {
+  text-align: center;
+}
+
+.paginationControls {
+  width: 100%;
+}
+
+.paginationButton:global(.rt-BaseButton),
+.paginationButton:global(.rt-Button) {
+  min-width: 40px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 12px;
+}
+
+.paginationEllipsis {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 36px;
+  color: #6b7280;
 }
 
 @media (max-width: 900px) {

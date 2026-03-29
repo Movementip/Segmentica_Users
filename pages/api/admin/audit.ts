@@ -105,6 +105,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                LEFT JOIN public.\"Сотрудники\" e ON e.id = u.employee_id`
             : `LEFT JOIN public.\"Сотрудники\" e ON 1 = 0`;
 
+        const baseParams = [...params];
+        const countSql = `SELECT COUNT(*)::int AS total
+                          FROM public.audit_logs a
+                          ${joinActor}
+                          ${where.length ? `WHERE ${where.join(' AND ')}` : ''}`;
+        const countRes = await query(countSql, baseParams);
+        const total = Number(countRes.rows?.[0]?.total) || 0;
+        const totalPages = Math.max(1, Math.ceil(total / limit));
+
         params.push(limit);
         params.push(offset);
 
@@ -121,6 +130,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             items: dataRes.rows || [],
             page,
             limit,
+            total,
+            totalPages,
             columns: Array.from(cols),
         });
     } catch (e) {

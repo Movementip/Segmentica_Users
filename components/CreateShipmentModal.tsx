@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Button, Dialog, Flex, Select, Text, TextField } from '@radix-ui/themes';
 import { fetchOrderDefaults } from '../lib/orderModes';
+import OrderSearchSelect from './OrderSearchSelect';
 import styles from './CreateShipmentModal.module.css';
 
 interface CreateShipmentModalProps {
@@ -29,8 +30,6 @@ type TransportOption = {
     id: number;
     название?: string;
 };
-
-const EMPTY_SELECT_VALUE = '__empty__';
 
 export function CreateShipmentModal({ isOpen, onClose, onCreated, transportId, initialOrderId, lockOrderId = false }: CreateShipmentModalProps): JSX.Element {
     const [loading, setLoading] = useState(false);
@@ -148,6 +147,25 @@ export function CreateShipmentModal({ isOpen, onClose, onCreated, transportId, i
         return statusOk && transportOk && !loading;
     }, [formData.использовать_доставку, formData.статус, loading, selectedTransportId, transportId]);
 
+    const transportSelectOptions = useMemo(
+        () => transports.map((item) => ({
+            value: String(item.id),
+            label: item.название || `ТК #${item.id}`,
+        })),
+        [transports]
+    );
+
+    const orderSelectOptions = useMemo(
+        () => [
+            { value: '', label: 'Без заявки' },
+            ...orders.map((item) => ({
+                value: String(item.id),
+                label: `#${item.id}${item.клиент_название ? ` — ${item.клиент_название}` : ''}`,
+            })),
+        ],
+        [orders]
+    );
+
     const handleClose = () => {
         if (loading) return;
         setError(null);
@@ -237,26 +255,14 @@ export function CreateShipmentModal({ isOpen, onClose, onCreated, transportId, i
                                     <Text as="label" size="2" weight="medium">
                                         Транспортная компания
                                     </Text>
-                                    <Select.Root
+                                    <OrderSearchSelect
                                         value={selectedTransportId ? String(selectedTransportId) : ''}
                                         onValueChange={(value) => setSelectedTransportId(value ? Number(value) : 0)}
+                                        options={transportSelectOptions}
+                                        placeholder="Выберите транспорт"
                                         disabled={transportsLoading || loading}
-                                    >
-                                        <Select.Trigger variant="surface" color="gray" className={styles.textField} placeholder="Выберите транспорт" />
-                                        <Select.Content position="popper" variant="solid" color="gray" highContrast>
-                                            {transports.length === 0 ? (
-                                                <Select.Item value={EMPTY_SELECT_VALUE} disabled>
-                                                    {transportsLoading ? 'Загрузка...' : 'Нет транспортных компаний'}
-                                                </Select.Item>
-                                            ) : (
-                                                transports.map((item) => (
-                                                    <Select.Item key={item.id} value={String(item.id)}>
-                                                        {item.название || `ТК #${item.id}`}
-                                                    </Select.Item>
-                                                ))
-                                            )}
-                                        </Select.Content>
-                                    </Select.Root>
+                                        emptyText={transportsLoading ? 'Загрузка...' : 'Нет транспортных компаний'}
+                                    />
                                 </Box>
                             ) : null}
 
@@ -276,29 +282,14 @@ export function CreateShipmentModal({ isOpen, onClose, onCreated, transportId, i
                                         size="2"
                                     />
                                 ) : (
-                                    <Select.Root
+                                    <OrderSearchSelect
                                         value={formData.заявка_id}
-                                        onValueChange={(value) => setFormData((p) => ({ ...p, заявка_id: value === EMPTY_SELECT_VALUE ? '' : value }))}
+                                        onValueChange={(value) => setFormData((p) => ({ ...p, заявка_id: value }))}
+                                        options={orderSelectOptions}
+                                        placeholder="Выберите заявку"
                                         disabled={ordersLoading || loading}
-                                    >
-                                        <Select.Trigger variant="surface" color="gray" className={styles.textField} placeholder="Выберите заявку" />
-                                        <Select.Content position="popper" variant="solid" color="gray" highContrast>
-                                            <Select.Item value={EMPTY_SELECT_VALUE}>
-                                                Без заявки
-                                            </Select.Item>
-                                            {orders.length === 0 ? (
-                                                <Select.Item value="__empty_orders__" disabled>
-                                                    {ordersLoading ? 'Загрузка...' : 'Нет заявок'}
-                                                </Select.Item>
-                                            ) : (
-                                                orders.map((o) => (
-                                                    <Select.Item key={o.id} value={String(o.id)}>
-                                                        #{o.id}{o.клиент_название ? ` — ${o.клиент_название}` : ''}
-                                                    </Select.Item>
-                                                ))
-                                            )}
-                                        </Select.Content>
-                                    </Select.Root>
+                                        emptyText={ordersLoading ? 'Загрузка...' : 'Нет заявок'}
+                                    />
                                 )}
                                 {!formData.заявка_id ? (
                                     <Text as="p" size="1" color="gray" className={styles.fieldHint}>

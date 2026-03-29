@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Button, Dialog, Flex, Select, Text, TextArea, TextField } from '@radix-ui/themes';
+import { Button, Dialog, Flex, Text, TextArea, TextField } from '@radix-ui/themes';
+import OrderSearchSelect from './OrderSearchSelect';
 import styles from './Modal.module.css';
 
 interface Category {
@@ -72,7 +73,13 @@ export function EditCategoryModal({ category, isOpen, onClose, onCategoryUpdated
         };
 
         walk(null, 0);
-        return result;
+        return [
+            { value: 'root', label: 'Корневая категория' },
+            ...result.map((item) => ({
+                value: String(item.id),
+                label: `${'— '.repeat(item.depth)}${item.название}`,
+            })),
+        ];
     }, [categories, category?.id]);
 
     const fetchCategories = async () => {
@@ -174,20 +181,16 @@ export function EditCategoryModal({ category, isOpen, onClose, onCategoryUpdated
                     </div>
 
                     <div className={styles.radixField}>
-                        <Text as="label" size="2" weight="medium" htmlFor="edit-category-parent">
+                        <Text as="label" size="2" weight="medium">
                             Родительская категория
                         </Text>
-                        <Select.Root value={родительскаяКатегорияId || 'root'} onValueChange={setРодительскаяКатегорияId}>
-                            <Select.Trigger id="edit-category-parent" placeholder="Выберите родительскую категорию" className={styles.radixSelectTrigger} />
-                            <Select.Content position="popper" className={styles.radixSelectContent}>
-                                <Select.Item value="root">Корневая категория</Select.Item>
-                                {categoryOptions.map((item) => (
-                                    <Select.Item key={item.id} value={String(item.id)}>
-                                        {`${'— '.repeat(item.depth)}${item.название}`}
-                                    </Select.Item>
-                                ))}
-                            </Select.Content>
-                        </Select.Root>
+                        <OrderSearchSelect
+                            value={родительскаяКатегорияId || 'root'}
+                            options={categoryOptions}
+                            onValueChange={setРодительскаяКатегорияId}
+                            placeholder="Выберите родительскую категорию"
+                            emptyText="Ничего не найдено"
+                        />
                         <Text as="div" size="1" color="gray">
                             Текущую категорию нельзя сделать родителем самой себя.
                         </Text>

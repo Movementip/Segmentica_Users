@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Button, Dialog, Flex, Text, TextField, Select, Box } from '@radix-ui/themes';
+import OrderSearchSelect from './OrderSearchSelect';
 import styles from './WarehouseMovementModal.module.css';
 
 interface Product {
@@ -7,10 +8,22 @@ interface Product {
     название: string;
     артикул: string;
     категория?: string;
+    категория_id?: number;
+    категория_название?: string;
     единица_измерения: string;
     минимальный_остаток: number;
     цена_закупки?: number;
     цена_продажи: number;
+}
+
+interface Category {
+    id: number;
+    название: string;
+    родительская_категория_id?: number | null;
+}
+
+interface CategoryOption extends Category {
+    depth: number;
 }
 
 interface EditProductModalProps {
@@ -28,10 +41,12 @@ export const EditProductModal: React.FC<EditProductModalProps> = ({
 }) => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [categories, setCategories] = useState<Category[]>([]);
     const [formData, setFormData] = useState({
         название: '',
         артикул: '',
         категория: '',
+        категория_id: '',
         единица_измерения: 'шт',
         минимальный_остаток: '0',
         цена_закупки: '0',
@@ -45,11 +60,60 @@ export const EditProductModal: React.FC<EditProductModalProps> = ({
     }, [isOpen]);
 
     useEffect(() => {
+        if (!isOpen) return;
+
+        const loadCategories = async () => {
+            try {
+                const response = await fetch('/api/categories');
+                if (!response.ok) {
+                    throw new Error('Ошибка загрузки категорий');
+                }
+                const data = await response.json();
+                setCategories(Array.isArray(data) ? data : []);
+            } catch (err) {
+                console.error('Error fetching categories for edit product:', err);
+            }
+        };
+
+        loadCategories();
+    }, [isOpen]);
+
+    const categoryOptions = useMemo(() => {
+        const byParent = new Map<number | null, Category[]>();
+
+        categories.forEach((item) => {
+            const parentId = item.родительская_категория_id ?? null;
+            const siblings = byParent.get(parentId) || [];
+            siblings.push(item);
+            byParent.set(parentId, siblings);
+        });
+
+        const result: CategoryOption[] = [];
+        const walk = (parentId: number | null, depth: number) => {
+            const nodes = byParent.get(parentId) || [];
+            nodes
+                .sort((left, right) => left.название.localeCompare(right.название, 'ru-RU'))
+                .forEach((item) => {
+                    result.push({ ...item, depth });
+                    walk(item.id, depth + 1);
+                });
+        };
+
+        walk(null, 0);
+
+        return result.map((category) => ({
+            value: String(category.id),
+            label: `${'— '.repeat(category.depth)}${category.название}`,
+        }));
+    }, [categories]);
+
+    useEffect(() => {
         if (product) {
             setFormData({
                 название: product.название || '',
                 артикул: product.артикул || '',
-                категория: product.категория || '',
+                категория: product.категория || product.категория_название || '',
+                категория_id: product.категория_id ? String(product.категория_id) : '',
                 единица_измерения: product.единица_измерения || 'шт',
                 минимальный_остаток: product.минимальный_остаток?.toString() || '0',
                 цена_закупки: product.цена_закупки?.toString() || '0',
@@ -57,6 +121,29 @@ export const EditProductModal: React.FC<EditProductModalProps> = ({
             });
         }
     }, [product]);
+
+    useEffect(() => {
+        if (!product || !categories.length) return;
+        if (formData.категория_id) return;
+
+        const categoryName = product.категория || product.категория_название || '';
+        if (!categoryName) return;
+
+        const matchedCategory = categories.find((item) => item.название === categoryName);
+        if (!matchedCategory) return;
+
+        setFormData((prev) => ({
+            ...prev,
+            категория_id: String(matchedCategory.id),
+            категория: matchedCategory.название,
+        }));
+    }, [categories, formData.категория_id, product]);
+
+    const selectedCategory = useMemo(() => {
+        const selectedId = Number(formData.категория_id);
+        if (!Number.isFinite(selectedId) || !selectedId) return null;
+        return categories.find((item) => item.id === selectedId) || null;
+    }, [categories, formData.категория_id]);
 
     const canSubmit = useMemo(() => {
         if (loading) return false;
@@ -82,7 +169,8 @@ export const EditProductModal: React.FC<EditProductModalProps> = ({
                     id: product.id,
                     название: formData.название,
                     артикул: formData.артикул,
-                    категория: formData.категория,
+                    категория: selectedCategory?.название || null,
+                    категория_id: formData.категория_id || null,
                     единица_измерения: formData.единица_измерения,
                     минимальный_остаток: parseInt(formData.минимальный_остаток) || 0,
                     цена_закупки: parseFloat(formData.цена_закупки) || 0,
@@ -154,14 +242,20 @@ export const EditProductModal: React.FC<EditProductModalProps> = ({
                         </Flex>
                         <Flex direction="column" gap="1" style={{ flex: '1 1 240px' }}>
                             <Text as="label" size="2" weight="medium">Категория *</Text>
-                            <TextField.Root
-                                value={formData.категория}
-                                onChange={(e) => setFormData((p) => ({ ...p, категория: e.target.value }))}
-                                placeholder="Введите категорию"
-                                variant="surface"
-                                radius="large"
-                                size="3"
-                                className={styles.textField}
+                            <OrderSearchSelect
+                                value={formData.категория_id}
+                                options={categoryOptions}
+                                onValueChange={(value) => {
+                                    const nextCategory = categories.find((item) => String(item.id) === value) || null;
+                                    setFormData((prev) => ({
+                                        ...prev,
+                                        категория_id: value,
+                                        категория: nextCategory?.название || '',
+                                    }));
+                                }}
+                                placeholder="Выберите категорию"
+                                emptyText="Ничего не найдено"
+                                inputClassName={styles.textField}
                             />
                         </Flex>
                     </Flex>

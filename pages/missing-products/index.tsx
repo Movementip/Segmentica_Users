@@ -641,9 +641,7 @@ function MissingProductsPage(): JSX.Element {
                                 </Text>
                             </div>
                         </div>
-                        <Button variant="surface" color="gray" highContrast className={styles.surfaceButton}>
-                            Срочная закупка
-                        </Button>
+
                     </div>
                 ) : null}
 

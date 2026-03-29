@@ -567,11 +567,7 @@ function PurchasesPage(): JSX.Element {
             return;
         }
         if (suppliers.length > 0) {
-            const first = suppliers[0];
-            setSelectedSupplier({
-                id: first.id,
-                название: first.название,
-            });
+            setSelectedSupplier(null);
             setCreatePurchaseModalKey((prev) => prev + 1);
             setShowCreateModal(true);
         } else {
@@ -1216,26 +1212,22 @@ function PurchasesPage(): JSX.Element {
                 </Dialog.Root>
 
                 {/* Create Purchase Modal */}
-                {
-                    showCreateModal && selectedSupplier ? (
-                        <CreatePurchaseModal
-                            key={`purchases-index-create-${createPurchaseModalKey}`}
-                            isOpen={showCreateModal}
-                            onClose={() => {
-                                setShowCreateModal(false);
-                                setSelectedSupplier(null);
-                            }}
-                            onPurchaseCreated={() => {
-                                setShowCreateModal(false);
-                                setSelectedSupplier(null);
-                                fetchPurchases();
-                            }}
-                            поставщик_id={selectedSupplier.id}
-                            поставщик_название={selectedSupplier.название}
-                            заявка_id={order_id ? Number(order_id) : undefined}
-                        />
-                    ) : null
-                }
+                {showCreateModal ? (
+                    <CreatePurchaseModal
+                        key={`purchases-index-create-${createPurchaseModalKey}`}
+                        isOpen={showCreateModal}
+                        onClose={() => {
+                            setShowCreateModal(false);
+                            setSelectedSupplier(null);
+                        }}
+                        onPurchaseCreated={() => {
+                            setShowCreateModal(false);
+                            setSelectedSupplier(null);
+                            fetchPurchases();
+                        }}
+                        заявка_id={order_id ? Number(order_id) : undefined}
+                    />
+                ) : null}
             </div>
         </div>
     );

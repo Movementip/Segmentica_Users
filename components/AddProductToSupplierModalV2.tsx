@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Box, Button, Dialog, Flex, Select, Text, TextField } from '@radix-ui/themes';
+import { Box, Button, Dialog, Flex, Text, TextField } from '@radix-ui/themes';
+import OrderSearchSelect from './OrderSearchSelect';
 import styles from './AddProductToSupplierModalV2.module.css';
 
 interface Product {
@@ -63,6 +64,14 @@ export function AddProductToSupplierModalV2({
         return Boolean(formData.товар_id) && Boolean(formData.цена) && Boolean(formData.срок_поставки) && !loading;
     }, [formData.товар_id, formData.цена, formData.срок_поставки, loading]);
 
+    const productSelectOptions = useMemo(
+        () => products.map((product) => ({
+            value: String(product.id),
+            label: `${product.артикул} - ${product.название}${product.категория ? ` (${product.категория})` : ''}`,
+        })),
+        [products]
+    );
+
     const handleClose = () => {
         setError(null);
         setLoading(false);
@@ -120,16 +129,13 @@ export function AddProductToSupplierModalV2({
                         <div className={styles.formGrid}>
                             <Box className={styles.formGroup}>
                                 <Text as="label" size="2" weight="medium">Товар</Text>
-                                <Select.Root value={formData.товар_id} onValueChange={(value) => setFormData((prev) => ({ ...prev, товар_id: value }))}>
-                                    <Select.Trigger variant="surface" color="gray" className={styles.selectTrigger} placeholder="Выберите товар" />
-                                    <Select.Content position="popper" variant="solid" color="gray" highContrast>
-                                        {products.map((p) => (
-                                            <Select.Item key={p.id} value={String(p.id)}>
-                                                {p.артикул} - {p.название}{p.категория ? ` (${p.категория})` : ''}
-                                            </Select.Item>
-                                        ))}
-                                    </Select.Content>
-                                </Select.Root>
+                                <OrderSearchSelect
+                                    value={formData.товар_id}
+                                    onValueChange={(value) => setFormData((prev) => ({ ...prev, товар_id: value }))}
+                                    options={productSelectOptions}
+                                    placeholder="Выберите товар"
+                                    emptyText="Нет товаров"
+                                />
                             </Box>
 
                             <Box className={styles.formGroup}>

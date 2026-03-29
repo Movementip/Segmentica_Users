@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useEffect, useLayoutEffect } from 'react';
+import { Fragment, useMemo, useRef, useState, useEffect, useLayoutEffect } from 'react';
 import { useRouter } from 'next/router';
 import { Layout } from '../../layout/Layout';
 import { CreateTransportModalNew } from '../../components/CreateTransportModalNew';
@@ -75,7 +75,7 @@ type TransportMonthShipmentRow = {
     номер_отслеживания: string | null;
     дата_отгрузки: string;
     стоимость_доставки: number | null;
-    заявка_номер: number;
+    заявка_номер: number | null;
     заявка_статус: string;
     клиент_название: string;
 };
@@ -526,11 +526,11 @@ export default function Transport() {
     };
 
     const formatCurrency = (amount: number | null) => {
-        if (!amount) return 'Не указано';
+        if (amount == null || Number.isNaN(Number(amount))) return 'Не указано';
         return new Intl.NumberFormat('ru-RU', {
             style: 'currency',
             currency: 'RUB'
-        }).format(amount);
+        }).format(Number(amount));
     };
 
     const getStatusColor = (status: string) => {
@@ -586,6 +586,10 @@ export default function Transport() {
                 return 'СОБРАНА';
             case 'отгружена':
                 return 'ОТГРУЖЕНА';
+            case 'в пути':
+                return 'В ПУТИ';
+            case 'доставлено':
+                return 'ДОСТАВЛЕНО';
             case 'выполнена':
             case 'выполнено':
                 return 'ВЫПОЛНЕНА';
@@ -710,6 +714,7 @@ export default function Transport() {
                 throw new Error(t?.error || 'Не удалось загрузить статистику');
             }
             const json = (await r.json()) as TransportStatsResponse;
+            setStatsCompany(json.transport || null);
             setStatsPerformance(Array.isArray(json.performance) ? json.performance : []);
             setStatsPeriodTotals(json.periodTotals || null);
         } catch (e) {
@@ -1558,9 +1563,8 @@ export default function Transport() {
                                                                 const isExpanded = expandedMonth === row.месяц;
 
                                                                 return (
-                                                                    <>
+                                                                    <Fragment key={row.месяц}>
                                                                         <Table.Row
-                                                                            key={row.месяц}
                                                                             className={styles.tableRow}
                                                                             onClick={() => {
                                                                                 if (!statsCompany) return;
@@ -1628,7 +1632,7 @@ export default function Transport() {
                                                                                                     ) : (
                                                                                                         monthShipments.map((s) => (
                                                                                                             <Table.Row key={s.id} className={styles.tableRow}>
-                                                                                                                <Table.Cell>#{s.id}</Table.Cell>
+                                                                                                                <Table.Cell>{`#${s.id}`}</Table.Cell>
                                                                                                                 <Table.Cell>{s.номер_отслеживания || '—'}</Table.Cell>
                                                                                                                 <Table.Cell>{s.клиент_название}</Table.Cell>
                                                                                                                 <Table.Cell>
@@ -1650,7 +1654,7 @@ export default function Transport() {
                                                                                 </Table.Cell>
                                                                             </Table.Row>
                                                                         ) : null}
-                                                                    </>
+                                                                    </Fragment>
                                                                 );
                                                             })
                                                         )}

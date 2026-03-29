@@ -116,6 +116,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 return res.status(400).json({ error: 'Товар с таким артикулом уже существует' });
             }
 
+            let resolvedCategoryId: number | null = null;
+            if (typeof категория_id === 'number') {
+                resolvedCategoryId = категория_id;
+            } else if (typeof категория_id === 'string' && категория_id.trim()) {
+                const parsedCategoryId = Number(категория_id);
+                resolvedCategoryId = Number.isFinite(parsedCategoryId) ? parsedCategoryId : null;
+            }
+
             // Start transaction
             await query('BEGIN');
 
@@ -130,7 +138,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         `, [
                     название,
                     артикул,
-                    категория_id || 1, // Default to category 1 (Electronics)
+                    resolvedCategoryId,
                     единица_измерения,
                     минимальный_остаток || 0,
                     цена_закупки || 0,

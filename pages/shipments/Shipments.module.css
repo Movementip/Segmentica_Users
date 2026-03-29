@@ -154,7 +154,7 @@
     border: 1px solid #e0e0e0 !important;
     background: #ffffff;
     box-shadow: inset 0 0 0 1px var(--gray-a7) !important;
-
+    
     border-style: solid !important;
     appearance: none !important;
     -webkit-appearance: none !important;
@@ -221,17 +221,22 @@
     color: currentColor !important;
 }
 
-.addShipmentButton {
-    background-color: #000000;
-    color: #ffffff !important;
-    border: 1px solid #000000 !important;
+.createShipmentButton:global(.rt-Button) {
     border-radius: 9999px !important;
-    box-shadow: none !important;
+        background-color: #0f1419 !important;
+        border: 1px solid #0f1419 !important;
+        box-shadow: none !important;
 }
 
-.addShipmentButton:hover {
-    background-color: #333333 !important;
-    border-color: #333333 !important;
+.createShipmentButton:global(.rt-Button):where(:hover) {
+    background-color: #111827 !important;
+        border-color: #111827 !important;
+}
+
+.createShipmentButton:global(.rt-Button):where(:focus-visible) {
+    outline: none !important;
+    border-color: #000000 !important;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12) !important;
 }
 
 .refreshButtonSpinning {
@@ -439,10 +444,16 @@
 
 .modalPreviewTableWrap {
     margin-top: 12px;
-    overflow-x: auto;
-    border: 1px solid #ececf1;
+    overflow: visible;
+    padding: 0;
     border-radius: 16px;
     background: #ffffff;
+}
+
+.shipmentPositionsScroller {
+    margin-top: 12px;
+    overflow-x: auto;
+    overflow-y: visible;
 }
 
 .modalPreviewTable :global(.rt-TableRootTable) {
@@ -475,32 +486,186 @@
 }
 
 .modalPreviewTotal {
-    margin-top: 12px;
+        margin-top: 12px;
+            padding: 12px 14px;
+            background: #f5f5f5;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 6px;
 }
 
-.manualPositionSelect:global(.rt-SelectTrigger) {
-    min-width: 280px;
+.shipmentPositionsTable {
+    --shipment-positions-grid: minmax(340px, 1.6fr) 76px 110px 140px 120px 120px 44px;
+    overflow: visible;
 }
 
-.manualVatSelect:global(.rt-SelectTrigger) {
-    min-width: 130px;
+.shipmentPositionHeaderRow {
+    display: grid;
+    grid-template-columns: var(--shipment-positions-grid);
+    gap: 10px;
+    padding: 12px 0;
+    min-width: 980px;
 }
 
-.manualPositionInput:global(.rt-TextFieldRoot) {
-    min-width: 110px;
-}
-
-.manualPositionActions {
-    width: 1%;
+.shipmentPositionHeaderCell {
+    display: flex;
+    align-items: center;
     white-space: nowrap;
 }
 
-.manualPositionRemoveButton:global(.rt-Button) {
-    width: 36px;
-    min-width: 36px;
-    height: 36px;
+.shipmentPositionHeaderCellRight {
+    justify-content: flex-end;
+}
+
+.shipmentPositionHeaderCellCenter {
+    justify-content: center;
+}
+
+.shipmentPositionRow {
+    display: grid;
+    grid-template-columns: var(--shipment-positions-grid);
+    gap: 10px;
+    align-items: start;
+    padding: 12px 0;
+    background: #ffffff;
+    border-radius: 12px;
+    border: 1px solid #e0e0e0;
+    min-width: 980px;
+    box-sizing: border-box;
+    padding-left: 12px;
+    padding-right: 12px;
+    overflow: visible;
+}
+
+.shipmentPositionRow :global(.rt-TextFieldRoot) {
+    display: flex;
+    align-items: stretch;
+}
+
+.shipmentPositionRow :global(.rt-TextFieldInput) {
+    height: 40px;
+    line-height: 40px;
+}
+
+.shipmentPositionSearchSelectInput:global(.rt-TextFieldRoot) {
+    min-width: 0;
+    overflow: visible;
+}
+
+.shipmentPositionSearchSelectMenu {
+    min-width: max-content;
+}
+
+.shipmentUnitValue {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+    color: #4b5563;
+}
+
+.shipmentPositionInput:global(.rt-TextFieldRoot) {
+    min-width: 0;
+    width: 100%;
+    height: 40px;
+    border-radius: 15px;
+    border: 1px solid #e0e0e0;
+    background: #ffffff;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+
+.shipmentVatField:global(.rt-SelectTrigger) {
+    min-width: 0;
+    width: 100%;
+    height: 40px;
+    border-radius: 15px;
+    border: 1px solid #e0e0e0;
+    background: #ffffff;
+    color: #424242;
+    line-height: 1;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+
+.shipmentPositionInput:global(.rt-TextFieldRoot):where(:hover),
+.shipmentVatField:global(.rt-SelectTrigger):where(:hover) {
+    background: #f5f5f5;
+    border-color: #d0d0d0;
+}
+
+.shipmentPositionInput:global(.rt-TextFieldRoot):focus-within,
+.shipmentVatField:global(.rt-SelectTrigger):focus-visible {
+    outline: none !important;
+    border-color: #000000 !important;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12) !important;
+}
+
+.shipmentPositionTotal {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-height: 40px;
+    text-align: right;
+}
+
+.shipmentRemovePositionButton:global(.rt-BaseButton),
+.shipmentRemovePositionButton:global(.rt-Button) {
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
     padding: 0;
+    justify-self: end;
+    align-self: start;
     border-radius: 12px !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    color: #6b7280 !important;
+}
+
+.shipmentRemovePositionButton:global(.rt-BaseButton):hover,
+.shipmentRemovePositionButton:global(.rt-Button):hover {
+    background: #f3f4f6 !important;
+    color: #111827 !important;
+}
+
+.shipmentRemovePositionButton:global(.rt-BaseButton):focus-visible,
+.shipmentRemovePositionButton:global(.rt-Button):focus-visible,
+.shipmentRemovePositionButton:global(.rt-BaseButton):focus-within,
+.shipmentRemovePositionButton:global(.rt-Button):focus-within {
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+.shipmentAddPositionButton:global(.rt-BaseButton),
+.shipmentAddPositionButton:global(.rt-Button) {
+    height: 40px;
+    border-radius: 15px;
+    padding: 0 16px;
+    font-size: 14px;
+    border: 1px solid #e0e0e0;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+
+.shipmentAddPositionButton:global(.rt-BaseButton):where(.rt-variant-surface),
+.shipmentAddPositionButton:global(.rt-Button):where(.rt-variant-surface) {
+    border: 1px solid #e0e0e0;
+    background: #ffffff;
+    color: #424242;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+
+.shipmentAddPositionButton:global(.rt-BaseButton.rt-variant-surface):hover,
+.shipmentAddPositionButton:global(.rt-Button.rt-variant-surface):hover {
+    background: #f5f5f5 !important;
+    border-color: #d0d0d0 !important;
+}
+
+.shipmentAddPositionButton:global(.rt-BaseButton.rt-variant-surface):hover::before,
+.shipmentAddPositionButton:global(.rt-BaseButton.rt-variant-surface):hover::after,
+.shipmentAddPositionButton:global(.rt-Button.rt-variant-surface):hover::before,
+.shipmentAddPositionButton:global(.rt-Button.rt-variant-surface):hover::after {
+    background: #f5f5f5 !important;
 }
 
 .textRight {

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Button, Dialog, Flex, Text, TextField, Select } from '@radix-ui/themes';
+import OrderSearchSelect from './OrderSearchSelect';
 import styles from './WarehouseMovementModal.module.css';
 
 interface CreateProductModalProps {
@@ -8,18 +9,27 @@ interface CreateProductModalProps {
     onProductCreated: () => void;
 }
 
+interface Category {
+    id: number;
+    название: string;
+    родительская_категория_id?: number | null;
+}
+
+interface CategoryOption extends Category {
+    depth: number;
+}
+
 export function CreateProductModal({ isOpen, onClose, onProductCreated }: CreateProductModalProps): JSX.Element {
     const [название, setНазвание] = useState('');
     const [артикул, setАртикул] = useState('');
-    const [категория, setКатегория] = useState('');
+    const [категорияId, setКатегорияId] = useState('');
     const [цена_закупки, setЦенаЗакупки] = useState('');
     const [цена_продажи, setЦенаПродажи] = useState('');
     const [единица_измерения, setЕдиницаИзмерения] = useState('шт');
     const [минимальный_остаток, setМинимальныйОстаток] = useState('0');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [categoryOptions, setCategoryOptions] = useState<string[]>([]);
-    const [isCategorySuggestOpen, setIsCategorySuggestOpen] = useState(false);
+    const [categories, setCategories] = useState<Category[]>([]);
 
     const canSubmit = useMemo(() => {
         if (loading) return false;
@@ -40,18 +50,10 @@ export function CreateProductModal({ isOpen, onClose, onProductCreated }: Create
 
         const loadCategories = async () => {
             try {
-                const res = await fetch('/api/products');
+                const res = await fetch('/api/categories');
                 if (!res.ok) return;
                 const data = await res.json();
-
-                const cats = new Set<string>();
-                if (Array.isArray(data)) {
-                    for (const p of data) {
-                        const c = typeof p?.категория === 'string' ? p.категория.trim() : '';
-                        if (c) cats.add(c);
-                    }
-                }
-                setCategoryOptions(Array.from(cats).sort((a, b) => a.localeCompare(b, 'ru')));
+                setCategories(Array.isArray(data) ? data : []);
             } catch {
                 // ignore
             }
@@ -60,22 +62,44 @@ export function CreateProductModal({ isOpen, onClose, onProductCreated }: Create
         loadCategories();
     }, [isOpen]);
 
-    const filteredCategoryOptions = useMemo(() => {
-        const q = категория.trim().toLowerCase();
-        if (!q) return categoryOptions;
-        return categoryOptions.filter((c) => c.toLowerCase().includes(q));
-    }, [categoryOptions, категория]);
+    const categoryOptions = useMemo(() => {
+        const byParent = new Map<number | null, Category[]>();
+
+        categories.forEach((item) => {
+            const parentId = item.родительская_категория_id ?? null;
+            const siblings = byParent.get(parentId) || [];
+            siblings.push(item);
+            byParent.set(parentId, siblings);
+        });
+
+        const result: CategoryOption[] = [];
+        const walk = (parentId: number | null, depth: number) => {
+            const nodes = byParent.get(parentId) || [];
+            nodes
+                .sort((left, right) => left.название.localeCompare(right.название, 'ru-RU'))
+                .forEach((item) => {
+                    result.push({ ...item, depth });
+                    walk(item.id, depth + 1);
+                });
+        };
+
+        walk(null, 0);
+
+        return result.map((category) => ({
+            value: String(category.id),
+            label: `${'— '.repeat(category.depth)}${category.название}`,
+        }));
+    }, [categories]);
 
     const resetForm = () => {
         setНазвание('');
         setАртикул('');
-        setКатегория('');
+        setКатегорияId('');
         setЦенаЗакупки('');
         setЦенаПродажи('');
         setЕдиницаИзмерения('шт');
         setМинимальныйОстаток('0');
         setError(null);
-        setIsCategorySuggestOpen(false);
     };
 
     const handleClose = () => {
@@ -115,7 +139,7 @@ export function CreateProductModal({ isOpen, onClose, onProductCreated }: Create
                 body: JSON.stringify({
                     название: название.trim(),
                     артикул: артикул.trim(),
-                    категория: категория.trim() || undefined,
+                    категория_id: категорияId || undefined,
                     цена_закупки: цена_закупки ? parseFloat(цена_закупки) : undefined,
                     цена_продажи: parseFloat(цена_продажи),
                     единица_измерения: единица_измерения,
@@ -183,44 +207,14 @@ export function CreateProductModal({ isOpen, onClose, onProductCreated }: Create
 
                     <Flex direction="column" gap="1">
                         <Text as="label" size="2" weight="medium">Категория</Text>
-                        <div className={styles.autocompleteWrap}>
-                            <TextField.Root
-                                value={категория}
-                                onChange={(e) => setКатегория(e.target.value)}
-                                placeholder="Введите категорию"
-                                variant="surface"
-                                radius="large"
-                                size="3"
-                                className={styles.textField}
-                                onFocus={() => setIsCategorySuggestOpen(true)}
-                                onBlur={() => {
-                                    window.setTimeout(() => setIsCategorySuggestOpen(false), 0);
-                                }}
-                            />
-
-                            {isCategorySuggestOpen ? (
-                                <div className={styles.suggestList}>
-                                    {filteredCategoryOptions.length === 0 ? (
-                                        <div className={styles.suggestEmpty}>Ничего не найдено</div>
-                                    ) : (
-                                        filteredCategoryOptions.slice(0, 12).map((c) => (
-                                            <button
-                                                key={c}
-                                                type="button"
-                                                className={styles.suggestItem}
-                                                onMouseDown={(e) => e.preventDefault()}
-                                                onClick={() => {
-                                                    setКатегория(c);
-                                                    setIsCategorySuggestOpen(false);
-                                                }}
-                                            >
-                                                {c}
-                                            </button>
-                                        ))
-                                    )}
-                                </div>
-                            ) : null}
-                        </div>
+                        <OrderSearchSelect
+                            value={категорияId}
+                            options={categoryOptions}
+                            onValueChange={setКатегорияId}
+                            placeholder="Выберите категорию"
+                            emptyText="Ничего не найдено"
+                            inputClassName={styles.textField}
+                        />
                     </Flex>
 
                     <Flex direction="column" gap="1">

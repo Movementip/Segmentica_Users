@@ -18,7 +18,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             return res.status(400).json({ error: 'month is required (YYYY-MM-01)' });
         }
 
-        // Expecting month as YYYY-MM-01 (first day of month). We will use [month, month+1month)
+        const parsedMonth = new Date(String(month));
+        if (Number.isNaN(parsedMonth.getTime())) {
+            return res.status(400).json({ error: 'Некорректный month, ожидается дата месяца' });
+        }
+
+        const normalizedMonth = `${parsedMonth.getUTCFullYear()}-${String(parsedMonth.getUTCMonth() + 1).padStart(2, '0')}-01`;
+
         const shipmentsResult = await query(
             `
             SELECT
@@ -28,17 +34,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               о."дата_отгрузки",
               о."стоимость_доставки",
               з.id as заявка_номер,
-              з."статус" as заявка_статус,
-              к."название" as клиент_название
+              COALESCE(з."статус", о."статус") as заявка_статус,
+              COALESCE(к."название", 'Самостоятельная отгрузка') as клиент_название
             FROM "Отгрузки" о
-            JOIN "Заявки" з ON о."заявка_id" = з.id
-            JOIN "Клиенты" к ON з."клиент_id" = к.id
+            LEFT JOIN "Заявки" з ON о."заявка_id" = з.id
+            LEFT JOIN "Клиенты" к ON з."клиент_id" = к.id
             WHERE о."транспорт_id" = $1
               AND о."дата_отгрузки" >= $2::date
               AND о."дата_отгрузки" < ($2::date + interval '1 month')
             ORDER BY о."дата_отгрузки" DESC
           `,
-            [companyId, month]
+            [companyId, normalizedMonth]
         );
 
         res.status(200).json({ shipments: shipmentsResult.rows });

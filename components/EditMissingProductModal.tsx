@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Button, Dialog, Flex, Select, Text, TextField } from '@radix-ui/themes';
+import OrderSearchSelect from './OrderSearchSelect';
 import styles from './Modal.module.css';
 
 export interface MissingProductEditItem {
@@ -74,6 +75,20 @@ export function EditMissingProductModal({
         return true;
     }, [formData, loading]);
 
+    const orderOptions = useMemo(
+        () => orders.map((order) => ({ value: String(order.id), label: `Заявка #${order.id}` })),
+        [orders]
+    );
+
+    const productOptions = useMemo(
+        () =>
+            products.map((item) => ({
+                value: String(item.id),
+                label: `${item.артикул} - ${item.название}`,
+            })),
+        [products]
+    );
+
     const handleClose = () => {
         setError(null);
         setLoading(false);
@@ -134,30 +149,24 @@ export function EditMissingProductModal({
                 <div className={styles.radixForm}>
                     <div className={styles.radixField}>
                         <Text as="label" size="2" weight="medium">Заявка</Text>
-                        <Select.Root value={formData.заявка_id} onValueChange={(value) => setFormData((prev) => ({ ...prev, заявка_id: value }))}>
-                            <Select.Trigger placeholder="Выберите заявку" className={styles.radixSelectTrigger} />
-                            <Select.Content position="popper" className={styles.radixSelectContent}>
-                                {orders.map((order) => (
-                                    <Select.Item key={order.id} value={String(order.id)}>
-                                        Заявка #{order.id}
-                                    </Select.Item>
-                                ))}
-                            </Select.Content>
-                        </Select.Root>
+                        <OrderSearchSelect
+                            value={formData.заявка_id}
+                            options={orderOptions}
+                            onValueChange={(value) => setFormData((prev) => ({ ...prev, заявка_id: value }))}
+                            placeholder="Выберите заявку"
+                            emptyText="Ничего не найдено"
+                        />
                     </div>
 
                     <div className={styles.radixField}>
                         <Text as="label" size="2" weight="medium">Товар</Text>
-                        <Select.Root value={formData.товар_id} onValueChange={(value) => setFormData((prev) => ({ ...prev, товар_id: value }))}>
-                            <Select.Trigger placeholder="Выберите товар" className={styles.radixSelectTrigger} />
-                            <Select.Content position="popper" className={styles.radixSelectContent}>
-                                {products.map((item) => (
-                                    <Select.Item key={item.id} value={String(item.id)}>
-                                        {item.артикул} - {item.название}
-                                    </Select.Item>
-                                ))}
-                            </Select.Content>
-                        </Select.Root>
+                        <OrderSearchSelect
+                            value={formData.товар_id}
+                            options={productOptions}
+                            onValueChange={(value) => setFormData((prev) => ({ ...prev, товар_id: value }))}
+                            placeholder="Выберите товар"
+                            emptyText="Ничего не найдено"
+                        />
                     </div>
 
                     <Flex gap="3" wrap="wrap">

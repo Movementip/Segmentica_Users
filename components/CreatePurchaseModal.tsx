@@ -419,17 +419,6 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
                 <Dialog.Title>Создать закупку</Dialog.Title>
 
 
-                {selectedSupplierName ? (
-                    <Text as="div" size="2" color="gray" className={styles.supplierLine}>
-                        Поставщик: <Text as="span" weight="bold" color="gray">{selectedSupplierName}</Text>
-                    </Text>
-                ) : null}
-
-                {error && (
-                    <Box className={styles.error}>
-                        <Text size="2">{error}</Text>
-                    </Box>
-                )}
 
                 <form onSubmit={handleSubmit} className={styles.form}>
                     <Flex direction="column" gap="4">

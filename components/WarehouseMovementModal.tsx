@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Button, Dialog, Flex, Text, TextField } from '@radix-ui/themes';
+import OrderSearchSelect from './OrderSearchSelect';
 import styles from './WarehouseMovementModal.module.css';
 
 type MovementType = 'приход' | 'расход';
@@ -22,8 +23,6 @@ export function WarehouseMovementModal({ isOpen, onClose, initialType, onSaved }
     const [type, setType] = useState<MovementType>(initialType);
     const [products, setProducts] = useState<ProductOption[]>([]);
     const [productId, setProductId] = useState<string>('');
-    const [productQuery, setProductQuery] = useState<string>('');
-    const [isSuggestOpen, setIsSuggestOpen] = useState(false);
     const [qty, setQty] = useState<string>('1');
     const [comment, setComment] = useState<string>('');
     const [loading, setLoading] = useState(false);
@@ -57,20 +56,17 @@ export function WarehouseMovementModal({ isOpen, onClose, initialType, onSaved }
         return products.find((p) => p.id === id);
     }, [productId, products]);
 
-    const filteredProductOptions = useMemo(() => {
-        const q = productQuery.trim().toLowerCase();
-        if (!q) return products;
-        return products.filter((p) => {
-            const name = (p.название || '').toLowerCase();
-            const art = (p.артикул || '').toLowerCase();
-            return name.includes(q) || art.includes(q);
-        });
-    }, [productQuery, products]);
+    const productOptions = useMemo(
+        () =>
+            products.map((product) => ({
+                value: String(product.id),
+                label: product.артикул ? `${product.артикул} - ${product.название}` : product.название,
+            })),
+        [products]
+    );
 
     const handleClose = () => {
         setProductId('');
-        setProductQuery('');
-        setIsSuggestOpen(false);
         setQty('1');
         setComment('');
         setLoading(false);
@@ -127,9 +123,7 @@ export function WarehouseMovementModal({ isOpen, onClose, initialType, onSaved }
         <Dialog.Root open={isOpen} onOpenChange={(open) => (!open ? handleClose() : undefined)}>
             <Dialog.Content className={styles.modalContent}>
                 <Dialog.Title>Движение товара</Dialog.Title>
-                <Dialog.Close>
-                    <button type="button" className={styles.closeButton} aria-label="Закрыть" />
-                </Dialog.Close>
+
 
                 {error ? (
                     <Box className={styles.error}>
@@ -151,45 +145,14 @@ export function WarehouseMovementModal({ isOpen, onClose, initialType, onSaved }
                         <Text as="label" size="2" weight="medium">
                             Товар
                         </Text>
-                        <div className={styles.autocompleteWrap}>
-                            <TextField.Root
-                                value={productQuery}
-                                onChange={(e) => setProductQuery(e.target.value)}
-                                placeholder="Начни вводить название или артикул…"
-                                variant="surface"
-                                radius="large"
-                                size="3"
-                                className={styles.textField}
-                                onFocus={() => setIsSuggestOpen(true)}
-                                onBlur={() => {
-                                    window.setTimeout(() => setIsSuggestOpen(false), 0);
-                                }}
-                            />
-
-                            {isSuggestOpen ? (
-                                <div className={styles.suggestList}>
-                                    {filteredProductOptions.length === 0 ? (
-                                        <div className={styles.suggestEmpty}>Ничего не найдено</div>
-                                    ) : (
-                                        filteredProductOptions.slice(0, 10).map((p) => (
-                                            <button
-                                                key={p.id}
-                                                type="button"
-                                                className={styles.suggestItem}
-                                                onMouseDown={(e) => e.preventDefault()}
-                                                onClick={() => {
-                                                    setProductId(String(p.id));
-                                                    setProductQuery(p.артикул ? `${p.артикул} — ${p.название}` : p.название);
-                                                    setIsSuggestOpen(false);
-                                                }}
-                                            >
-                                                {p.артикул ? `${p.артикул} — ` : ''}{p.название}
-                                            </button>
-                                        ))
-                                    )}
-                                </div>
-                            ) : null}
-                        </div>
+                        <OrderSearchSelect
+                            value={productId}
+                            options={productOptions}
+                            onValueChange={setProductId}
+                            placeholder="Начни вводить название или артикул..."
+                            emptyText="Ничего не найдено"
+                            inputClassName={styles.textField}
+                        />
                         {selectedProduct ? (
                             <Text size="1" color="gray" className={styles.helper}>
                                 Ед.: {selectedProduct.единица_измерения}

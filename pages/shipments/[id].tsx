@@ -1,23 +1,24 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { withLayout } from '../../layout/Layout';
 import styles from './ShipmentDetail.module.css';
+import shipmentEditorStyles from './Shipments.module.css';
 import deleteConfirmationStyles from '../../components/DeleteConfirmation.module.css';
 import { Badge, Box, Button, Card, Dialog, DropdownMenu, Flex, Grid, Select, Separator, Table, Text, TextField } from '@radix-ui/themes';
 import { FiTruck, FiEye, FiArrowLeft, FiDownload, FiEdit2, FiFile, FiFileText, FiPaperclip, FiPrinter, FiRefreshCw, FiTrash2, FiUploadCloud } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
-import { calculateVatAmountsFromLine, getVatRateOption } from '../../lib/vat';
+import { calculateVatAmountsFromLine, DEFAULT_VAT_RATE_ID, getVatRateOption, VAT_RATE_OPTIONS } from '../../lib/vat';
 import modalStyles from '../../components/Modal.module.css';
 import { getShipmentDeliveryLabel } from '../../lib/logisticsDeliveryLabels';
-
-const EMPTY_SELECT_VALUE = '__empty__';
+import OrderSearchSelect from '../../components/OrderSearchSelect';
 
 interface ShipmentDetail {
     id: number;
     заявка_id: number | null;
     использовать_доставку?: boolean;
+    без_учета_склада?: boolean;
     транспорт_id: number | null;
     статус: string;
     номер_отслеживания: string | null;
@@ -29,11 +30,25 @@ interface ShipmentDetail {
 
 interface Order {
     id: number;
+    клиент_название?: string;
 }
 
 interface Transport {
     id: number;
     название: string;
+}
+
+interface Product {
+    id: number;
+    название: string;
+    артикул: string;
+    единица_измерения: string;
+    цена_продажи: number;
+}
+
+interface WarehouseStockItem {
+    товар_id: number;
+    количество: number;
 }
 
 interface OrderPosition {
@@ -62,6 +77,21 @@ interface AttachmentItem {
     created_at: string;
 }
 
+interface ManualShipmentPosition {
+    id?: number;
+    товар_id: number;
+    количество: number;
+    цена: number;
+    ндс_id: number;
+}
+
+const createEmptyManualShipmentPosition = (): ManualShipmentPosition => ({
+    товар_id: 0,
+    количество: 1,
+    цена: 0,
+    ндс_id: DEFAULT_VAT_RATE_ID,
+});
+
 function ShipmentDetailPage(): JSX.Element {
     const router = useRouter();
     const { user, loading: authLoading } = useAuth();
@@ -70,6 +100,8 @@ function ShipmentDetailPage(): JSX.Element {
     const [shipment, setShipment] = useState<ShipmentDetail | null>(null);
     const [orders, setOrders] = useState<Order[]>([]);
     const [transports, setTransports] = useState<Transport[]>([]);
+    const [products, setProducts] = useState<Product[]>([]);
+    const [warehouseStock, setWarehouseStock] = useState<WarehouseStockItem[]>([]);
     const [positions, setPositions] = useState<OrderPosition[]>([]);
     const [positionsLoading, setPositionsLoading] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -88,6 +120,7 @@ function ShipmentDetailPage(): JSX.Element {
     const [formData, setFormData] = useState({
         заявка_id: 0,
         использовать_доставку: true,
+        без_учета_склада: false,
         транспорт_id: 0,
         статус: 'в пути',
         номер_отслеживания: '',
@@ -95,6 +128,8 @@ function ShipmentDetailPage(): JSX.Element {
     });
     const [editPreviewPositions, setEditPreviewPositions] = useState<OrderPosition[]>([]);
     const [editPreviewLoading, setEditPreviewLoading] = useState(false);
+    const [manualPositions, setManualPositions] = useState<ManualShipmentPosition[]>([createEmptyManualShipmentPosition()]);
+    const [manualPositionsLoading, setManualPositionsLoading] = useState(false);
 
     const canView = Boolean(user?.permissions?.includes('shipments.view'));
     const canEdit = Boolean(user?.permissions?.includes('shipments.edit'));
@@ -130,6 +165,7 @@ function ShipmentDetailPage(): JSX.Element {
         setFormData({
             заявка_id: Number(s.заявка_id) || 0,
             использовать_доставку: s.использовать_доставку !== false,
+            без_учета_склада: s.без_учета_склада === true,
             транспорт_id: Number(s.транспорт_id) || 0,
             статус: (s.статус || 'в пути').toLowerCase(),
             номер_отслеживания: s.номер_отслеживания || '',
@@ -203,6 +239,65 @@ function ShipmentDetailPage(): JSX.Element {
         }
     }, [canOrdersView, canShipmentsPositionsView]);
 
+    const fetchProducts = useCallback(async () => {
+        try {
+            const response = await fetch('/api/products');
+            if (!response.ok) {
+                throw new Error('Ошибка загрузки товаров');
+            }
+
+            const data = await response.json();
+            setProducts(Array.isArray(data) ? data : []);
+        } catch (productsError) {
+            console.error('Error fetching products for shipment editor:', productsError);
+            setProducts([]);
+        }
+    }, []);
+
+    const fetchWarehouseStock = useCallback(async () => {
+        try {
+            const response = await fetch('/api/warehouse');
+            if (!response.ok) {
+                throw new Error('Ошибка загрузки остатков склада');
+            }
+
+            const data = await response.json();
+            setWarehouseStock(Array.isArray(data?.warehouse) ? data.warehouse : []);
+        } catch (warehouseError) {
+            console.error('Error fetching warehouse stock for shipment editor:', warehouseError);
+            setWarehouseStock([]);
+        }
+    }, []);
+
+    const loadDirectShipmentPositions = useCallback(async (shipmentId: number) => {
+        try {
+            setManualPositionsLoading(true);
+            const response = await fetch(`/api/shipments/${encodeURIComponent(String(shipmentId))}`);
+            if (!response.ok) {
+                throw new Error('Не удалось загрузить состав отгрузки');
+            }
+
+            const data = await response.json();
+            const loadedPositions = Array.isArray(data?.позиции)
+                ? data.позиции.map((position: any) => ({
+                    id: Number(position?.id) || undefined,
+                    товар_id: Number(position?.товар_id) || 0,
+                    количество: Number(position?.количество) || 1,
+                    цена: Number(position?.цена) || 0,
+                    ндс_id: Number(position?.ндс_id) || DEFAULT_VAT_RATE_ID,
+                }))
+                : [];
+
+            setManualPositions(loadedPositions.length > 0 ? loadedPositions : [createEmptyManualShipmentPosition()]);
+        } catch (shipmentPositionsError) {
+            console.error('Error loading standalone shipment positions:', shipmentPositionsError);
+            setManualPositions([createEmptyManualShipmentPosition()]);
+            setError(shipmentPositionsError instanceof Error ? shipmentPositionsError.message : 'Не удалось загрузить состав отгрузки');
+        } finally {
+            setManualPositionsLoading(false);
+        }
+    }, []);
+
     const formatCurrency = (amount: number) => {
         return new Intl.NumberFormat('ru-RU', {
             style: 'currency',
@@ -214,21 +309,148 @@ function ShipmentDetailPage(): JSX.Element {
         if (!isEditModalOpen) {
             setEditPreviewPositions([]);
             setEditPreviewLoading(false);
+            setManualPositionsLoading(false);
             return;
         }
+
+        fetchProducts();
+        fetchWarehouseStock();
 
         if (!formData.заявка_id) {
             setEditPreviewPositions([]);
+            if (shipment?.id) {
+                loadDirectShipmentPositions(shipment.id);
+            } else {
+                setManualPositions([createEmptyManualShipmentPosition()]);
+            }
             return;
         }
 
+        setManualPositions([createEmptyManualShipmentPosition()]);
         fetchEditPreviewPositions(formData.заявка_id);
-    }, [isEditModalOpen, formData.заявка_id, fetchEditPreviewPositions]);
+    }, [
+        fetchEditPreviewPositions,
+        fetchProducts,
+        fetchWarehouseStock,
+        formData.заявка_id,
+        isEditModalOpen,
+        loadDirectShipmentPositions,
+        shipment?.id,
+    ]);
 
     const editPreviewTotal = editPreviewPositions.reduce((sum, position) => {
         if (typeof position.сумма_всего === 'number') return sum + position.сумма_всего;
         return sum + calculateVatAmountsFromLine(position.количество, position.цена, getVatRateOption(position.ндс_id).rate).total;
     }, 0);
+
+    const getProductSalePrice = useCallback((product?: Product | null) => Number(product?.цена_продажи ?? 0), []);
+
+    const handleManualPositionChange = useCallback((index: number, field: keyof ManualShipmentPosition, value: string | number) => {
+        setManualPositions((prev) => {
+            const next = [...prev];
+            const parsedValue = typeof value === 'string' ? (Number(value) || 0) : value;
+            next[index] = {
+                ...next[index],
+                [field]: parsedValue,
+            };
+
+            if (field === 'товар_id') {
+                const product = products.find((item) => item.id === Number(parsedValue));
+                const price = getProductSalePrice(product);
+                if (price > 0) {
+                    next[index].цена = price;
+                }
+                if (!next[index].ндс_id) {
+                    next[index].ндс_id = DEFAULT_VAT_RATE_ID;
+                }
+            }
+
+            return next;
+        });
+    }, [getProductSalePrice, products]);
+
+    const addManualPosition = useCallback(() => {
+        setManualPositions((prev) => [...prev, createEmptyManualShipmentPosition()]);
+    }, []);
+
+    const removeManualPosition = useCallback((index: number) => {
+        setManualPositions((prev) => (
+            prev.length > 1 ? prev.filter((_, currentIndex) => currentIndex !== index) : prev
+        ));
+    }, []);
+
+    const orderSelectOptions = useMemo(
+        () => [
+            { value: '', label: 'Без заявки' },
+            ...orders.map((order) => ({
+                value: String(order.id),
+                label: `Заявка #${order.id}`,
+            })),
+        ],
+        [orders]
+    );
+
+    const transportSelectOptions = useMemo(
+        () => transports.map((transport) => ({
+            value: String(transport.id),
+            label: transport.название || `ТК #${transport.id}`,
+        })),
+        [transports]
+    );
+
+    const productsById = useMemo(() => {
+        const map = new Map<number, Product>();
+        for (const product of products) {
+            map.set(product.id, product);
+        }
+        return map;
+    }, [products]);
+
+    const warehouseStockByProductId = useMemo(() => {
+        const map = new Map<number, number>();
+        for (const item of warehouseStock) {
+            map.set(Number(item.товар_id), Number(item.количество) || 0);
+        }
+        return map;
+    }, [warehouseStock]);
+
+    const selectedManualProductIds = useMemo(() => (
+        new Set(
+            manualPositions
+                .map((position) => Number(position.товар_id) || 0)
+                .filter((productId) => productId > 0)
+        )
+    ), [manualPositions]);
+
+    const availableManualProducts = useMemo(() => {
+        if (formData.без_учета_склада) return products;
+        return products.filter((product) => (
+            (warehouseStockByProductId.get(product.id) || 0) > 0
+            || selectedManualProductIds.has(product.id)
+        ));
+    }, [formData.без_учета_склада, products, selectedManualProductIds, warehouseStockByProductId]);
+
+    const normalizedManualPositions = useMemo(() => (
+        manualPositions.filter((position) => (
+            Number(position.товар_id) > 0
+            && Number(position.количество) > 0
+            && Number(position.цена) > 0
+        ))
+    ), [manualPositions]);
+
+    const manualPositionsTotal = useMemo(() => (
+        normalizedManualPositions.reduce((sum, position) => (
+            sum + calculateVatAmountsFromLine(
+                position.количество,
+                position.цена,
+                getVatRateOption(position.ндс_id).rate
+            ).total
+        ), 0)
+    ), [normalizedManualPositions]);
+
+    const shipmentDeliveryAmount = useMemo(() => (
+        formData.использовать_доставку ? Number(formData.стоимость_доставки || 0) : 0
+    ), [formData.использовать_доставку, formData.стоимость_доставки]);
 
     const formatBytes = (bytes: number) => {
         const b = Number(bytes) || 0;
@@ -497,7 +719,9 @@ function ShipmentDetailPage(): JSX.Element {
 
             if (transportsRes.ok) {
                 const t = await transportsRes.json();
-                setTransports(Array.isArray(t) ? t : []);
+                setTransports(Array.isArray(t?.transport) ? t.transport : []);
+            } else {
+                setTransports([]);
             }
         } catch {
             // ignore
@@ -521,10 +745,23 @@ function ShipmentDetailPage(): JSX.Element {
             setError('Выберите транспортную компанию для доставки');
             return;
         }
+        if (!formData.заявка_id && normalizedManualPositions.length === 0) {
+            setError('Для самостоятельной отгрузки добавьте хотя бы одну позицию');
+            return;
+        }
 
         try {
             setOperationLoading(true);
             setError(null);
+
+            if (!formData.заявка_id && !formData.без_учета_склада) {
+                const hasUnavailableProduct = normalizedManualPositions.some((position) => (
+                    (warehouseStockByProductId.get(Number(position.товар_id)) || 0) <= 0
+                ));
+                if (hasUnavailableProduct) {
+                    throw new Error('Для отгрузки со склада выберите только товары, которые есть в наличии');
+                }
+            }
 
             const response = await fetch('/api/shipments', {
                 method: 'PUT',
@@ -535,10 +772,12 @@ function ShipmentDetailPage(): JSX.Element {
                     id: shipment.id,
                     заявка_id: formData.заявка_id > 0 ? formData.заявка_id : null,
                     использовать_доставку: formData.использовать_доставку,
+                    без_учета_склада: formData.заявка_id > 0 ? false : formData.без_учета_склада,
                     транспорт_id: formData.использовать_доставку ? formData.транспорт_id : null,
                     статус: formData.статус,
-                    номер_отслеживания: formData.использовать_доставку ? (formData.номер_отслеживания || null) : null,
-                    стоимость_доставки: formData.использовать_доставку ? (formData.стоимость_доставки || null) : null,
+                    номер_отслеживания: formData.использовать_доставку && formData.номер_отслеживания.trim() ? formData.номер_отслеживания.trim() : null,
+                    стоимость_доставки: formData.использовать_доставку && formData.стоимость_доставки ? formData.стоимость_доставки : null,
+                    позиции: formData.заявка_id > 0 ? undefined : normalizedManualPositions,
                 }),
             });
 
@@ -555,7 +794,7 @@ function ShipmentDetailPage(): JSX.Element {
         } finally {
             setOperationLoading(false);
         }
-    }, [fetchShipment, formData, shipment]);
+    }, [fetchShipment, formData, normalizedManualPositions, shipment, warehouseStockByProductId]);
 
     const handleDeleteShipment = useCallback(async () => {
         if (!shipment) return;
@@ -738,7 +977,12 @@ function ShipmentDetailPage(): JSX.Element {
                                 color="gray"
                                 highContrast
                                 className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton} ${styles.noPrint}`}
-                                onClick={() => setIsEditModalOpen(true)}
+                                onClick={() => {
+                                    setError(null);
+                                    syncFormWithShipment(shipment);
+                                    setManualPositions([createEmptyManualShipmentPosition()]);
+                                    setIsEditModalOpen(true);
+                                }}
                             >
                                 <FiEdit2 className={styles.icon} />
                                 Редактировать
@@ -1154,15 +1398,15 @@ function ShipmentDetailPage(): JSX.Element {
             </Dialog.Root>
 
             <Dialog.Root open={isEditModalOpen} onOpenChange={(open) => (!open ? setIsEditModalOpen(false) : undefined)}>
-                <Dialog.Content className={modalStyles.radixDialogWide}>
+                <Dialog.Content className={`${modalStyles.radixDialogWide} ${shipmentEditorStyles.shipmentEditorDialog}`}>
                     <Dialog.Title>Редактировать отгрузку</Dialog.Title>
-                    <Dialog.Description className={styles.modalDescription}>
-                        Обновите данные отгрузки.
+                    <Dialog.Description className={modalStyles.radixDescription}>
+                        Заполните данные отгрузки.
                     </Dialog.Description>
 
-                    <form onSubmit={handleSubmitEdit} className={styles.modalForm}>
+                    <form onSubmit={handleSubmitEdit} className={modalStyles.radixForm}>
                         <Flex direction="column" gap="4">
-                            <Box className={styles.formGroup}>
+                            <Box className={modalStyles.radixField}>
                                 <label style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 40 }}>
                                     <input
                                         type="checkbox"
@@ -1179,61 +1423,52 @@ function ShipmentDetailPage(): JSX.Element {
                                     <Text as="span" size="2" weight="medium">Использовать доставку</Text>
                                 </label>
                                 <Text as="div" size="1" color="gray">
-                                    Если выключено, отгрузка будет оформлена как передача без доставки.
+                                    Если выключено, отгрузка оформляется как передача без доставки.
                                 </Text>
                             </Box>
 
-                            <Box className={styles.formGroup}>
+                            <Box className={modalStyles.radixField}>
                                 <Text as="label" size="2" weight="medium">Заявка</Text>
-                                <Select.Root
-                                    value={formData.заявка_id ? String(formData.заявка_id) : EMPTY_SELECT_VALUE}
-                                    onValueChange={(v) => setFormData((p) => ({ ...p, заявка_id: v === EMPTY_SELECT_VALUE ? 0 : Number(v) || 0 }))}
-                                >
-                                    <Select.Trigger variant="surface" color="gray" className={styles.selectTrigger} placeholder="Выберите заявку" />
-                                    <Select.Content position="popper" variant="solid" color="gray" highContrast>
-                                        <Select.Item value={EMPTY_SELECT_VALUE}>
-                                            Без заявки
-                                        </Select.Item>
-                                        {orders.map((o) => (
-                                            <Select.Item key={o.id} value={String(o.id)}>
-                                                Заявка #{o.id}
-                                            </Select.Item>
-                                        ))}
-                                    </Select.Content>
-                                </Select.Root>
+                                <OrderSearchSelect
+                                    value={formData.заявка_id ? String(formData.заявка_id) : ''}
+                                    onValueChange={(nextValue) => setFormData((p) => ({
+                                        ...p,
+                                        заявка_id: nextValue ? Number(nextValue) || 0 : 0,
+                                        без_учета_склада: nextValue ? false : p.без_учета_склада,
+                                    }))}
+                                    options={orderSelectOptions}
+                                    placeholder="Без заявки"
+                                    disabled={!canOrdersList}
+                                />
                                 {!formData.заявка_id ? (
                                     <Text as="div" size="1" color="gray">
-                                        Если заявку не выбирать, отгрузка станет самостоятельной складской отгрузкой без автоподбора позиций.
+                                        Если заявку не выбирать, отгрузка будет оформлена как самостоятельная отгрузка со склада.
                                     </Text>
                                 ) : null}
                             </Box>
 
-                            <Box className={styles.formGroup}>
-                                <Text as="label" size="2" weight="medium">Транспортная компания</Text>
-                                <Select.Root
-                                    value={formData.транспорт_id ? String(formData.транспорт_id) : EMPTY_SELECT_VALUE}
-                                    onValueChange={(v) => setFormData((p) => ({ ...p, транспорт_id: v === EMPTY_SELECT_VALUE ? 0 : Number(v) || 0 }))}
-                                    disabled={!formData.использовать_доставку}
-                                >
-                                    <Select.Trigger variant="surface" color="gray" className={styles.selectTrigger} placeholder="Выберите ТК" />
-                                    <Select.Content position="popper" variant="solid" color="gray" highContrast>
-                                        <Select.Item value={EMPTY_SELECT_VALUE} disabled>
-                                            Выберите ТК
-                                        </Select.Item>
-                                        {transports.map((t) => (
-                                            <Select.Item key={t.id} value={String(t.id)}>
-                                                {t.название}
-                                            </Select.Item>
-                                        ))}
-                                    </Select.Content>
-                                </Select.Root>
-                            </Box>
+                            {!formData.заявка_id ? (
+                                <Box className={modalStyles.radixField}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 40 }}>
+                                        <input
+                                            type="checkbox"
+                                            style={{ accentColor: '#111111', width: 16, height: 16 }}
+                                            checked={formData.без_учета_склада}
+                                            onChange={(e) => setFormData((p) => ({ ...p, без_учета_склада: e.target.checked }))}
+                                        />
+                                        <Text as="span" size="2" weight="medium">Без учета склада</Text>
+                                    </label>
+                                    <Text as="div" size="1" color="gray">
+                                        Доступно только для самостоятельной отгрузки. Документ будет создан без проверки остатков и без списания со склада.
+                                    </Text>
+                                </Box>
+                            ) : null}
 
-                            <Box className={styles.formGroup}>
+                            <Box className={modalStyles.radixField}>
                                 <Text as="label" size="2" weight="medium">Статус</Text>
                                 <Select.Root value={formData.статус} onValueChange={(v) => setFormData((p) => ({ ...p, статус: v }))}>
-                                    <Select.Trigger variant="surface" color="gray" className={styles.selectTrigger} />
-                                    <Select.Content position="popper" variant="solid" color="gray" highContrast>
+                                    <Select.Trigger variant="surface" color="gray" className={modalStyles.radixSelectTrigger} />
+                                    <Select.Content position="popper" className={modalStyles.radixSelectContent}>
                                         <Select.Item value="в пути">В пути</Select.Item>
                                         <Select.Item value="доставлено">Доставлено</Select.Item>
                                         <Select.Item value="отменено">Отменено</Select.Item>
@@ -1241,70 +1476,237 @@ function ShipmentDetailPage(): JSX.Element {
                                 </Select.Root>
                             </Box>
 
-                            <Box className={styles.formGroup}>
-                                <Text as="label" size="2" weight="medium">Номер отслеживания (опц.)</Text>
-                                <TextField.Root
-                                    value={formData.номер_отслеживания}
-                                    onChange={(ev) => setFormData((p) => ({ ...p, номер_отслеживания: ev.target.value }))}
-                                    placeholder="TRACK-001"
-                                    className={styles.textField}
-                                    size="2"
-                                    disabled={!formData.использовать_доставку}
-                                />
-                            </Box>
+                            {formData.использовать_доставку ? (
+                                <>
+                                    <Box className={modalStyles.radixField}>
+                                        <Text as="label" size="2" weight="medium">Транспортная компания</Text>
+                                        <OrderSearchSelect
+                                            value={formData.транспорт_id ? String(formData.транспорт_id) : ''}
+                                            onValueChange={(nextValue) => setFormData((p) => ({
+                                                ...p,
+                                                транспорт_id: nextValue ? Number(nextValue) || 0 : 0,
+                                            }))}
+                                            options={transportSelectOptions}
+                                            placeholder="Выберите ТК"
+                                        />
+                                    </Box>
 
-                            <Box className={styles.formGroup}>
-                                <Text as="label" size="2" weight="medium">Стоимость доставки (опц.)</Text>
-                                <TextField.Root
-                                    value={formData.стоимость_доставки === 0 ? '' : String(formData.стоимость_доставки)}
-                                    onChange={(ev) => {
-                                        const v = ev.target.value;
-                                        const n = v === '' ? 0 : Number(v);
-                                        setFormData((p) => ({ ...p, стоимость_доставки: Number.isFinite(n) ? n : p.стоимость_доставки }));
-                                    }}
-                                    placeholder="0"
-                                    className={styles.textField}
-                                    size="2"
-                                    disabled={!formData.использовать_доставку}
-                                />
-                            </Box>
+                                    <Box className={modalStyles.radixField}>
+                                        <Text as="label" size="2" weight="medium">Номер отслеживания (опц.)</Text>
+                                        <TextField.Root
+                                            value={formData.номер_отслеживания}
+                                            onChange={(ev) => setFormData((p) => ({ ...p, номер_отслеживания: ev.target.value }))}
+                                            placeholder="TRACK-001"
+                                            size="2"
+                                        />
+                                    </Box>
 
-                            <Box className={styles.modalPreviewSection}>
+                                    <Box className={modalStyles.radixField}>
+                                        <Text as="label" size="2" weight="medium">Стоимость доставки (опц.)</Text>
+                                        <TextField.Root
+                                            value={String(formData.стоимость_доставки ?? '')}
+                                            onChange={(ev) => {
+                                                const value = ev.target.value;
+                                                const next = value === '' ? 0 : Number(value);
+                                                setFormData((p) => ({
+                                                    ...p,
+                                                    стоимость_доставки: Number.isFinite(next) ? next : p.стоимость_доставки,
+                                                }));
+                                            }}
+                                            placeholder="400.00"
+                                            size="2"
+                                        />
+                                    </Box>
+                                </>
+                            ) : null}
+
+                            <Box className={shipmentEditorStyles.modalPreviewSection}>
                                 <Flex align="center" justify="between" gap="3" wrap="wrap">
-                                    <Text as="div" size="3" weight="medium" className={styles.modalPreviewTitle}>
-                                        Позиции заявки
+                                    <Text as="div" size="3" weight="medium" className={shipmentEditorStyles.modalPreviewTitle}>
+                                        {formData.заявка_id ? 'Позиции заявки' : 'Позиции отгрузки'}
                                     </Text>
-                                    {editPreviewLoading ? (
+                                    {formData.заявка_id && editPreviewLoading ? (
                                         <Text size="2" color="gray">Загружаем состав заявки...</Text>
+                                    ) : null}
+                                    {!formData.заявка_id ? (
+                                        <Button
+                                            type="button"
+                                            variant="surface"
+                                            color="gray"
+                                            highContrast
+                                            onClick={addManualPosition}
+                                            className={shipmentEditorStyles.shipmentAddPositionButton}
+                                            disabled={manualPositionsLoading}
+                                        >
+                                            Добавить позицию
+                                        </Button>
                                     ) : null}
                                 </Flex>
 
                                 {!formData.заявка_id ? (
-                                    <Text as="div" size="2" color="gray" className={styles.modalPreviewHint}>
-                                        Без заявки состав отгрузки не подтягивается автоматически.
+                                    <Text as="div" size="2" color="gray" className={shipmentEditorStyles.modalPreviewHint}>
+                                        {formData.без_учета_склада
+                                            ? 'Без заявки выберите товары вручную: это будет самостоятельная отгрузка без учета склада.'
+                                            : 'Без заявки выберите товары вручную: в списке доступны только товары, которые есть на складе.'}
+                                    </Text>
+                                ) : null}
+
+                                {!formData.заявка_id && !formData.без_учета_склада && availableManualProducts.length === 0 ? (
+                                    <Text as="div" size="2" color="gray" className={shipmentEditorStyles.modalPreviewHint}>
+                                        На складе нет товаров, доступных для самостоятельной отгрузки.
                                     </Text>
                                 ) : null}
 
                                 {formData.заявка_id && !editPreviewLoading && editPreviewPositions.length === 0 ? (
-                                    <Text as="div" size="2" color="gray" className={styles.modalPreviewHint}>
+                                    <Text as="div" size="2" color="gray" className={shipmentEditorStyles.modalPreviewHint}>
                                         У выбранной заявки пока нет позиций или они недоступны для просмотра.
                                     </Text>
                                 ) : null}
 
-                                {editPreviewPositions.length > 0 ? (
+                                {!formData.заявка_id ? (
                                     <>
-                                        <div className={styles.modalPreviewTableWrap}>
-                                            <Table.Root variant="surface" className={styles.modalPreviewTable}>
+                                        {manualPositionsLoading ? (
+                                            <Text as="div" size="2" color="gray" className={shipmentEditorStyles.modalPreviewHint}>
+                                                Загружаем состав самостоятельной отгрузки...
+                                            </Text>
+                                        ) : null}
+
+                                        {!manualPositionsLoading ? (
+                                            <>
+                                                <div className={shipmentEditorStyles.modalPreviewTableWrap}>
+                                                    <div className={shipmentEditorStyles.shipmentPositionsScroller}>
+                                                        <Box className={shipmentEditorStyles.shipmentPositionsTable}>
+                                                            {manualPositions.length > 0 ? (
+                                                                <Box className={shipmentEditorStyles.shipmentPositionHeaderRow}>
+                                                                    <Text as="span" size="1" color="gray" className={shipmentEditorStyles.shipmentPositionHeaderCell}>Товар</Text>
+                                                                    <Text as="span" size="1" color="gray" className={shipmentEditorStyles.shipmentPositionHeaderCell}>Ед.изм</Text>
+                                                                    <Text as="span" size="1" color="gray" className={shipmentEditorStyles.shipmentPositionHeaderCell}>Кол-во</Text>
+                                                                    <Text as="span" size="1" color="gray" className={shipmentEditorStyles.shipmentPositionHeaderCell}>Цена, ₽</Text>
+                                                                    <Text as="span" size="1" color="gray" className={shipmentEditorStyles.shipmentPositionHeaderCell}>НДС</Text>
+                                                                    <Text as="span" size="1" color="gray" className={`${shipmentEditorStyles.shipmentPositionHeaderCell} ${shipmentEditorStyles.shipmentPositionHeaderCellRight}`}>Всего, ₽</Text>
+                                                                    <Text as="span" size="1" color="gray" className={`${shipmentEditorStyles.shipmentPositionHeaderCell} ${shipmentEditorStyles.shipmentPositionHeaderCellCenter}`} />
+                                                                </Box>
+                                                            ) : null}
+
+                                                            <Flex direction="column" gap="2">
+                                                                {manualPositions.map((position, index) => {
+                                                                    const selectedProduct = productsById.get(position.товар_id);
+                                                                    const total = calculateVatAmountsFromLine(
+                                                                        position.количество,
+                                                                        position.цена,
+                                                                        getVatRateOption(position.ндс_id).rate
+                                                                    ).total;
+                                                                    const productOptions = availableManualProducts.map((product) => ({
+                                                                        value: String(product.id),
+                                                                        label: `${product.артикул} - ${product.название}${!formData.без_учета_склада ? ` · в наличии: ${warehouseStockByProductId.get(product.id) || 0}` : ''}`,
+                                                                    }));
+
+                                                                    return (
+                                                                        <Box key={position.id ?? `manual-${index}`} className={shipmentEditorStyles.shipmentPositionRow}>
+                                                                            <OrderSearchSelect
+                                                                                value={position.товар_id ? String(position.товар_id) : ''}
+                                                                                onValueChange={(nextValue) => handleManualPositionChange(index, 'товар_id', nextValue ? Number(nextValue) : 0)}
+                                                                                options={productOptions}
+                                                                                placeholder="Выберите товар"
+                                                                                compact
+                                                                                inputClassName={shipmentEditorStyles.shipmentPositionSearchSelectInput}
+                                                                                menuClassName={shipmentEditorStyles.shipmentPositionSearchSelectMenu}
+                                                                            />
+
+                                                                            <Text as="span" size="2" className={shipmentEditorStyles.shipmentUnitValue}>
+                                                                                {selectedProduct?.единица_измерения || 'шт'}
+                                                                            </Text>
+
+                                                                            <TextField.Root
+                                                                                type="number"
+                                                                                min={1}
+                                                                                step={1}
+                                                                                value={String(position.количество)}
+                                                                                onChange={(event) => handleManualPositionChange(index, 'количество', event.target.value)}
+                                                                                size="2"
+                                                                                className={shipmentEditorStyles.shipmentPositionInput}
+                                                                            />
+
+                                                                            <TextField.Root
+                                                                                type="number"
+                                                                                min={0}
+                                                                                step={0.01}
+                                                                                value={String(position.цена)}
+                                                                                onChange={(event) => handleManualPositionChange(index, 'цена', event.target.value)}
+                                                                                size="2"
+                                                                                className={shipmentEditorStyles.shipmentPositionInput}
+                                                                            />
+
+                                                                            <Select.Root
+                                                                                value={String(position.ндс_id || DEFAULT_VAT_RATE_ID)}
+                                                                                onValueChange={(nextValue) => handleManualPositionChange(index, 'ндс_id', Number(nextValue) || DEFAULT_VAT_RATE_ID)}
+                                                                            >
+                                                                                <Select.Trigger
+                                                                                    variant="surface"
+                                                                                    color="gray"
+                                                                                    className={`${modalStyles.radixSelectTrigger} ${shipmentEditorStyles.shipmentVatField}`}
+                                                                                />
+                                                                                <Select.Content position="popper" className={modalStyles.radixSelectContent}>
+                                                                                    {VAT_RATE_OPTIONS.map((option) => (
+                                                                                        <Select.Item key={option.id} value={String(option.id)}>
+                                                                                            {option.label}
+                                                                                        </Select.Item>
+                                                                                    ))}
+                                                                                </Select.Content>
+                                                                            </Select.Root>
+
+                                                                            <Text as="span" size="2" weight="medium" className={shipmentEditorStyles.shipmentPositionTotal}>
+                                                                                {formatCurrency(total)}
+                                                                            </Text>
+
+                                                                            <Button
+                                                                                type="button"
+                                                                                variant="surface"
+                                                                                color="gray"
+                                                                                highContrast
+                                                                                onClick={() => removeManualPosition(index)}
+                                                                                disabled={manualPositions.length === 1}
+                                                                                className={shipmentEditorStyles.shipmentRemovePositionButton}
+                                                                            >
+                                                                                ×
+                                                                            </Button>
+                                                                        </Box>
+                                                                    );
+                                                                })}
+                                                            </Flex>
+                                                        </Box>
+                                                    </div>
+                                                </div>
+
+                                                <Flex justify="end" className={shipmentEditorStyles.modalPreviewTotal}>
+                                                    <Flex direction="column" align="end" gap="1">
+                                                        <Text size="2" color="gray">
+                                                            Стоимость доставки: {formatCurrency(shipmentDeliveryAmount)}
+                                                        </Text>
+                                                        <Text weight="bold">
+                                                            Итого: {formatCurrency(manualPositionsTotal + shipmentDeliveryAmount)}
+                                                        </Text>
+                                                    </Flex>
+                                                </Flex>
+                                            </>
+                                        ) : null}
+                                    </>
+                                ) : null}
+
+                                {formData.заявка_id && editPreviewPositions.length > 0 ? (
+                                    <>
+                                        <div className={shipmentEditorStyles.modalPreviewTableWrap}>
+                                            <Table.Root variant="surface" className={shipmentEditorStyles.modalPreviewTable}>
                                                 <Table.Header>
                                                     <Table.Row>
                                                         <Table.ColumnHeaderCell>Название</Table.ColumnHeaderCell>
                                                         <Table.ColumnHeaderCell>Ед.изм</Table.ColumnHeaderCell>
                                                         <Table.ColumnHeaderCell>Кол-во</Table.ColumnHeaderCell>
-                                                        <Table.ColumnHeaderCell className={styles.textRight}>Цена, ₽</Table.ColumnHeaderCell>
-                                                        <Table.ColumnHeaderCell className={styles.textRight}>Сумма без НДС, ₽</Table.ColumnHeaderCell>
+                                                        <Table.ColumnHeaderCell className={shipmentEditorStyles.textRight}>Цена, ₽</Table.ColumnHeaderCell>
+                                                        <Table.ColumnHeaderCell className={shipmentEditorStyles.textRight}>Сумма без НДС, ₽</Table.ColumnHeaderCell>
                                                         <Table.ColumnHeaderCell>НДС</Table.ColumnHeaderCell>
-                                                        <Table.ColumnHeaderCell className={styles.textRight}>Сумма НДС, ₽</Table.ColumnHeaderCell>
-                                                        <Table.ColumnHeaderCell className={styles.textRight}>Всего, ₽</Table.ColumnHeaderCell>
+                                                        <Table.ColumnHeaderCell className={shipmentEditorStyles.textRight}>Сумма НДС, ₽</Table.ColumnHeaderCell>
+                                                        <Table.ColumnHeaderCell className={shipmentEditorStyles.textRight}>Всего, ₽</Table.ColumnHeaderCell>
                                                     </Table.Row>
                                                 </Table.Header>
                                                 <Table.Body>
@@ -1315,18 +1717,18 @@ function ShipmentDetailPage(): JSX.Element {
                                                         return (
                                                             <Table.Row key={position.id}>
                                                                 <Table.Cell>
-                                                                    <div className={styles.productName}>{position.товар_название || `Товар #${position.товар_id}`}</div>
+                                                                    <div className={shipmentEditorStyles.productCellTitle}>{position.товар_название || `Товар #${position.товар_id}`}</div>
                                                                     {position.товар_артикул ? (
-                                                                        <div className={styles.productMeta}>{position.товар_артикул}</div>
+                                                                        <div className={shipmentEditorStyles.productCellMeta}>{position.товар_артикул}</div>
                                                                     ) : null}
                                                                 </Table.Cell>
                                                                 <Table.Cell>{position.товар_единица_измерения || 'шт'}</Table.Cell>
                                                                 <Table.Cell>{position.количество}</Table.Cell>
-                                                                <Table.Cell className={styles.textRight}>{formatCurrency(position.цена || 0)}</Table.Cell>
-                                                                <Table.Cell className={styles.textRight}>{formatCurrency(position.сумма_без_ндс ?? fallbackAmounts.net)}</Table.Cell>
+                                                                <Table.Cell className={shipmentEditorStyles.textRight}>{formatCurrency(position.цена || 0)}</Table.Cell>
+                                                                <Table.Cell className={shipmentEditorStyles.textRight}>{formatCurrency(position.сумма_без_ндс ?? fallbackAmounts.net)}</Table.Cell>
                                                                 <Table.Cell>{position.ндс_название || vatOption.label}</Table.Cell>
-                                                                <Table.Cell className={styles.textRight}>{formatCurrency(position.сумма_ндс ?? fallbackAmounts.tax)}</Table.Cell>
-                                                                <Table.Cell className={styles.textRight}>{formatCurrency(position.сумма_всего ?? fallbackAmounts.total)}</Table.Cell>
+                                                                <Table.Cell className={shipmentEditorStyles.textRight}>{formatCurrency(position.сумма_ндс ?? fallbackAmounts.tax)}</Table.Cell>
+                                                                <Table.Cell className={shipmentEditorStyles.textRight}>{formatCurrency(position.сумма_всего ?? fallbackAmounts.total)}</Table.Cell>
                                                             </Table.Row>
                                                         );
                                                     })}
@@ -1334,18 +1736,57 @@ function ShipmentDetailPage(): JSX.Element {
                                             </Table.Root>
                                         </div>
 
-                                        <Flex justify="end" className={styles.modalPreviewTotal}>
-                                            <Text weight="bold">Итого: {formatCurrency(editPreviewTotal)}</Text>
+                                        <Flex justify="end" className={shipmentEditorStyles.modalPreviewTotal}>
+                                            <Flex direction="column" align="end" gap="1">
+                                                <Text size="2" color="gray">
+                                                    Стоимость доставки: {formatCurrency(shipmentDeliveryAmount)}
+                                                </Text>
+                                                <Text weight="bold">
+                                                    Итого: {formatCurrency(editPreviewTotal + shipmentDeliveryAmount)}
+                                                </Text>
+                                            </Flex>
                                         </Flex>
                                     </>
                                 ) : null}
                             </Box>
 
-                            <Flex justify="end" gap="3" mt="4" className={styles.modalActions}>
-                                <Button type="button" variant="surface" color="gray" highContrast onClick={() => setIsEditModalOpen(false)} disabled={operationLoading}>
+                            <Flex gap="3" justify="end" className={modalStyles.radixActions}>
+                                <Button
+                                    type="button"
+                                    variant="surface"
+                                    color="gray"
+                                    highContrast
+                                    disabled={!formData.заявка_id || operationLoading}
+                                    style={{ marginRight: 'auto' }}
+                                    className={modalStyles.secondaryButton}
+                                    onClick={() => {
+                                        if (!canGoToOrder) return;
+                                        if (!formData.заявка_id) return;
+                                        setIsEditModalOpen(false);
+                                        router.push(`/orders/${encodeURIComponent(String(formData.заявка_id))}`);
+                                    }}
+                                >
+                                    Перейти к заявке
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="surface"
+                                    color="gray"
+                                    highContrast
+                                    onClick={() => setIsEditModalOpen(false)}
+                                    disabled={operationLoading}
+                                    className={modalStyles.secondaryButton}
+                                >
                                     Отмена
                                 </Button>
-                                <Button type="submit" color="gray" highContrast disabled={operationLoading}>
+                                <Button
+                                    type="submit"
+                                    variant="solid"
+                                    color="gray"
+                                    highContrast
+                                    disabled={operationLoading || manualPositionsLoading}
+                                    className={modalStyles.primaryButton}
+                                >
                                     {operationLoading ? 'Сохранение...' : 'Сохранить'}
                                 </Button>
                             </Flex>
