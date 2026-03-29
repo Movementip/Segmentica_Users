@@ -92,7 +92,7 @@ const createEmptyManualShipmentPosition = (): ManualShipmentPosition => ({
 });
 
 type ShipmentsTab = 'all' | 'in_transit' | 'delivered' | 'canceled';
-type StatusFilter = 'all' | 'в пути' | 'доставлено' | 'отменено';
+type StatusFilter = 'all' | 'в пути' | 'доставлено' | 'получено' | 'отменено';
 
 function ShipmentsPage(): JSX.Element {
     const router = useRouter();
@@ -256,7 +256,7 @@ function ShipmentsPage(): JSX.Element {
 
     const getCostText = useCallback((shipment: Shipment) => {
         if (shipment.использовать_доставку === false) return 'Не используется';
-        return shipment.стоимость_доставки ? formatCurrency(shipment.стоимость_доставки) : 'Не указана';
+        return shipment.стоимость_доставки == null ? 'Не указана' : formatCurrency(shipment.стоимость_доставки);
     }, []);
 
     const getProductSalePrice = useCallback((product?: Product | null) => Number(product?.цена_продажи ?? 0), []);
@@ -312,7 +312,7 @@ function ShipmentsPage(): JSX.Element {
         ));
     }, []);
 
-    const fetchOrderPositionsPreview = useCallback(async (orderId: number) => {
+    const fetchOrderPositionsPreview = useCallback(async (orderId: number, shipmentId?: number | null) => {
         if (!orderId || !canOrdersView) {
             setSelectedOrderPositions([]);
             return;
@@ -320,14 +320,20 @@ function ShipmentsPage(): JSX.Element {
 
         try {
             setSelectedOrderPositionsLoading(true);
-            const response = await fetch(`/api/orders/${encodeURIComponent(String(orderId))}`);
+            const endpoint = shipmentId
+                ? `/api/shipments/${encodeURIComponent(String(shipmentId))}`
+                : `/api/orders/${encodeURIComponent(String(orderId))}/shipment-draft`;
+            const response = await fetch(endpoint);
             if (!response.ok) {
                 setSelectedOrderPositions([]);
                 return;
             }
 
             const data = await response.json();
-            setSelectedOrderPositions(Array.isArray(data?.позиции) ? data.позиции : []);
+            const positions = shipmentId
+                ? (Array.isArray(data?.позиции) ? data.позиции : [])
+                : (Array.isArray(data) ? data : []);
+            setSelectedOrderPositions(positions);
         } catch (previewError) {
             console.error('Error loading shipment order preview:', previewError);
             setSelectedOrderPositions([]);
@@ -348,8 +354,8 @@ function ShipmentsPage(): JSX.Element {
             return;
         }
 
-        fetchOrderPositionsPreview(formData.заявка_id);
-    }, [showAddModal, formData.заявка_id, fetchOrderPositionsPreview]);
+        fetchOrderPositionsPreview(formData.заявка_id, editingId);
+    }, [showAddModal, formData.заявка_id, editingId, fetchOrderPositionsPreview]);
 
     const positionsPreviewTotal = useMemo(() => (
         selectedOrderPositions.reduce((sum, position) => {
@@ -410,7 +416,7 @@ function ShipmentsPage(): JSX.Element {
             : 'all';
         const nextQ = q !== undefined ? String(q) : '';
         const nextTransport = transport !== undefined ? String(transport) : EMPTY_SELECT_VALUE;
-        const nextStatus: StatusFilter = (status === 'в пути' || status === 'доставлено' || status === 'отменено' || status === 'all')
+        const nextStatus: StatusFilter = (status === 'в пути' || status === 'доставлено' || status === 'получено' || status === 'отменено' || status === 'all')
             ? (status as StatusFilter)
             : 'all';
 
@@ -837,10 +843,18 @@ function ShipmentsPage(): JSX.Element {
 
     const filteredShipments = useMemo(() => {
         const q = searchTerm.trim().toLowerCase();
+        const byTab =
+            activeTab === 'in_transit'
+                ? shipments.filter((s) => (s.статус || '').toLowerCase().trim() === 'в пути')
+                : activeTab === 'delivered'
+                    ? shipments.filter((s) => ['доставлено', 'получено'].includes((s.статус || '').toLowerCase().trim()))
+                    : activeTab === 'canceled'
+                        ? shipments.filter((s) => (s.статус || '').toLowerCase().trim() === 'отменено')
+                        : shipments;
         const byStatus =
-            statusFilter === 'all'
-                ? shipments
-                : shipments.filter((s) => (s.статус || '').toLowerCase().trim() === statusFilter);
+            activeTab !== 'all' || statusFilter === 'all'
+                ? byTab
+                : byTab.filter((s) => (s.статус || '').toLowerCase().trim() === statusFilter);
 
         const byTransport =
             transportFilter === EMPTY_SELECT_VALUE
@@ -855,12 +869,12 @@ function ShipmentsPage(): JSX.Element {
             const status = String(s.статус || '').toLowerCase();
             return id.includes(q) || orderId.includes(q) || transport.includes(q) || tracking.includes(q) || status.includes(q);
         });
-    }, [searchTerm, shipments, statusFilter, transportFilter]);
+    }, [activeTab, searchTerm, shipments, statusFilter, transportFilter]);
 
     const metrics = useMemo(() => {
         const total = shipments.length;
         const inTransit = shipments.filter((s) => (s.статус || '').toLowerCase().trim() === 'в пути').length;
-        const delivered = shipments.filter((s) => (s.статус || '').toLowerCase().trim() === 'доставлено').length;
+        const delivered = shipments.filter((s) => ['доставлено', 'получено'].includes((s.статус || '').toLowerCase().trim())).length;
         const canceled = shipments.filter((s) => (s.статус || '').toLowerCase().trim() === 'отменено').length;
         const successRate = total > 0 ? (delivered / total) * 100 : 0;
         return { total, inTransit, delivered, canceled, successRate };
@@ -1015,6 +1029,7 @@ function ShipmentsPage(): JSX.Element {
     const getStatusText = (status: string) => {
         switch (status) {
             case 'в пути': return 'В ПУТИ';
+            case 'получено': return 'ПОЛУЧЕНО';
             case 'доставлено': return 'ДОСТАВЛЕНО';
             case 'отменено': return 'ОТМЕНЕНО';
             default: return status.toUpperCase();
@@ -1298,10 +1313,7 @@ function ShipmentsPage(): JSX.Element {
                                     onValueChange={(v) => {
                                         const next = v as StatusFilter;
                                         setStatusFilter(next);
-                                        if (next === 'all') setActiveTab('all');
-                                        if (next === 'в пути') setActiveTab('in_transit');
-                                        if (next === 'доставлено') setActiveTab('delivered');
-                                        if (next === 'отменено') setActiveTab('canceled');
+                                        setActiveTab('all');
                                     }}
                                 >
                                     <Select.Trigger variant="surface" color="gray" className={styles.filterSelectTrigger} />
@@ -1309,6 +1321,7 @@ function ShipmentsPage(): JSX.Element {
                                         <Select.Item value="all">Все статусы</Select.Item>
                                         <Select.Item value="в пути">В пути</Select.Item>
                                         <Select.Item value="доставлено">Доставлено</Select.Item>
+                                        <Select.Item value="получено">Получено</Select.Item>
                                         <Select.Item value="отменено">Отменено</Select.Item>
                                     </Select.Content>
                                 </Select.Root>
@@ -1652,6 +1665,7 @@ function ShipmentsPage(): JSX.Element {
                                     <Select.Content position="popper" className={modalStyles.radixSelectContent}>
                                         <Select.Item value="в пути">В пути</Select.Item>
                                         <Select.Item value="доставлено">Доставлено</Select.Item>
+                                        <Select.Item value="получено">Получено</Select.Item>
                                         <Select.Item value="отменено">Отменено</Select.Item>
                                     </Select.Content>
                                 </Select.Root>
@@ -1699,10 +1713,10 @@ function ShipmentsPage(): JSX.Element {
                             <Box className={styles.modalPreviewSection}>
                                 <Flex align="center" justify="between" gap="3" wrap="wrap">
                                     <Text as="div" size="3" weight="medium" className={styles.modalPreviewTitle}>
-                                        {formData.заявка_id ? 'Позиции заявки' : 'Позиции отгрузки'}
+                                        {'Позиции отгрузки'}
                                     </Text>
                                     {formData.заявка_id && selectedOrderPositionsLoading ? (
-                                        <Text size="2" color="gray">Загружаем состав заявки...</Text>
+                                        <Text size="2" color="gray">Загружаем состав отгрузки...</Text>
                                     ) : null}
                                     {!formData.заявка_id ? (
                                         <Button
@@ -1735,7 +1749,7 @@ function ShipmentsPage(): JSX.Element {
 
                                 {formData.заявка_id && !selectedOrderPositionsLoading && selectedOrderPositions.length === 0 ? (
                                     <Text as="div" size="2" color="gray" className={styles.modalPreviewHint}>
-                                        У выбранной заявки пока нет позиций или они недоступны для просмотра.
+                                        Для этой отгрузки сейчас нет позиций или они недоступны для просмотра.
                                     </Text>
                                 ) : null}
 

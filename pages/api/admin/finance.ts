@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { query } from '../../../lib/db';
+import { getPool, query } from '../../../lib/db';
 import { requireDirector } from '../../../lib/auth';
 
 export type FinanceSettings = {
@@ -916,8 +916,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
                 return res.status(400).json({ error: 'Нет сотрудников с начислениями к выплате по графику на сегодня' });
             }
 
-            await query('BEGIN');
+            const pool = await getPool();
+            const client = await pool.connect();
             try {
+                await client.query('BEGIN');
                 for (const item of employeesToPay) {
                     const suggestion = item.suggestion!;
                     const columns = [quoteIdent(paymentsMeta.employeeCol), quoteIdent(paymentsMeta.amountCol), quoteIdent(paymentsMeta.dateCol)];
@@ -991,7 +993,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
                     }
 
                     const placeholders = values.map((_, index) => `$${index + 1}`).join(', ');
-                    await query(
+                    await client.query(
                         `
                         INSERT INTO public.${quoteIdent(paymentsMeta.tableName)} (${columns.join(', ')})
                         VALUES (${placeholders})
@@ -1000,10 +1002,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
                     );
                 }
 
-                await query('COMMIT');
+                await client.query('COMMIT');
             } catch (bulkError) {
-                await query('ROLLBACK');
+                await client.query('ROLLBACK');
                 throw bulkError;
+            } finally {
+                client.release();
             }
 
             return res.status(200).json({ ok: true });

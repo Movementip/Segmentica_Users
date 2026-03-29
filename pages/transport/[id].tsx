@@ -1,4 +1,5 @@
 import { Fragment, useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/router';
 import { Layout } from '../../layout/Layout';
 import { EditTransportModalNew } from '../../components/EditTransportModalNew';
@@ -281,7 +282,7 @@ export default function TransportDetail() {
     };
 
     const formatCurrency = (amount: number | null) => {
-        if (!amount) return 'Не указано';
+        if (amount == null) return 'Не указано';
         return new Intl.NumberFormat('ru-RU', {
             style: 'currency',
             currency: 'RUB'
@@ -290,6 +291,7 @@ export default function TransportDetail() {
 
     const getStatusClass = (status: string): string => {
         switch (status.toLowerCase()) {
+            case 'получено':
             case 'доставлено':
                 return 'completed';
             case 'в пути':
@@ -306,6 +308,7 @@ export default function TransportDetail() {
     const getStatusText = (status: string) => {
         switch (status) {
             case 'в пути': return 'В ПУТИ';
+            case 'получено': return 'ПОЛУЧЕНО';
             case 'доставлено': return 'ДОСТАВЛЕНО';
             case 'в обработке': return 'В ОБРАБОТКЕ';
             case 'отменено': return 'ОТМЕНЕНО';
@@ -728,10 +731,13 @@ export default function TransportDetail() {
                                         {previewAttachment ? (
                                             canPreviewInline(previewAttachment) ? (
                                                 previewAttachment.mime_type.toLowerCase().startsWith('image/') || /\.(png|jpg|jpeg|gif|webp|bmp|svg)$/i.test(previewAttachment.filename) ? (
-                                                    <img
+                                                    <Image
                                                         src={`/api/attachments/${encodeURIComponent(previewAttachment.id)}/inline`}
                                                         alt={previewAttachment.filename}
-                                                        style={{ width: '100%', maxHeight: '75vh', objectFit: 'contain' }}
+                                                        width={1600}
+                                                        height={1200}
+                                                        unoptimized
+                                                        style={{ width: '100%', maxHeight: '75vh', height: 'auto', objectFit: 'contain' }}
                                                     />
                                                 ) : (
                                                     <iframe

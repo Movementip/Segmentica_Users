@@ -554,6 +554,9 @@ export default function Transport() {
                 return '#9c27b0'; // Purple
             case 'отгружена':
                 return '#4caf50'; // Green
+            case 'получено':
+            case 'доставлено':
+                return '#4CAF50'; // Green
             case 'выполнена':
             case 'выполнено':
                 return '#4CAF50'; // Green
@@ -588,6 +591,8 @@ export default function Transport() {
                 return 'ОТГРУЖЕНА';
             case 'в пути':
                 return 'В ПУТИ';
+            case 'получено':
+                return 'ПОЛУЧЕНО';
             case 'доставлено':
                 return 'ДОСТАВЛЕНО';
             case 'выполнена':

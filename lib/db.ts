@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { Pool, PoolClient } from 'pg';
 import { getRequestContext } from './requestContext';
 export let isRemote = false;
@@ -152,6 +153,7 @@ const getConnectionString = async (): Promise<{ connectionString: string; isRemo
 
 let poolPromise: Promise<Pool> | null = null;
 let pool: Pool | null = null;
+const transactionClientStorage = new AsyncLocalStorage<PoolClient>();
 
 const createPool = async () => {
     try {
@@ -272,7 +274,11 @@ const isMutatingSql = (sql: string): boolean => {
     return false;
 };
 
-const loadAuditColumns = async (p: Pool): Promise<AuditColumns> => {
+type Queryable = {
+    query: (text: string, params?: any[]) => Promise<any>;
+};
+
+const loadAuditColumns = async (p: Queryable): Promise<AuditColumns> => {
     if (auditColsCache) return auditColsCache;
     try {
         const colsRes = await p.query(
@@ -292,7 +298,7 @@ const loadAuditColumns = async (p: Pool): Promise<AuditColumns> => {
 };
 
 const writeSqlAudit = async (
-    p: Pool,
+    p: Queryable,
     sqlText: string,
     params?: any[],
     extras?: {
@@ -405,6 +411,11 @@ export const resetPool = async () => {
 };
 
 const queryNoAudit = async (text: string, params?: any[]) => {
+    const txClient = transactionClientStorage.getStore();
+    if (txClient) {
+        return txClient.query(text, params);
+    }
+
     const p = await ensurePool();
     return p.query(text, params);
 };
@@ -415,7 +426,8 @@ export const getDbClient = async (): Promise<PoolClient> => {
 };
 
 const query = async (text: string, params?: any[]) => {
-    const p = await ensurePool();
+    const txClient = transactionClientStorage.getStore();
+    const queryable: Queryable = txClient ?? await ensurePool();
 
     const ctx = getRequestContext();
     const shouldAudit = isMutatingSql(text) && !!ctx;
@@ -430,14 +442,14 @@ const query = async (text: string, params?: any[]) => {
     let beforeRow: any | null = null;
     if (canSnapshot) {
         try {
-            const beforeRes = await p.query(`SELECT * FROM public."${opInfo.tableName}" WHERE id = $1 LIMIT 1`, [id]);
+            const beforeRes = await queryable.query(`SELECT * FROM public."${opInfo.tableName}" WHERE id = $1 LIMIT 1`, [id]);
             beforeRow = beforeRes.rows?.[0] ?? null;
         } catch {
             beforeRow = null;
         }
     }
 
-    const result = await p.query(text, params);
+    const result = await queryable.query(text, params);
 
     try {
         if (isMutatingSql(text)) {
@@ -459,7 +471,7 @@ const query = async (text: string, params?: any[]) => {
 
             if (canSnapshot && opInfo.op === 'update') {
                 try {
-                    const afterRes = await p.query(`SELECT * FROM public."${opInfo.tableName}" WHERE id = $1 LIMIT 1`, [id]);
+                    const afterRes = await queryable.query(`SELECT * FROM public."${opInfo.tableName}" WHERE id = $1 LIMIT 1`, [id]);
                     afterRow = afterRes.rows?.[0] ?? null;
                 } catch {
                     afterRow = null;
@@ -479,7 +491,7 @@ const query = async (text: string, params?: any[]) => {
                 }
             }
 
-            await writeSqlAudit(p, text, params, {
+            await writeSqlAudit(queryable, text, params, {
                 before: beforeSlim,
                 after: afterSlim,
                 changes,
@@ -496,5 +508,31 @@ const getPool = async () => {
     return await ensurePool();
 };
 
-export { query, queryNoAudit, getPool };
+const withTransaction = async <T>(
+    fn: (client: PoolClient) => Promise<T>
+): Promise<T> => {
+    const existingClient = transactionClientStorage.getStore();
+    if (existingClient) {
+        return fn(existingClient);
+    }
+
+    const p = await ensurePool();
+    const client = await p.connect();
+    try {
+        await client.query('BEGIN');
+        const result = await transactionClientStorage.run(client, () => fn(client));
+        await client.query('COMMIT');
+        return result;
+    } catch (error) {
+        try {
+            await client.query('ROLLBACK');
+        } catch {
+        }
+        throw error;
+    } finally {
+        client.release();
+    }
+};
+
+export { query, queryNoAudit, getPool, withTransaction };
 export default ensurePool;

@@ -111,7 +111,7 @@ export async function syncOrderStatusWithMissingProducts(orderId: number) {
     await syncOrderWorkflowStatus(orderId);
 }
 
-async function downgradeOrderToInProgressIfNeeded(orderId: number) {
+export async function downgradeOrderToInProgressIfNeeded(orderId: number) {
     await query(`
       UPDATE "Заявки"
       SET "статус" = 'в работе'

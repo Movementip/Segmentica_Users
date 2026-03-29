@@ -50,11 +50,70 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             ),
             revenue AS (
                 SELECT date_trunc('month', z."дата_создания") AS month_start,
-                       COALESCE(SUM(z."общая_сумма"), 0) AS revenue,
+                       COALESCE(SUM(
+                           COALESCE(order_totals.items_total, 0)
+                           + COALESCE(purchase_logistics.purchase_delivery_total, 0)
+                           + COALESCE(shipment_logistics.shipment_delivery_total, 0)
+                       ), 0) AS revenue,
                        COUNT(*) AS orders
                 FROM "Заявки" z
+                LEFT JOIN (
+                    SELECT
+                        positions."заявка_id",
+                        SUM(
+                            COALESCE(positions."количество", 0)
+                            * COALESCE(positions."цена", 0)
+                            * (1 + COALESCE(vat."ставка", 0) / 100.0)
+                        )::numeric as items_total
+                    FROM "Позиции_заявки" positions
+                    LEFT JOIN "Ставки_НДС" vat ON vat.id = positions."ндс_id"
+                    GROUP BY positions."заявка_id"
+                ) order_totals ON order_totals."заявка_id" = z.id
+                LEFT JOIN (
+                    SELECT
+                        purchases."заявка_id",
+                        SUM(
+                            CASE
+                              WHEN COALESCE(purchases."использовать_доставку", false)
+                                AND COALESCE(purchases."статус", 'заказано') <> 'отменено'
+                                THEN COALESCE(purchases."стоимость_доставки", 0)
+                              ELSE 0
+                            END
+                        )::numeric as purchase_delivery_total
+                    FROM "Закупки" purchases
+                    GROUP BY purchases."заявка_id"
+                ) purchase_logistics ON purchase_logistics."заявка_id" = z.id
+                LEFT JOIN (
+                    SELECT
+                        shipments."заявка_id",
+                        SUM(
+                            CASE
+                              WHEN COALESCE(shipments."использовать_доставку", true)
+                                AND COALESCE(shipments."статус", 'в пути') <> 'отменено'
+                                THEN COALESCE(shipments."стоимость_доставки", 0)
+                              ELSE 0
+                            END
+                        )::numeric as shipment_delivery_total
+                    FROM "Отгрузки" shipments
+                    GROUP BY shipments."заявка_id"
+                ) shipment_logistics ON shipment_logistics."заявка_id" = z.id
                 WHERE z."статус" IN ('выполнена', 'выполнено')
                   AND z."дата_создания" >= (date_trunc('month', CURRENT_DATE) - ($1::int - 1) * interval '1 month')
+                GROUP BY 1
+            ),
+            finance_income AS (
+                SELECT date_trunc('month', фк."дата") AS month_start,
+                       COALESCE(SUM(фк."сумма"), 0) AS extra_revenue
+                FROM "Финансы_компании" фк
+                WHERE фк."дата" IS NOT NULL
+                  AND фк."дата" >= (date_trunc('month', CURRENT_DATE) - ($1::int - 1) * interval '1 month')
+                  AND фк."заявка_id" IS NULL
+                  AND фк."закупка_id" IS NULL
+                  AND (
+                        LOWER(COALESCE(фк."тип"::text, '')) LIKE '%поступ%'
+                     OR LOWER(COALESCE(фк."тип"::text, '')) LIKE '%доход%'
+                     OR LOWER(COALESCE(фк."тип"::text, '')) LIKE '%выруч%'
+                  )
                 GROUP BY 1
             ),
             purchases AS (
@@ -80,6 +139,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
                 FROM "Финансы_компании" фк
                 WHERE фк."дата" IS NOT NULL
                   AND фк."дата" >= (date_trunc('month', CURRENT_DATE) - ($1::int - 1) * interval '1 month')
+                  AND фк."закупка_id" IS NULL
+                  AND фк."выплата_id" IS NULL
                   AND (
                         LOWER(COALESCE(фк."тип"::text, '')) LIKE '%расход%'
                      OR LOWER(COALESCE(фк."тип"::text, '')) LIKE '%спис%'
@@ -89,13 +150,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             )
             SELECT
                 TO_CHAR(m.month_start::date, 'YYYY-MM') AS month,
-                COALESCE(r.revenue, 0) AS revenue,
+                COALESCE(r.revenue, 0) + COALESCE(fi.extra_revenue, 0) AS revenue,
                 COALESCE(r.orders, 0) AS orders,
                 COALESCE(p.expense_purchases, 0) AS expense_purchases,
                 COALESCE(pay.expense_payments, 0) AS expense_payments,
                 COALESCE(f.expense_finance, 0) AS expense_finance
             FROM months m
             LEFT JOIN revenue r ON r.month_start = m.month_start
+            LEFT JOIN finance_income fi ON fi.month_start = m.month_start
             LEFT JOIN purchases p ON p.month_start = m.month_start
             LEFT JOIN payments pay ON pay.month_start = m.month_start
             LEFT JOIN finance f ON f.month_start = m.month_start

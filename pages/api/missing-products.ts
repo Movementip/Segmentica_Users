@@ -1,16 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { query } from '../../lib/db';
-import { syncOrderStatusWithMissingProducts } from '../../lib/missingProductsHelper';
+import { downgradeOrderToInProgressIfNeeded, syncOrderStatusWithMissingProducts } from '../../lib/missingProductsHelper';
 import { requireAuth, requirePermission } from '../../lib/auth';
-
-async function downgradeOrderToInProgressIfNeeded(orderId: number) {
-    await query(`
-      UPDATE "Заявки"
-      SET "статус" = 'в работе'
-      WHERE id = $1
-        AND "статус" IN ('собрана', 'отгружена', 'выполнена')
-    `, [orderId]);
-}
 
 interface MissingProduct {
     id: number;
@@ -81,10 +72,26 @@ export default async function handler(
             const { заявка_id, товар_id, необходимое_количество, недостающее_количество } = req.body;
 
             // Validate required fields
-            if (!заявка_id || !товар_id || !необходимое_количество || !недостающее_количество) {
+            if (
+                заявка_id == null
+                || товар_id == null
+                || необходимое_количество == null
+                || недостающее_количество == null
+            ) {
                 return res.status(400).json({
                     error: 'Заявка, товар, необходимое количество и недостающее количество обязательны'
                 });
+            }
+
+            const requiredQty = Number(необходимое_количество);
+            const missingQty = Number(недостающее_количество);
+
+            if (!Number.isFinite(requiredQty) || requiredQty <= 0) {
+                return res.status(400).json({ error: 'Необходимое количество должно быть больше 0' });
+            }
+
+            if (!Number.isFinite(missingQty) || missingQty < 0) {
+                return res.status(400).json({ error: 'Недостающее количество не может быть отрицательным' });
             }
 
             // Check if order exists
@@ -116,7 +123,7 @@ export default async function handler(
           AND "недостающее_количество" > 0
         ORDER BY id DESC
         LIMIT 1
-      `, [заявка_id, товар_id]);
+        `, [заявка_id, товар_id]);
 
             let result;
 
@@ -131,19 +138,21 @@ export default async function handler(
               END
           WHERE id = $3
           RETURNING *
-        `, [необходимое_количество, недостающее_количество, existingMissingProduct.rows[0].id]);
+        `, [requiredQty, missingQty, existingMissingProduct.rows[0].id]);
             } else {
                 result = await query(`
           INSERT INTO "Недостающие_товары" (
             "заявка_id", "товар_id", "необходимое_количество", "недостающее_количество", "статус"
           ) VALUES ($1, $2, $3, $4, $5)
           RETURNING *
-        `, [заявка_id, товар_id, необходимое_количество, недостающее_количество, Number(недостающее_количество) > 0 ? 'в обработке' : 'получено']);
+        `, [заявка_id, товар_id, requiredQty, missingQty, missingQty > 0 ? 'в обработке' : 'получено']);
             }
 
-            if (Number(недостающее_количество) > 0) {
+            if (missingQty > 0) {
                 await downgradeOrderToInProgressIfNeeded(заявка_id);
             }
+
+            await syncOrderStatusWithMissingProducts(заявка_id);
 
             res.status(201).json(result.rows[0]);
         } catch (error) {
@@ -191,6 +200,10 @@ export default async function handler(
       `,
                     [статус, nextMissingQty, id]
                 );
+
+                if (nextMissingQty > 0) {
+                    await downgradeOrderToInProgressIfNeeded(orderId);
+                }
 
                 await syncOrderStatusWithMissingProducts(orderId);
 
@@ -240,6 +253,17 @@ export default async function handler(
                 return res.status(400).json({ error: 'Товар не найден' });
             }
 
+            const existingRecordResult = await query(
+                'SELECT id, "заявка_id" FROM "Недостающие_товары" WHERE id = $1',
+                [id]
+            );
+
+            if (existingRecordResult.rows.length === 0) {
+                return res.status(404).json({ error: 'Недостающий товар не найден' });
+            }
+
+            const previousOrderId = Number(existingRecordResult.rows[0].заявка_id);
+
             // Update missing product
             const result = await query(`
         UPDATE "Недостающие_товары" 
@@ -253,11 +277,14 @@ export default async function handler(
         RETURNING *
       `, [заявка_id, товар_id, requiredQty, missingQty, статус, id]);
 
-            if (result.rows.length === 0) {
-                return res.status(404).json({ error: 'Недостающий товар не найден' });
+            if (missingQty > 0) {
+                await downgradeOrderToInProgressIfNeeded(заявка_id);
             }
 
-            await syncOrderStatusWithMissingProducts(заявка_id);
+            const orderIdsToSync = new Set<number>([previousOrderId, Number(заявка_id)]);
+            for (const orderId of orderIdsToSync) {
+                await syncOrderStatusWithMissingProducts(orderId);
+            }
 
             res.status(200).json(result.rows[0]);
         } catch (error) {
@@ -276,7 +303,16 @@ export default async function handler(
                 return res.status(400).json({ error: 'ID обязателен' });
             }
 
-            // Delete missing product
+            const existingMissing = await query(
+                'SELECT id, "заявка_id" FROM "Недостающие_товары" WHERE id = $1',
+                [id]
+            );
+
+            if (existingMissing.rows.length === 0) {
+                return res.status(404).json({ error: 'Недостающий товар не найден' });
+            }
+
+            const orderId = Number(existingMissing.rows[0].заявка_id);
             const result = await query(
                 'DELETE FROM "Недостающие_товары" WHERE id = $1 RETURNING *',
                 [id]
@@ -285,6 +321,8 @@ export default async function handler(
             if (result.rows.length === 0) {
                 return res.status(404).json({ error: 'Недостающий товар не найден' });
             }
+
+            await syncOrderStatusWithMissingProducts(orderId);
 
             res.status(200).json({ message: 'Недостающий товар успешно удален' });
         } catch (error) {

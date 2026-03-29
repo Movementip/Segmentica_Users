@@ -22,6 +22,19 @@ const calculateOrderTotal = (positions: Array<{ количество: number; ц
 );
 
 export async function syncOrderPositionsFromLinkedPurchases(db: DbLike, orderId: number) {
+    const orderModeResult = await runQuery(
+        db,
+        `
+            SELECT "режим_исполнения"
+            FROM "Заявки"
+            WHERE id = $1
+            LIMIT 1
+        `,
+        [orderId]
+    );
+    const executionMode = normalizeOrderExecutionMode(orderModeResult.rows[0]?.режим_исполнения);
+    const linkedPurchaseSupplyMode = 'purchase';
+
     const aggregatedPurchasePositions = await runQuery(
         db,
         `
@@ -42,10 +55,6 @@ export async function syncOrderPositionsFromLinkedPurchases(db: DbLike, orderId:
         [orderId, DEFAULT_VAT_RATE_ID]
     );
 
-    if (aggregatedPurchasePositions.rows.length === 0) {
-        return;
-    }
-
     const existingPositionsResult = await runQuery(
         db,
         `
@@ -54,7 +63,8 @@ export async function syncOrderPositionsFromLinkedPurchases(db: DbLike, orderId:
                 "товар_id",
                 COALESCE("количество", 0)::integer AS quantity,
                 COALESCE("цена", 0)::numeric AS price,
-                COALESCE("ндс_id", $2)::integer AS vat_id
+                COALESCE("ндс_id", $2)::integer AS vat_id,
+                "способ_обеспечения" AS supply_mode
             FROM "Позиции_заявки"
             WHERE "заявка_id" = $1
         `,
@@ -64,6 +74,62 @@ export async function syncOrderPositionsFromLinkedPurchases(db: DbLike, orderId:
     const existingByProductId = new Map<number, any>();
     for (const row of existingPositionsResult.rows) {
         existingByProductId.set(Number(row.товар_id), row);
+    }
+
+    const aggregatedProductIds = new Set(
+        aggregatedPurchasePositions.rows.map((row) => Number(row.товар_id))
+    );
+
+    const downstreamUsageResult = await runQuery(
+        db,
+        `
+            SELECT DISTINCT product_id
+            FROM (
+                SELECT batch_positions.product_id
+                FROM public.order_assembly_batches batches
+                INNER JOIN public.order_assembly_batch_positions batch_positions
+                    ON batch_positions.batch_id = batches.id
+                WHERE batches.order_id = $1
+
+                UNION
+
+                SELECT shipment_positions.product_id
+                FROM "Отгрузки" shipments
+                INNER JOIN public.shipment_positions shipment_positions
+                    ON shipment_positions.shipment_id = shipments.id
+                WHERE shipments."заявка_id" = $1
+            ) used_products
+        `,
+        [orderId]
+    );
+    const protectedLegacyAutoProductIds = new Set(
+        downstreamUsageResult.rows
+            .map((row) => Number(row.product_id))
+            .filter((value) => Number.isFinite(value))
+    );
+
+    for (const existing of existingPositionsResult.rows) {
+        const productId = Number(existing.товар_id);
+        const supplyMode = String(existing.supply_mode || '').trim().toLowerCase() || 'purchase';
+        const canPromoteLegacyAutoPosition = executionMode === 'warehouse'
+            && (supplyMode === '' || supplyMode === 'auto')
+            && aggregatedProductIds.has(productId)
+            && !protectedLegacyAutoProductIds.has(productId);
+        const isPurchaseDriven = executionMode === 'direct'
+            ? (supplyMode === 'purchase' || supplyMode === 'auto')
+            : (supplyMode === 'purchase' || canPromoteLegacyAutoPosition);
+
+        if (isPurchaseDriven && !aggregatedProductIds.has(productId)) {
+            await runQuery(
+                db,
+                `
+                    DELETE FROM "Позиции_заявки"
+                    WHERE id = $1
+                `,
+                [existing.id]
+            );
+            existingByProductId.delete(productId);
+        }
     }
 
     for (const row of aggregatedPurchasePositions.rows) {
@@ -77,16 +143,24 @@ export async function syncOrderPositionsFromLinkedPurchases(db: DbLike, orderId:
             await runQuery(
                 db,
                 `
-                    INSERT INTO "Позиции_заявки" ("заявка_id", "товар_id", "количество", "цена", "ндс_id")
-                    VALUES ($1, $2, $3, $4, $5)
+                    INSERT INTO "Позиции_заявки" ("заявка_id", "товар_id", "количество", "цена", "ндс_id", "способ_обеспечения")
+                    VALUES ($1, $2, $3, $4, $5, $6)
                 `,
-                [orderId, productId, purchaseQuantity, salePrice, vatId]
+                [orderId, productId, purchaseQuantity, salePrice, vatId, linkedPurchaseSupplyMode]
             );
             continue;
         }
 
         const existingPrice = Number(existing.price) || 0;
         const existingVatId = existing.vat_id == null ? null : Number(existing.vat_id);
+        const existingSupplyMode = String(existing.supply_mode || '').trim().toLowerCase();
+        const canPromoteLegacyAutoPosition = executionMode === 'warehouse'
+            && (existingSupplyMode === '' || existingSupplyMode === 'auto')
+            && !protectedLegacyAutoProductIds.has(productId);
+        const shouldTreatAsPurchaseDriven = executionMode === 'direct'
+            ? (existingSupplyMode === '' || existingSupplyMode === 'auto' || existingSupplyMode === 'purchase')
+            : (existingSupplyMode === 'purchase' || canPromoteLegacyAutoPosition);
+
         if (existingPrice <= 0 || existingVatId == null) {
             await runQuery(
                 db,
@@ -97,6 +171,21 @@ export async function syncOrderPositionsFromLinkedPurchases(db: DbLike, orderId:
                     WHERE id = $3
                 `,
                 [salePrice, vatId, existing.id]
+            );
+        }
+
+        if (shouldTreatAsPurchaseDriven) {
+            await runQuery(
+                db,
+                `
+                    UPDATE "Позиции_заявки"
+                    SET "количество" = $1,
+                        "цена" = CASE WHEN COALESCE("цена", 0) <= 0 THEN $2 ELSE "цена" END,
+                        "ндс_id" = COALESCE("ндс_id", $3),
+                        "способ_обеспечения" = 'purchase'
+                    WHERE id = $4
+                `,
+                [purchaseQuantity, salePrice, vatId, existing.id]
             );
         }
     }

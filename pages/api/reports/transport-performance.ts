@@ -38,13 +38,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             SELECT
                 тк.id AS transport_id,
                 тк."название" AS transport_name,
-                COALESCE(COUNT(o.id), 0)::int AS shipments,
-                COALESCE(COUNT(CASE WHEN COALESCE(o."статус"::text, '') ILIKE 'достав%' THEN 1 END), 0)::int AS on_time,
+                COALESCE(COUNT(CASE WHEN COALESCE(o."статус"::text, 'в пути') <> 'отменено' THEN 1 END), 0)::int AS shipments,
+                COALESCE(COUNT(CASE WHEN LOWER(COALESCE(o."статус"::text, '')) IN ('доставлено', 'получено') THEN 1 END), 0)::int AS on_time,
                 CASE
-                    WHEN COALESCE(COUNT(o.id), 0) = 0 THEN 0
-                    ELSE (COALESCE(COUNT(CASE WHEN COALESCE(o."статус"::text, '') ILIKE 'достав%' THEN 1 END), 0)::float / NULLIF(COUNT(o.id)::float, 0)) * 100
+                    WHEN COALESCE(COUNT(CASE WHEN COALESCE(o."статус"::text, 'в пути') <> 'отменено' THEN 1 END), 0) = 0 THEN 0
+                    ELSE (
+                        COALESCE(COUNT(CASE WHEN LOWER(COALESCE(o."статус"::text, '')) IN ('доставлено', 'получено') THEN 1 END), 0)::float
+                        / NULLIF(COUNT(CASE WHEN COALESCE(o."статус"::text, 'в пути') <> 'отменено' THEN 1 END)::float, 0)
+                    ) * 100
                 END AS rating_percent,
-                COALESCE(AVG(o."стоимость_доставки"), 0)::float AS avg_cost
+                COALESCE(AVG(CASE WHEN COALESCE(o."статус"::text, 'в пути') <> 'отменено' THEN o."стоимость_доставки" END), 0)::float AS avg_cost
             FROM "Транспортные_компании" тк
             LEFT JOIN "Отгрузки" o ON тк.id = o."транспорт_id"
             GROUP BY тк.id, тк."название"
@@ -67,13 +70,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             SELECT
                 тк.id AS transport_id,
                 тк."название" AS transport_name,
-                COALESCE(COUNT(o.id), 0)::int AS shipments,
-                COALESCE(COUNT(CASE WHEN COALESCE(o."статус"::text, '') ILIKE 'достав%' THEN 1 END), 0)::int AS on_time,
+                COALESCE(COUNT(CASE WHEN COALESCE(o."статус"::text, 'в пути') <> 'отменено' THEN 1 END), 0)::int AS shipments,
+                COALESCE(COUNT(CASE WHEN LOWER(COALESCE(o."статус"::text, '')) IN ('доставлено', 'получено') THEN 1 END), 0)::int AS on_time,
                 CASE
-                    WHEN COALESCE(COUNT(o.id), 0) = 0 THEN 0
-                    ELSE (COALESCE(COUNT(CASE WHEN COALESCE(o."статус"::text, '') ILIKE 'достав%' THEN 1 END), 0)::float / NULLIF(COUNT(o.id)::float, 0)) * 100
+                    WHEN COALESCE(COUNT(CASE WHEN COALESCE(o."статус"::text, 'в пути') <> 'отменено' THEN 1 END), 0) = 0 THEN 0
+                    ELSE (
+                        COALESCE(COUNT(CASE WHEN LOWER(COALESCE(o."статус"::text, '')) IN ('доставлено', 'получено') THEN 1 END), 0)::float
+                        / NULLIF(COUNT(CASE WHEN COALESCE(o."статус"::text, 'в пути') <> 'отменено' THEN 1 END)::float, 0)
+                    ) * 100
                 END AS rating_percent,
-                COALESCE(AVG(o."стоимость_доставки"), 0)::float AS avg_cost
+                COALESCE(AVG(CASE WHEN COALESCE(o."статус"::text, 'в пути') <> 'отменено' THEN o."стоимость_доставки" END), 0)::float AS avg_cost
             FROM "Транспортные_компании" тк
             LEFT JOIN "Отгрузки" o ON тк.id = o."транспорт_id"
             LEFT JOIN wnd w ON TRUE

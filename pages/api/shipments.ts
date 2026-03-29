@@ -5,6 +5,8 @@ import { getOrderWorkflowSummary, syncOrderWorkflowStatus } from '../../lib/orde
 import { getNextShipmentBranchMeta, getRemainingShipmentDraft, normalizeFulfillmentStatus } from '../../lib/orderFulfillment';
 import { ensureLogisticsDeliverySchema, normalizeDeliveryCost, toBoolean } from '../../lib/logisticsDelivery';
 import { DEFAULT_VAT_RATE_ID, isValidVatRateId, normalizeVatRateId } from '../../lib/vat';
+import { syncStandaloneShipmentFinanceRecord } from '../../lib/companyFinance';
+import { recalculateShipmentDeliveryCostIfNeeded } from '../../lib/shipmentDeliveryCost';
 
 interface Shipment {
     id: number;
@@ -210,7 +212,7 @@ export default async function handler(
                 const workflow = await getOrderWorkflowSummary(Number(normalizedOrderId));
                 if (!workflow.canCreateShipment && normalizeShipmentStatus(статус || 'в пути') !== 'отменено') {
                     return res.status(400).json({
-                        error: 'Отгрузку можно создать только после сборки заявки и при отсутствии активной отгрузки'
+                        error: 'Отгрузку можно создать только после сборки заявки и при наличии подготовленных, но ещё не отгруженных позиций'
                     });
                 }
             }
@@ -280,8 +282,14 @@ export default async function handler(
                     );
                 }
 
+                await recalculateShipmentDeliveryCostIfNeeded(client, Number(created.id));
+
                 if (normalizedOrderId == null && isActiveShipmentStatus(статус || 'в пути') && !withoutStockAccounting) {
                     await applyDirectShipmentStockChange(client, Number(created.id), directPositions, 'out');
+                }
+
+                if (normalizedOrderId == null) {
+                    await syncStandaloneShipmentFinanceRecord(client, Number(created.id));
                 }
 
                 await client.query('COMMIT');
@@ -399,26 +407,10 @@ export default async function handler(
             if (!willBeCancelled && nextOrderId != null) {
                 const workflow = await getOrderWorkflowSummary(nextOrderId);
                 const orderChanged = nextOrderId !== previousOrderId;
-                const hasAnotherActiveShipment = await query(
-                    `
-                        SELECT id
-                        FROM "Отгрузки"
-                        WHERE "заявка_id" = $1
-                          AND id <> $2
-                          AND COALESCE("статус", 'в пути') NOT IN ('доставлено', 'отменено')
-                        LIMIT 1
-                    `,
-                    [nextOrderId, id]
-                );
-
                 if ((orderChanged || wasCancelled) && !workflow.canCreateShipment) {
                     return res.status(400).json({
                         error: 'Эта заявка пока не готова к отгрузке'
                     });
-                }
-
-                if (hasAnotherActiveShipment.rows.length > 0) {
-                    return res.status(400).json({ error: 'По этой заявке уже есть активная отгрузка' });
                 }
             }
 
@@ -572,6 +564,12 @@ export default async function handler(
                     }
                 }
 
+                if (previousOrderId == null) {
+                    await recalculateShipmentDeliveryCostIfNeeded(client, Number(id));
+                    await syncStandaloneShipmentFinanceRecord(client, Number(id));
+                } else {
+                    await recalculateShipmentDeliveryCostIfNeeded(client, Number(id));
+                }
                 await client.query('COMMIT');
             } catch (transactionError) {
                 await client.query('ROLLBACK');
@@ -634,6 +632,7 @@ export default async function handler(
                     const currentPositions = normalizeDirectShipmentPositions(positionsResult.rows);
                     await applyDirectShipmentStockChange(client, Number(id), currentPositions, 'back');
                 }
+                await client.query('DELETE FROM "Финансы_компании" WHERE "отгрузка_id" = $1', [id]);
                 await client.query('DELETE FROM "Отгрузки" WHERE id = $1 RETURNING *', [id]);
                 await client.query('COMMIT');
             } catch (transactionError) {

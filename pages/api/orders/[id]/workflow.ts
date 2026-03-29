@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { requirePermission } from '../../../../lib/auth';
-import { syncOrderWorkflowStatus } from '../../../../lib/orderWorkflow';
+import { getOrderWorkflowSummary, getWorkflowDisplayStatus } from '../../../../lib/orderWorkflow';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'GET') {
@@ -19,8 +19,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     try {
-        const summary = await syncOrderWorkflowStatus(orderId);
-        return res.status(200).json(summary);
+        const summary = await getOrderWorkflowSummary(orderId);
+        return res.status(200).json({
+            ...summary,
+            currentStatus: getWorkflowDisplayStatus(summary),
+        });
     } catch (error) {
         console.error('Error fetching order workflow summary:', error);
         return res.status(500).json({

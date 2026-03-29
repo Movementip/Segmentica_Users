@@ -74,7 +74,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     `SELECT COUNT(*) as count
                      FROM "Товары" t
                      JOIN "Склад" s ON t.id = s."товар_id"
-                     WHERE s."количество" <= t."минимальный_остаток" AND s."количество" > 0`
+                     WHERE s."количество" <= t."минимальный_остаток"`
                 )
                 : Promise.resolve(null),
             needRecentOrders
@@ -82,11 +82,55 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     `SELECT
                         z.id,
                         k."название" as client,
-                        z."общая_сумма" as amount,
+                        (
+                          COALESCE(order_totals.items_total, 0)
+                          + COALESCE(purchase_logistics.purchase_delivery_total, 0)
+                          + COALESCE(shipment_logistics.shipment_delivery_total, 0)
+                        )::numeric as amount,
                         z."статус" as status,
                         z."дата_создания" as created_at
                      FROM "Заявки" z
                      JOIN "Клиенты" k ON z."клиент_id" = k.id
+                     LEFT JOIN (
+                        SELECT
+                            positions."заявка_id",
+                            SUM(
+                                COALESCE(positions."количество", 0)
+                                * COALESCE(positions."цена", 0)
+                                * (1 + COALESCE(vat."ставка", 0) / 100.0)
+                            )::numeric as items_total
+                        FROM "Позиции_заявки" positions
+                        LEFT JOIN "Ставки_НДС" vat ON vat.id = positions."ндс_id"
+                        GROUP BY positions."заявка_id"
+                     ) order_totals ON order_totals."заявка_id" = z.id
+                     LEFT JOIN (
+                        SELECT
+                            purchases."заявка_id",
+                            SUM(
+                                CASE
+                                    WHEN COALESCE(purchases."использовать_доставку", false)
+                                      AND COALESCE(purchases."статус", 'заказано') <> 'отменено'
+                                      THEN COALESCE(purchases."стоимость_доставки", 0)
+                                    ELSE 0
+                                END
+                            )::numeric as purchase_delivery_total
+                        FROM "Закупки" purchases
+                        GROUP BY purchases."заявка_id"
+                     ) purchase_logistics ON purchase_logistics."заявка_id" = z.id
+                     LEFT JOIN (
+                        SELECT
+                            shipments."заявка_id",
+                            SUM(
+                                CASE
+                                    WHEN COALESCE(shipments."использовать_доставку", true)
+                                      AND COALESCE(shipments."статус", 'в пути') <> 'отменено'
+                                      THEN COALESCE(shipments."стоимость_доставки", 0)
+                                    ELSE 0
+                                END
+                            )::numeric as shipment_delivery_total
+                        FROM "Отгрузки" shipments
+                        GROUP BY shipments."заявка_id"
+                     ) shipment_logistics ON shipment_logistics."заявка_id" = z.id
                      ORDER BY z."дата_создания" DESC
                      LIMIT 5`
                 )
@@ -108,16 +152,64 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             needSalesByPeriod
                 ? query(
                     `SELECT
-                        TO_CHAR(DATE_TRUNC('month', "дата_создания")::date, 'YYYY-MM-DD') as "период",
+                        TO_CHAR(DATE_TRUNC('month', z."дата_создания")::date, 'YYYY-MM-DD') as "период",
                         COUNT(*) as "количество_продаж",
-                        COALESCE(SUM("общая_сумма"), 0) as "общая_сумма",
+                        COALESCE(SUM(
+                            COALESCE(order_totals.items_total, 0)
+                            + COALESCE(purchase_logistics.purchase_delivery_total, 0)
+                            + COALESCE(shipment_logistics.shipment_delivery_total, 0)
+                        ), 0) as "общая_сумма",
                         CASE
-                            WHEN COUNT(*) > 0 THEN COALESCE(SUM("общая_сумма") / COUNT(*), 0)
+                            WHEN COUNT(*) > 0 THEN COALESCE(SUM(
+                                COALESCE(order_totals.items_total, 0)
+                                + COALESCE(purchase_logistics.purchase_delivery_total, 0)
+                                + COALESCE(shipment_logistics.shipment_delivery_total, 0)
+                            ) / COUNT(*), 0)
                             ELSE 0
                         END as "средний_чек"
-                     FROM "Заявки"
-                     WHERE "статус" IN ('выполнена', 'выполнено')
-                     GROUP BY DATE_TRUNC('month', "дата_создания")
+                     FROM "Заявки" z
+                     LEFT JOIN (
+                        SELECT
+                            positions."заявка_id",
+                            SUM(
+                                COALESCE(positions."количество", 0)
+                                * COALESCE(positions."цена", 0)
+                                * (1 + COALESCE(vat."ставка", 0) / 100.0)
+                            )::numeric as items_total
+                        FROM "Позиции_заявки" positions
+                        LEFT JOIN "Ставки_НДС" vat ON vat.id = positions."ндс_id"
+                        GROUP BY positions."заявка_id"
+                     ) order_totals ON order_totals."заявка_id" = z.id
+                     LEFT JOIN (
+                        SELECT
+                            purchases."заявка_id",
+                            SUM(
+                                CASE
+                                    WHEN COALESCE(purchases."использовать_доставку", false)
+                                      AND COALESCE(purchases."статус", 'заказано') <> 'отменено'
+                                      THEN COALESCE(purchases."стоимость_доставки", 0)
+                                    ELSE 0
+                                END
+                            )::numeric as purchase_delivery_total
+                        FROM "Закупки" purchases
+                        GROUP BY purchases."заявка_id"
+                     ) purchase_logistics ON purchase_logistics."заявка_id" = z.id
+                     LEFT JOIN (
+                        SELECT
+                            shipments."заявка_id",
+                            SUM(
+                                CASE
+                                    WHEN COALESCE(shipments."использовать_доставку", true)
+                                      AND COALESCE(shipments."статус", 'в пути') <> 'отменено'
+                                      THEN COALESCE(shipments."стоимость_доставки", 0)
+                                    ELSE 0
+                                END
+                            )::numeric as shipment_delivery_total
+                        FROM "Отгрузки" shipments
+                        GROUP BY shipments."заявка_id"
+                     ) shipment_logistics ON shipment_logistics."заявка_id" = z.id
+                     WHERE z."статус" IN ('выполнена', 'выполнено')
+                     GROUP BY DATE_TRUNC('month', z."дата_создания")
                      ORDER BY "период" DESC
                      LIMIT 6`
                 )

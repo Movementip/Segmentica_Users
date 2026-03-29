@@ -1,5 +1,6 @@
 import { query } from './db';
 import { normalizeFulfillmentStatus } from './orderFulfillment';
+import { recalculateStoredOrderTotal } from './orderTotals';
 import {
     normalizeOrderExecutionMode,
     normalizeOrderSupplyMode,
@@ -26,7 +27,7 @@ export interface OrderWorkflowPositionSummary {
 }
 
 export interface OrderWorkflowMissingSummary {
-    id: number;
+    id: number | null;
     товар_id: number;
     необходимое_количество: number;
     недостающее_количество: number;
@@ -52,6 +53,11 @@ export interface OrderWorkflowShipmentSummary {
     стоимость_доставки?: number;
     транспорт_название?: string;
     totalUnits: number;
+    positions: Array<{
+        товар_id: number;
+        товар_название: string;
+        quantity: number;
+    }>;
 }
 
 export interface OrderWorkflowAssemblyBatchSummary {
@@ -109,6 +115,32 @@ export interface OrderWorkflowSummary {
 }
 
 const normalizeStatus = (value?: string | null) => normalizeFulfillmentStatus(value);
+
+const normalizeShipmentWorkflowStatus = (value?: string | null): string => {
+    const status = normalizeStatus(value);
+    return status === 'получено' ? 'доставлено' : status;
+};
+
+const getStoredOrderStatusRank = (value?: string | null): number => {
+    switch (normalizeStatus(value)) {
+        case 'новая':
+            return 0;
+        case 'подтверждена':
+        case 'в обработке':
+        case 'в работе':
+            return 1;
+        case 'собрана':
+            return 2;
+        case 'отгружена':
+            return 3;
+        case 'выполнена':
+            return 4;
+        case 'отменена':
+            return 99;
+        default:
+            return -1;
+    }
+};
 
 const mapWorkflowStatusToOrderStatus = (value?: string | null): string => {
     const status = normalizeStatus(value);
@@ -175,6 +207,7 @@ export async function getOrderWorkflowSummary(orderId: number): Promise<OrderWor
 
     const [
         positionsResult,
+        shipmentPositionsResult,
         missingProductsResult,
         purchasesResult,
         shipmentsResult,
@@ -244,7 +277,7 @@ export async function getOrderWorkflowSummary(orderId: number): Promise<OrderWor
                         SUM(shipment_positions.quantity)::numeric AS shipped_qty,
                         SUM(
                             CASE
-                                WHEN COALESCE(shipments."статус", 'в пути') = 'доставлено' THEN shipment_positions.quantity
+                                WHEN COALESCE(shipments."статус", 'в пути') IN ('доставлено', 'получено') THEN shipment_positions.quantity
                                 ELSE 0
                             END
                         )::numeric AS delivered_qty
@@ -258,6 +291,23 @@ export async function getOrderWorkflowSummary(orderId: number): Promise<OrderWor
                     ON shipped.product_id = order_positions."товар_id"
                 WHERE order_positions."заявка_id" = $1
                 ORDER BY order_positions.id
+            `,
+            [orderId]
+        ),
+        query(
+            `
+                SELECT
+                    shipment_positions.shipment_id,
+                    shipment_positions.product_id,
+                    shipment_positions.quantity,
+                    COALESCE(products."название", CONCAT('Товар #', shipment_positions.product_id)) AS product_name
+                FROM public.shipment_positions shipment_positions
+                INNER JOIN public."Отгрузки" shipments
+                    ON shipments.id = shipment_positions.shipment_id
+                LEFT JOIN public."Товары" products
+                    ON products.id = shipment_positions.product_id
+                WHERE shipments."заявка_id" = $1
+                ORDER BY shipment_positions.shipment_id, shipment_positions.id
             `,
             [orderId]
         ),
@@ -411,12 +461,12 @@ export async function getOrderWorkflowSummary(orderId: number): Promise<OrderWor
     });
 
     const missingProducts = missingProductsResult.rows.map((row: any) => ({
-        id: Number(row.id),
+        id: row.id == null ? null : Number(row.id),
         товар_id: Number(row.товар_id),
         необходимое_количество: Number(row.необходимое_количество) || 0,
         недостающее_количество: Number(row.недостающее_количество) || 0,
         статус: row.статус || 'в обработке',
-    })) satisfies OrderWorkflowMissingSummary[];
+    })).filter((item) => Number.isFinite(item.товар_id)) satisfies OrderWorkflowMissingSummary[];
 
     const purchases = purchasesResult.rows.map((row: any) => ({
         id: Number(row.id),
@@ -426,6 +476,18 @@ export async function getOrderWorkflowSummary(orderId: number): Promise<OrderWor
         использовать_доставку: Boolean(row.использовать_доставку),
         стоимость_доставки: row.стоимость_доставки == null ? undefined : Number(row.стоимость_доставки),
     })) satisfies OrderWorkflowPurchaseSummary[];
+
+    const shipmentPositionsById = new Map<number, Array<{ товар_id: number; товар_название: string; quantity: number }>>();
+    for (const row of shipmentPositionsResult.rows) {
+        const shipmentId = Number(row.shipment_id);
+        const list = shipmentPositionsById.get(shipmentId) ?? [];
+        list.push({
+            товар_id: Number(row.product_id),
+            товар_название: row.product_name || `Товар #${row.product_id}`,
+            quantity: Number(row.quantity) || 0,
+        });
+        shipmentPositionsById.set(shipmentId, list);
+    }
 
     const shipments = shipmentsResult.rows.map((row: any) => ({
         id: Number(row.id),
@@ -437,6 +499,7 @@ export async function getOrderWorkflowSummary(orderId: number): Promise<OrderWor
         стоимость_доставки: row.стоимость_доставки == null ? undefined : Number(row.стоимость_доставки),
         транспорт_название: row.транспорт_название || '',
         totalUnits: Number(row.total_units) || 0,
+        positions: shipmentPositionsById.get(Number(row.id)) ?? [],
     })) satisfies OrderWorkflowShipmentSummary[];
 
     const batchPositionsById = new Map<number, Array<{ товар_id: number; товар_название: string; quantity: number }>>();
@@ -468,8 +531,8 @@ export async function getOrderWorkflowSummary(orderId: number): Promise<OrderWor
         (item) => normalizeStatus(item.статус) !== 'получено' && Number(item.недостающее_количество) > 0
     );
     const activePurchases = purchases.filter((purchase) => !['получено', 'отменено'].includes(normalizeStatus(purchase.статус)));
-    const activeShipments = shipments.filter((shipment) => !['доставлено', 'отменено'].includes(normalizeStatus(shipment.статус)));
-    const deliveredShipments = shipments.filter((shipment) => normalizeStatus(shipment.статус) === 'доставлено');
+    const activeShipments = shipments.filter((shipment) => !['доставлено', 'отменено'].includes(normalizeShipmentWorkflowStatus(shipment.статус)));
+    const deliveredShipments = shipments.filter((shipment) => normalizeShipmentWorkflowStatus(shipment.статус) === 'доставлено');
     const directPurchasePositions = executionMode === 'direct'
         ? positions.filter((position) => position.способ_обеспечения === 'purchase')
         : [];
@@ -507,11 +570,18 @@ export async function getOrderWorkflowSummary(orderId: number): Promise<OrderWor
             && !['отменена', 'выполнена'].includes(normalizeStatus(orderResult.rows[0].статус))
         : activeMissingProducts.length > 0
             && !['отменена', 'выполнена'].includes(normalizeStatus(orderResult.rows[0].статус));
-    const canComplete = positions.length > 0
-        && positions.every((position) => Number(position.доставленное_количество) >= Number(position.необходимое_количество))
+    const directCanComplete = positions.length > 0
+        && remainingShipmentUnits <= 0
+        && activePurchases.length === 0
+        && directUncoveredPurchasePositions.length === 0
+        && activeShipments.length === 0;
+    const warehouseCanComplete = positions.length > 0
+        && remainingShipmentUnits <= 0
         && activeMissingProducts.length === 0
         && activePurchases.length === 0
-        && activeShipments.length === 0;
+        && activeShipments.length === 0
+        && deliveredShipments.length > 0;
+    const canComplete = executionMode === 'direct' ? directCanComplete : warehouseCanComplete;
 
     const summaryBase = {
         currentStatus: orderResult.rows[0].статус || 'новая',
@@ -577,17 +647,42 @@ export async function syncOrderWorkflowStatus(orderId: number): Promise<OrderWor
     const summary = await getOrderWorkflowSummary(orderId);
     const currentStored = normalizeStatus(summary.currentStatus);
     const nextWorkflow = normalizeStatus(summary.derivedStatus);
-    const nextStored = normalizeStatus(mapWorkflowStatusToOrderStatus(summary.derivedStatus));
+    const displayStatus = getWorkflowDisplayStatus(summary);
+    const nextStored = normalizeStatus(displayStatus);
+    const shouldSyncStoredStatus = (
+        currentStored !== 'отменена'
+        && currentStored !== 'выполнена'
+        && nextStored
+        && nextStored !== currentStored
+    );
 
-    if (currentStored !== 'отменена' && nextStored && nextStored !== currentStored) {
+    if (shouldSyncStoredStatus) {
         await query(
             'UPDATE "Заявки" SET "статус" = $1 WHERE id = $2',
-            [mapWorkflowStatusToOrderStatus(summary.derivedStatus), orderId]
+            [displayStatus, orderId]
         );
     }
 
+    await recalculateStoredOrderTotal({ query }, orderId);
+
     return {
         ...summary,
-        currentStatus: nextWorkflow || summary.currentStatus,
+        currentStatus: shouldSyncStoredStatus
+            ? displayStatus
+            : summary.currentStatus,
+        derivedStatus: nextWorkflow || summary.derivedStatus,
     };
+}
+
+export function getWorkflowDisplayStatus(
+    summary: Pick<OrderWorkflowSummary, 'currentStatus' | 'derivedStatus'>
+): string {
+    const currentStored = normalizeStatus(summary.currentStatus);
+    const nextStored = mapWorkflowStatusToOrderStatus(summary.derivedStatus);
+
+    if (currentStored === 'отменена' || currentStored === 'выполнена') {
+        return summary.currentStatus;
+    }
+
+    return nextStored || summary.currentStatus;
 }

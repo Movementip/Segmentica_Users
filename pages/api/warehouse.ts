@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { query } from '../../lib/db';
+import { getPool, query } from '../../lib/db';
 import { requireAuth, requirePermission } from '../../lib/auth';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -124,12 +124,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 resolvedCategoryId = Number.isFinite(parsedCategoryId) ? parsedCategoryId : null;
             }
 
-            // Start transaction
-            await query('BEGIN');
+            const pool = await getPool();
+            const client = await pool.connect();
 
             try {
+                await client.query('BEGIN');
+                const txQuery = (text: string, params?: any[]) => client.query(text, params);
                 // Create product
-                const productResult = await query(`
+                const productResult = await txQuery(`
           INSERT INTO "Товары" (
             "название", "артикул", "категория_id", "единица_измерения",
             "минимальный_остаток", "цена_закупки", "цена_продажи"
@@ -154,15 +156,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     : `INSERT INTO "Склад" ("товар_id", "количество")
              VALUES ($1, $2)`;
 
-                await query(warehouseInsertQuery, [productId, начальное_количество || 0]);
+                await txQuery(warehouseInsertQuery, [productId, начальное_количество || 0]);
 
-                // Commit transaction
-                await query('COMMIT');
+                await client.query('COMMIT');
                 res.status(201).json({ message: 'Товар успешно создан', productId });
             } catch (transactionError) {
-                // Rollback transaction on error
-                await query('ROLLBACK');
+                await client.query('ROLLBACK');
                 throw transactionError;
+            } finally {
+                client.release();
             }
         } catch (error) {
             console.error('Error creating product:', error);
@@ -186,28 +188,56 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 return res.status(400).json({ error: 'ID товара обязателен' });
             }
 
-            // Check if product exists in warehouse
-            const warehouseItem = await query(
-                'SELECT * FROM "Склад" WHERE id = $1',
-                [id]
-            );
+            const pool = await getPool();
+            const client = await pool.connect();
 
-            if (warehouseItem.rows.length === 0) {
-                return res.status(404).json({ error: 'Товар не найден на складе' });
+            try {
+                await client.query('BEGIN');
+
+                const warehouseItem = await client.query(
+                    'SELECT * FROM "Склад" WHERE id = $1 FOR UPDATE',
+                    [id]
+                );
+
+                if (warehouseItem.rows.length === 0) {
+                    await client.query('ROLLBACK');
+                    return res.status(404).json({ error: 'Товар не найден на складе' });
+                }
+
+                const товарId = Number(warehouseItem.rows[0].товар_id);
+                const referenceCheck = await client.query(
+                    `
+                        SELECT
+                          EXISTS(SELECT 1 FROM "Позиции_заявки" WHERE "товар_id" = $1) AS has_order_positions,
+                          EXISTS(SELECT 1 FROM "Позиции_закупки" WHERE "товар_id" = $1) AS has_purchase_positions,
+                          EXISTS(SELECT 1 FROM public.shipment_positions WHERE product_id = $1) AS has_shipment_positions,
+                          EXISTS(SELECT 1 FROM public.order_assembly_batch_positions WHERE product_id = $1) AS has_assembly_positions,
+                          EXISTS(SELECT 1 FROM "Недостающие_товары" WHERE "товар_id" = $1) AS has_missing_products
+                    `,
+                    [товарId]
+                );
+
+                const refs = referenceCheck.rows[0] || {};
+                if (refs.has_order_positions || refs.has_purchase_positions || refs.has_shipment_positions || refs.has_assembly_positions || refs.has_missing_products) {
+                    await client.query('ROLLBACK');
+                    return res.status(409).json({
+                        error: 'Нельзя удалить товар: он уже участвует в заявках, закупках, отгрузках, сборках или недостачах'
+                    });
+                }
+
+                await client.query('DELETE FROM "Ассортимент_поставщиков" WHERE "товар_id" = $1', [товарId]);
+                await client.query('DELETE FROM "Движения_склада" WHERE "товар_id" = $1', [товарId]);
+                await client.query('DELETE FROM "Склад" WHERE id = $1', [id]);
+                await client.query('DELETE FROM "Товары" WHERE id = $1', [товарId]);
+
+                await client.query('COMMIT');
+                res.status(200).json({ message: 'Товар успешно удален' });
+            } catch (transactionError) {
+                await client.query('ROLLBACK');
+                throw transactionError;
+            } finally {
+                client.release();
             }
-
-            const товарId = warehouseItem.rows[0].товар_id;
-
-            // Remove from warehouse
-            await query('DELETE FROM "Склад" WHERE id = $1', [id]);
-
-            // Remove all movements for this product
-            await query('DELETE FROM "Движения_склада" WHERE "товар_id" = $1', [товарId]);
-
-            // Remove product from products table
-            await query('DELETE FROM "Товары" WHERE id = $1', [товарId]);
-
-            res.status(200).json({ message: 'Товар успешно удален' });
         } catch (error) {
             console.error('Error deleting product:', error);
             res.status(500).json({ error: 'Ошибка удаления товара' });
@@ -233,32 +263,39 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 return res.status(400).json({ error: 'ID товара обязателен' });
             }
 
-            let resolvedCategoryId: number | null = null;
             const resolvedCategoryName: string | null = typeof категория === 'string' && категория.trim() ? категория.trim() : null;
-            if (typeof категория_id === 'number') {
-                resolvedCategoryId = категория_id;
-            } else if (typeof категория_id === 'string' && категория_id.trim()) {
-                const asNum = Number(категория_id);
-                resolvedCategoryId = Number.isFinite(asNum) ? asNum : null;
-            } else if (resolvedCategoryName) {
-                const categoryName = resolvedCategoryName;
-                const existingCategory = await query(
-                    'SELECT id FROM "Категории_товаров" WHERE "название" = $1 LIMIT 1',
-                    [categoryName]
-                );
-                if (existingCategory.rows.length > 0) {
-                    resolvedCategoryId = existingCategory.rows[0].id;
-                } else {
-                    const insertedCategory = await query(
-                        'INSERT INTO "Категории_товаров" ("название") VALUES ($1) RETURNING id',
+            const pool = await getPool();
+            const client = await pool.connect();
+
+            try {
+                await client.query('BEGIN');
+                const txQuery = (text: string, params?: any[]) => client.query(text, params);
+                let resolvedCategoryId: number | null = null;
+
+                if (typeof категория_id === 'number') {
+                    resolvedCategoryId = категория_id;
+                } else if (typeof категория_id === 'string' && категория_id.trim()) {
+                    const asNum = Number(категория_id);
+                    resolvedCategoryId = Number.isFinite(asNum) ? asNum : null;
+                } else if (resolvedCategoryName) {
+                    const categoryName = resolvedCategoryName;
+                    const existingCategory = await txQuery(
+                        'SELECT id FROM "Категории_товаров" WHERE "название" = $1 LIMIT 1',
                         [categoryName]
                     );
-                    resolvedCategoryId = insertedCategory.rows[0].id;
+                    if (existingCategory.rows.length > 0) {
+                        resolvedCategoryId = existingCategory.rows[0].id;
+                    } else {
+                        const insertedCategory = await txQuery(
+                            'INSERT INTO "Категории_товаров" ("название") VALUES ($1) RETURNING id',
+                            [categoryName]
+                        );
+                        resolvedCategoryId = insertedCategory.rows[0].id;
+                    }
                 }
-            }
 
-            // Update product information
-            const updateResult = await query(`
+                // Update product information
+                const updateResult = await txQuery(`
         UPDATE "Товары" SET
           "название" = $1,
           "артикул" = $2,
@@ -281,11 +318,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 id
             ]);
 
-            if (updateResult.rowCount === 0) {
-                return res.status(404).json({ error: 'Товар не найден' });
-            }
+                if (updateResult.rowCount === 0) {
+                    await client.query('ROLLBACK');
+                    return res.status(404).json({ error: 'Товар не найден' });
+                }
 
-            res.status(200).json({ message: 'Товар успешно обновлен' });
+                await client.query('COMMIT');
+                res.status(200).json({ message: 'Товар успешно обновлен' });
+            } catch (transactionError) {
+                await client.query('ROLLBACK');
+                throw transactionError;
+            } finally {
+                client.release();
+            }
         } catch (error) {
             console.error('Error updating product:', error);
             res.status(500).json({ error: 'Ошибка обновления товара' });

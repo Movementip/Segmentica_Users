@@ -1,5 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { query } from '../../lib/db';
+import { hasPermission, requireAuth } from '../../lib/auth';
+import { getOrderWorkflowSummary, getWorkflowDisplayStatus } from '../../lib/orderWorkflow';
 
 interface SearchResult {
     id: number;
@@ -15,6 +17,9 @@ export default async function handler(
     req: NextApiRequest,
     res: NextApiResponse
 ) {
+    const actor = await requireAuth(req, res);
+    if (!actor) return;
+
     if (req.method !== 'GET') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
@@ -23,6 +28,19 @@ export default async function handler(
 
     if (!searchQuery || typeof searchQuery !== 'string') {
         return res.status(400).json({ error: 'Search query is required' });
+    }
+
+    const canSearchProducts = hasPermission(actor, 'products.list') || hasPermission(actor, 'products.view');
+    const canSearchClients = hasPermission(actor, 'clients.list') || hasPermission(actor, 'clients.view');
+    const canSearchOrders =
+        hasPermission(actor, 'orders.list')
+        || hasPermission(actor, 'orders.view')
+        || hasPermission(actor, 'clients.orders_history.view');
+    const canSearchSuppliers = hasPermission(actor, 'suppliers.list') || hasPermission(actor, 'suppliers.view');
+    const canSearchCategories = canSearchProducts;
+
+    if (!canSearchProducts && !canSearchClients && !canSearchOrders && !canSearchSuppliers && !canSearchCategories) {
+        return res.status(403).json({ error: 'Forbidden' });
     }
 
     try {
@@ -34,19 +52,19 @@ export default async function handler(
         ];
 
         // Search in products
-        const products = await searchProducts(searchPatterns);
+        const products = canSearchProducts ? await searchProducts(searchPatterns) : [];
 
         // Search in clients
-        const clients = await searchClients(searchPatterns);
+        const clients = canSearchClients ? await searchClients(searchPatterns) : [];
 
         // Search in orders
-        const orders = await searchOrders(rawQuery, searchPatterns);
+        const orders = canSearchOrders ? await searchOrders(rawQuery, searchPatterns) : [];
 
         // Search in categories
-        const categories = await searchCategories(searchPatterns);
+        const categories = canSearchCategories ? await searchCategories(searchPatterns) : [];
 
         // Search in suppliers
-        const suppliers = await searchSuppliers(searchPatterns);
+        const suppliers = canSearchSuppliers ? await searchSuppliers(searchPatterns) : [];
 
         // Combine all results
         const results = {
@@ -161,13 +179,57 @@ async function searchOrders(rawQuery: string, searchPatterns: string[]): Promise
           з.id, 
           з.статус, 
           з.дата_создания,
-          з.общая_сумма,
+          (
+            COALESCE(order_totals.items_total, 0)
+            + COALESCE(purchase_logistics.purchase_delivery_total, 0)
+            + COALESCE(shipment_logistics.shipment_delivery_total, 0)
+          )::numeric as общая_сумма,
           з.адрес_доставки,
           к.название as клиент_название,
           с.фио as менеджер_фио
         FROM "Заявки" з
         LEFT JOIN "Клиенты" к ON з.клиент_id = к.id
         LEFT JOIN "Сотрудники" с ON з.менеджер_id = с.id
+        LEFT JOIN (
+          SELECT
+            positions."заявка_id",
+            SUM(
+              COALESCE(positions."количество", 0)
+              * COALESCE(positions."цена", 0)
+              * (1 + COALESCE(vat."ставка", 0) / 100.0)
+            )::numeric as items_total
+          FROM "Позиции_заявки" positions
+          LEFT JOIN "Ставки_НДС" vat ON vat.id = positions."ндс_id"
+          GROUP BY positions."заявка_id"
+        ) order_totals ON order_totals."заявка_id" = з.id
+        LEFT JOIN (
+          SELECT
+            purchases."заявка_id",
+            SUM(
+              CASE
+                WHEN COALESCE(purchases."использовать_доставку", false)
+                  AND COALESCE(purchases."статус", 'заказано') <> 'отменено'
+                  THEN COALESCE(purchases."стоимость_доставки", 0)
+                ELSE 0
+              END
+            )::numeric as purchase_delivery_total
+          FROM "Закупки" purchases
+          GROUP BY purchases."заявка_id"
+        ) purchase_logistics ON purchase_logistics."заявка_id" = з.id
+        LEFT JOIN (
+          SELECT
+            shipments."заявка_id",
+            SUM(
+              CASE
+                WHEN COALESCE(shipments."использовать_доставку", true)
+                  AND COALESCE(shipments."статус", 'в пути') <> 'отменено'
+                  THEN COALESCE(shipments."стоимость_доставки", 0)
+                ELSE 0
+              END
+            )::numeric as shipment_delivery_total
+          FROM "Отгрузки" shipments
+          GROUP BY shipments."заявка_id"
+        ) shipment_logistics ON shipment_logistics."заявка_id" = з.id
         WHERE з.id = $1
         ORDER BY з.дата_создания DESC
         LIMIT 1`;  // Ограничиваем одной записью, так как ищем по ID
@@ -181,13 +243,57 @@ async function searchOrders(rawQuery: string, searchPatterns: string[]): Promise
           з.id, 
           з.статус, 
           з.дата_создания,
-          з.общая_сумма,
+          (
+            COALESCE(order_totals.items_total, 0)
+            + COALESCE(purchase_logistics.purchase_delivery_total, 0)
+            + COALESCE(shipment_logistics.shipment_delivery_total, 0)
+          )::numeric as общая_сумма,
           з.адрес_доставки,
           к.название as клиент_название,
           с.фио as менеджер_фио
         FROM "Заявки" з
         LEFT JOIN "Клиенты" к ON з.клиент_id = к.id
         LEFT JOIN "Сотрудники" с ON з.менеджер_id = с.id
+        LEFT JOIN (
+          SELECT
+            positions."заявка_id",
+            SUM(
+              COALESCE(positions."количество", 0)
+              * COALESCE(positions."цена", 0)
+              * (1 + COALESCE(vat."ставка", 0) / 100.0)
+            )::numeric as items_total
+          FROM "Позиции_заявки" positions
+          LEFT JOIN "Ставки_НДС" vat ON vat.id = positions."ндс_id"
+          GROUP BY positions."заявка_id"
+        ) order_totals ON order_totals."заявка_id" = з.id
+        LEFT JOIN (
+          SELECT
+            purchases."заявка_id",
+            SUM(
+              CASE
+                WHEN COALESCE(purchases."использовать_доставку", false)
+                  AND COALESCE(purchases."статус", 'заказано') <> 'отменено'
+                  THEN COALESCE(purchases."стоимость_доставки", 0)
+                ELSE 0
+              END
+            )::numeric as purchase_delivery_total
+          FROM "Закупки" purchases
+          GROUP BY purchases."заявка_id"
+        ) purchase_logistics ON purchase_logistics."заявка_id" = з.id
+        LEFT JOIN (
+          SELECT
+            shipments."заявка_id",
+            SUM(
+              CASE
+                WHEN COALESCE(shipments."использовать_доставку", true)
+                  AND COALESCE(shipments."статус", 'в пути') <> 'отменено'
+                  THEN COALESCE(shipments."стоимость_доставки", 0)
+                ELSE 0
+              END
+            )::numeric as shipment_delivery_total
+          FROM "Отгрузки" shipments
+          GROUP BY shipments."заявка_id"
+        ) shipment_logistics ON shipment_logistics."заявка_id" = з.id
         WHERE 
           CAST(з.id AS TEXT) LIKE $1
           OR з.статус LIKE ANY($2)
@@ -201,7 +307,9 @@ async function searchOrders(rawQuery: string, searchPatterns: string[]): Promise
 
         const result = await query(queryText, queryParams);
 
-        return result.rows.map(order => {
+        return Promise.all(result.rows.map(async (order) => {
+            const workflow = await getOrderWorkflowSummary(Number(order.id));
+            const displayStatus = getWorkflowDisplayStatus(workflow);
             const statusMap: Record<string, string> = {
                 'новая': 'Новая',
                 'в работе': 'В работе',
@@ -226,7 +334,7 @@ async function searchOrders(rawQuery: string, searchPatterns: string[]): Promise
             };
 
             // Clean the status text
-            const cleanStatus = (order.статус || '').trim().toLowerCase();
+            const cleanStatus = (displayStatus || order.статус || '').trim().toLowerCase();
             // Only use status if it's in our mapping
             const statusText = statusMap[cleanStatus] || '';
             const managerInfo = order.менеджер_фио ? ` • ${order.менеджер_фио}` : '';
@@ -244,7 +352,7 @@ async function searchOrders(rawQuery: string, searchPatterns: string[]): Promise
                 date: new Date(order.дата_создания).toLocaleDateString(),
                 price: order.общая_сумма
             };
-        });
+        }));
     } catch (error) {
         console.error('Ошибка при поиске заявок:', error);
         return [];

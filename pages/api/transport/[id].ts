@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { query } from '../../../lib/db';
-import { requireAuth, requirePermission } from '../../../lib/auth';
+import { requirePermission } from '../../../lib/auth';
+import { getTransportCompanyAggregate, getTransportPerformance } from '../../../lib/transportAnalytics';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     const { id } = req.query;
@@ -14,19 +15,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             const canMonthsView = actor.permissions.includes('transport.shipments.months.view');
 
             // Get transport company details
-            const transportResult = await query(`
-        SELECT 
-          тк.*,
-          COUNT(о.id) as общее_количество_отгрузок,
-          COUNT(CASE WHEN COALESCE(о."статус", 'в пути') NOT IN ('доставлено', 'отменено') THEN 1 END) as активные_отгрузки,
-          COUNT(CASE WHEN COALESCE(о."статус", 'в пути') = 'доставлено' THEN 1 END) as завершенные_отгрузки,
-          COALESCE(AVG(о."стоимость_доставки"), 0) as средняя_стоимость,
-          COALESCE(SUM(о."стоимость_доставки"), 0) as общая_выручка
-        FROM "Транспортные_компании" тк
-        LEFT JOIN "Отгрузки" о ON тк.id = о."транспорт_id"
-        WHERE тк.id = $1
-        GROUP BY тк.id, тк."название", тк."телефон", тк.email, тк."тариф", тк.created_at
-      `, [id]);
+            const transportResult = await getTransportCompanyAggregate({ query }, String(id));
 
             if (transportResult.rows.length === 0) {
                 return res.status(404).json({ error: 'Transport company not found' });
@@ -38,52 +27,85 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             const shipmentsResult = canHistoryView
                 ? await query(`
         SELECT 
-          о.*,
-          з."id" as заявка_номер,
-          COALESCE(к."название", 'Самостоятельная отгрузка') as клиент_название,
-          з."адрес_доставки" as адрес_доставки,
-          з."общая_сумма" as сумма_заявки,
-          COALESCE(о."статус", з."статус", 'в пути') as заявка_статус
-        FROM "Отгрузки" о
-        LEFT JOIN "Заявки" з ON о."заявка_id" = з.id
-        LEFT JOIN "Клиенты" к ON з."клиент_id" = к.id
-        WHERE о."транспорт_id" = $1
-        ORDER BY о."дата_отгрузки" DESC
+          s.*,
+          o."id" as заявка_номер,
+          COALESCE(c."название", 'Самостоятельная отгрузка') as клиент_название,
+          o."адрес_доставки" as адрес_доставки,
+          (
+            COALESCE(order_totals.items_total, 0)
+            + COALESCE(purchase_logistics.purchase_delivery_total, 0)
+            + COALESCE(shipment_logistics.shipment_delivery_total, 0)
+          )::numeric as сумма_заявки,
+          COALESCE(s."статус", o."статус", 'в пути') as заявка_статус
+        FROM "Отгрузки" s
+        LEFT JOIN "Заявки" o ON s."заявка_id" = o.id
+        LEFT JOIN "Клиенты" c ON o."клиент_id" = c.id
+        LEFT JOIN (
+          SELECT
+            positions."заявка_id",
+            SUM(
+              COALESCE(positions."количество", 0)
+              * COALESCE(positions."цена", 0)
+              * (1 + COALESCE(vat."ставка", 0) / 100.0)
+            )::numeric as items_total
+          FROM "Позиции_заявки" positions
+          LEFT JOIN "Ставки_НДС" vat ON vat.id = positions."ндс_id"
+          GROUP BY positions."заявка_id"
+        ) order_totals ON order_totals."заявка_id" = o.id
+        LEFT JOIN (
+          SELECT
+            purchases."заявка_id",
+            SUM(
+              CASE
+                WHEN COALESCE(purchases."использовать_доставку", false)
+                  AND COALESCE(purchases."статус", 'заказано') <> 'отменено'
+                  THEN COALESCE(purchases."стоимость_доставки", 0)
+                ELSE 0
+              END
+            )::numeric as purchase_delivery_total
+          FROM "Закупки" purchases
+          GROUP BY purchases."заявка_id"
+        ) purchase_logistics ON purchase_logistics."заявка_id" = o.id
+        LEFT JOIN (
+          SELECT
+            shipments."заявка_id",
+            SUM(
+              CASE
+                WHEN COALESCE(shipments."использовать_доставку", true)
+                  AND COALESCE(shipments."статус", 'в пути') <> 'отменено'
+                  THEN COALESCE(shipments."стоимость_доставки", 0)
+                ELSE 0
+              END
+            )::numeric as shipment_delivery_total
+          FROM "Отгрузки" shipments
+          GROUP BY shipments."заявка_id"
+        ) shipment_logistics ON shipment_logistics."заявка_id" = o.id
+        WHERE s."транспорт_id" = $1
+        ORDER BY s."дата_отгрузки" DESC, s.id DESC
         LIMIT 100
       `, [id])
                 : { rows: [] as any[] };
 
             // Get performance statistics by month
             const performanceResult = canMonthsView
-                ? await query(`
-        SELECT 
-          TO_CHAR(DATE_TRUNC('month', о."дата_отгрузки"), 'YYYY-MM-01') as месяц,
-          COUNT(*) as количество_отгрузок,
-          COALESCE(AVG(о."стоимость_доставки"), 0) as средняя_стоимость,
-          COALESCE(SUM(о."стоимость_доставки"), 0) as общая_выручка,
-          COUNT(CASE WHEN о."статус" = 'доставлено' THEN 1 END) as успешные_доставки
-        FROM "Отгрузки" о
-        WHERE о."транспорт_id" = $1
-        GROUP BY DATE_TRUNC('month', о."дата_отгрузки")
-        ORDER BY месяц DESC
-      `, [id])
+                ? await getTransportPerformance({ query }, String(id))
                 : { rows: [] as any[] };
 
             // Get current active shipments
             const activeShipmentsResult = canActiveShipmentsView
                 ? await query(`
         SELECT 
-          о.*,
-          з."id" as заявка_номер,
-          COALESCE(к."название", 'Самостоятельная отгрузка') as клиент_название,
-          з."адрес_доставки" as адрес_доставки,
-          COALESCE(о."статус", з."статус", 'в пути') as заявка_статус
-        FROM "Отгрузки" о
-        LEFT JOIN "Заявки" з ON о."заявка_id" = з.id
-        LEFT JOIN "Клиенты" к ON з."клиент_id" = к.id
-        WHERE о."транспорт_id" = $1
-        AND COALESCE(о."статус", 'в пути') NOT IN ('доставлено', 'отменено')
-        ORDER BY о."дата_отгрузки" DESC
+          s.*,
+          o."id" as заявка_номер,
+          COALESCE(c."название", 'Самостоятельная отгрузка') as клиент_название,
+          o."адрес_доставки" as адрес_доставки,
+          COALESCE(s."статус", o."статус", 'в пути') as заявка_статус
+        FROM "Отгрузки" s
+        LEFT JOIN "Заявки" o ON s."заявка_id" = o.id
+        LEFT JOIN "Клиенты" c ON o."клиент_id" = c.id
+        WHERE s."транспорт_id" = $1
+        AND COALESCE(s."статус", 'в пути') NOT IN ('доставлено', 'получено', 'отменено')
+        ORDER BY s."дата_отгрузки" DESC, s.id DESC
       `, [id])
                 : { rows: [] as any[] };
 

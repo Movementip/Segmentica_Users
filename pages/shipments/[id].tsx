@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter } from 'next/router';
 import { withLayout } from '../../layout/Layout';
 import styles from './ShipmentDetail.module.css';
@@ -180,7 +181,7 @@ function ShipmentDetailPage(): JSX.Element {
 
     const getCostText = useCallback((item: ShipmentDetail) => {
         if (item.использовать_доставку === false) return 'Не используется';
-        return item.стоимость_доставки ? formatCurrency(item.стоимость_доставки) : 'Не указана';
+        return item.стоимость_доставки == null ? 'Не указана' : formatCurrency(item.стоимость_доставки);
     }, []);
 
     const fetchShipmentPositions = useCallback(async (orderId: number) => {
@@ -216,7 +217,7 @@ function ShipmentDetailPage(): JSX.Element {
         }
     }, [canOrdersView, canShipmentsPositionsView]);
 
-    const fetchEditPreviewPositions = useCallback(async (orderId: number) => {
+    const fetchEditPreviewPositions = useCallback(async (orderId: number, shipmentId?: number | null) => {
         if (!orderId || !canOrdersView || !canShipmentsPositionsView) {
             setEditPreviewPositions([]);
             return;
@@ -224,14 +225,20 @@ function ShipmentDetailPage(): JSX.Element {
 
         try {
             setEditPreviewLoading(true);
-            const res = await fetch(`/api/orders/${encodeURIComponent(String(orderId))}`);
+            const endpoint = shipmentId
+                ? `/api/shipments/${encodeURIComponent(String(shipmentId))}`
+                : `/api/orders/${encodeURIComponent(String(orderId))}/shipment-draft`;
+            const res = await fetch(endpoint);
             if (!res.ok) {
                 setEditPreviewPositions([]);
                 return;
             }
 
             const data = await res.json();
-            setEditPreviewPositions(Array.isArray(data?.позиции) ? data.позиции : []);
+            const positions = shipmentId
+                ? (Array.isArray(data?.позиции) ? data.позиции : [])
+                : (Array.isArray(data) ? data : []);
+            setEditPreviewPositions(positions);
         } catch {
             setEditPreviewPositions([]);
         } finally {
@@ -327,7 +334,8 @@ function ShipmentDetailPage(): JSX.Element {
         }
 
         setManualPositions([createEmptyManualShipmentPosition()]);
-        fetchEditPreviewPositions(formData.заявка_id);
+        const currentShipmentId = shipment?.заявка_id === formData.заявка_id ? shipment?.id : null;
+        fetchEditPreviewPositions(formData.заявка_id, currentShipmentId);
     }, [
         fetchEditPreviewPositions,
         fetchProducts,
@@ -336,6 +344,7 @@ function ShipmentDetailPage(): JSX.Element {
         isEditModalOpen,
         loadDirectShipmentPositions,
         shipment?.id,
+        shipment?.заявка_id,
     ]);
 
     const editPreviewTotal = editPreviewPositions.reduce((sum, position) => {
@@ -555,12 +564,14 @@ function ShipmentDetailPage(): JSX.Element {
             console.error(e);
             setAttachmentsError(e instanceof Error ? e.message : 'Ошибка удаления вложения');
         }
-    }, [fetchAttachments, shipment?.id]);
+    }, [canShipmentsAttachmentsDelete, fetchAttachments, shipment?.id]);
 
     const getStatusText = (status: string) => {
         switch ((status || '').toLowerCase()) {
             case 'в пути':
                 return 'В пути';
+            case 'получено':
+                return 'Получено';
             case 'доставлено':
                 return 'Доставлено';
             case 'отменено':
@@ -574,6 +585,7 @@ function ShipmentDetailPage(): JSX.Element {
         switch ((status || '').toLowerCase()) {
             case 'в пути':
                 return styles.statusPillBlue;
+            case 'получено':
             case 'доставлено':
                 return styles.statusPillGreen;
             case 'отменено':
@@ -1217,10 +1229,13 @@ function ShipmentDetailPage(): JSX.Element {
                     <Box style={{ marginTop: 12 }}>
                         {previewAttachment && canPreviewInline(previewAttachment) ? (
                             previewAttachment.mime_type.toLowerCase().startsWith('image/') || /\.(png|jpg|jpeg|gif|webp|bmp|svg)$/i.test(previewAttachment.filename) ? (
-                                <img
+                                <Image
                                     src={`/api/attachments/${encodeURIComponent(previewAttachment.id)}/inline`}
                                     alt={previewAttachment.filename}
-                                    style={{ width: '100%', maxHeight: '75vh', objectFit: 'contain' }}
+                                    width={1600}
+                                    height={1200}
+                                    unoptimized
+                                    style={{ width: '100%', maxHeight: '75vh', height: 'auto', objectFit: 'contain' }}
                                 />
                             ) : (
                                 <iframe
@@ -1471,6 +1486,7 @@ function ShipmentDetailPage(): JSX.Element {
                                     <Select.Content position="popper" className={modalStyles.radixSelectContent}>
                                         <Select.Item value="в пути">В пути</Select.Item>
                                         <Select.Item value="доставлено">Доставлено</Select.Item>
+                                        <Select.Item value="получено">Получено</Select.Item>
                                         <Select.Item value="отменено">Отменено</Select.Item>
                                     </Select.Content>
                                 </Select.Root>
@@ -1523,10 +1539,10 @@ function ShipmentDetailPage(): JSX.Element {
                             <Box className={shipmentEditorStyles.modalPreviewSection}>
                                 <Flex align="center" justify="between" gap="3" wrap="wrap">
                                     <Text as="div" size="3" weight="medium" className={shipmentEditorStyles.modalPreviewTitle}>
-                                        {formData.заявка_id ? 'Позиции заявки' : 'Позиции отгрузки'}
+                                        {'Позиции отгрузки'}
                                     </Text>
                                     {formData.заявка_id && editPreviewLoading ? (
-                                        <Text size="2" color="gray">Загружаем состав заявки...</Text>
+                                        <Text size="2" color="gray">Загружаем состав отгрузки...</Text>
                                     ) : null}
                                     {!formData.заявка_id ? (
                                         <Button
@@ -1559,7 +1575,7 @@ function ShipmentDetailPage(): JSX.Element {
 
                                 {formData.заявка_id && !editPreviewLoading && editPreviewPositions.length === 0 ? (
                                     <Text as="div" size="2" color="gray" className={shipmentEditorStyles.modalPreviewHint}>
-                                        У выбранной заявки пока нет позиций или они недоступны для просмотра.
+                                        Для этой отгрузки сейчас нет позиций или они недоступны для просмотра.
                                     </Text>
                                 ) : null}
 

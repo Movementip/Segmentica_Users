@@ -2,7 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { getPool, query } from '../../lib/db';
 import { hasPermission, requireAuth, requirePermission } from '../../lib/auth';
 import { calculateVatAmountsFromLine, DEFAULT_VAT_RATE_ID, getVatRateOption, isValidVatRateId, normalizeVatRateId } from '../../lib/vat';
-import { getOrderWorkflowSummary, syncOrderWorkflowStatus } from '../../lib/orderWorkflow';
+import { getOrderWorkflowSummary, getWorkflowDisplayStatus, syncOrderWorkflowStatus } from '../../lib/orderWorkflow';
 import { checkAndCreateMissingProducts } from '../../lib/missingProductsHelper';
 import { reconcileOrderExecutionsForPositionUpdate, rollbackOrderFulfillment } from '../../lib/orderFulfillment';
 import { normalizeOrderExecutionMode, normalizeOrderSupplyMode, type OrderExecutionMode } from '../../lib/orderModes';
@@ -105,6 +105,7 @@ export default async function handler(
               SUM(
                 CASE
                   WHEN COALESCE(purchases."использовать_доставку", false)
+                    AND COALESCE(purchases."статус", 'заказано') <> 'отменено'
                     THEN COALESCE(purchases."стоимость_доставки", 0)
                   ELSE 0
                 END
@@ -118,6 +119,7 @@ export default async function handler(
               SUM(
                 CASE
                   WHEN COALESCE(shipments."использовать_доставку", true)
+                    AND COALESCE(shipments."статус", 'в пути') <> 'отменено'
                     THEN COALESCE(shipments."стоимость_доставки", 0)
                   ELSE 0
                 END
@@ -132,10 +134,10 @@ export default async function handler(
                 const baseOrders: Order[] = result.rows.map(mapOrderRow);
 
                 const orders = await Promise.all(baseOrders.map(async (order) => {
-                    const summary = await syncOrderWorkflowStatus(Number(order.id));
+                    const summary = await getOrderWorkflowSummary(Number(order.id));
                     return {
                         ...order,
-                        статус: summary.currentStatus,
+                        статус: getWorkflowDisplayStatus(summary),
                         can_create_purchase: summary.canCreatePurchase,
                         can_assemble: summary.canAssemble,
                         can_create_shipment: summary.canCreateShipment,
@@ -188,6 +190,7 @@ export default async function handler(
             SUM(
               CASE
                 WHEN COALESCE(purchases."использовать_доставку", false)
+                  AND COALESCE(purchases."статус", 'заказано') <> 'отменено'
                   THEN COALESCE(purchases."стоимость_доставки", 0)
                 ELSE 0
               END
@@ -201,6 +204,7 @@ export default async function handler(
             SUM(
               CASE
                 WHEN COALESCE(shipments."использовать_доставку", true)
+                  AND COALESCE(shipments."статус", 'в пути') <> 'отменено'
                   THEN COALESCE(shipments."стоимость_доставки", 0)
                 ELSE 0
               END
@@ -215,10 +219,10 @@ export default async function handler(
             const baseOrders: Order[] = result.rows.map(mapOrderRow);
 
             const orders = await Promise.all(baseOrders.map(async (order) => {
-                const summary = await syncOrderWorkflowStatus(Number(order.id));
+                const summary = await getOrderWorkflowSummary(Number(order.id));
                 return {
                     ...order,
-                    статус: summary.currentStatus,
+                    статус: getWorkflowDisplayStatus(summary),
                     can_create_purchase: summary.canCreatePurchase,
                     can_assemble: summary.canAssemble,
                     can_create_shipment: summary.canCreateShipment,
@@ -337,7 +341,7 @@ export default async function handler(
 
             const existingOrderResult = await query(
                 `
-                    SELECT id, "режим_исполнения"
+                    SELECT id, "режим_исполнения", "статус"
                     FROM "Заявки"
                     WHERE id = $1
                     LIMIT 1
@@ -352,12 +356,20 @@ export default async function handler(
             const nextExecutionMode = hasExecutionMode
                 ? normalizeOrderExecutionMode(режим_исполнения)
                 : normalizeOrderExecutionMode(existingOrderResult.rows[0]?.режим_исполнения);
+            const currentStatus = typeof existingOrderResult.rows[0]?.статус === 'string'
+                ? existingOrderResult.rows[0].статус.trim()
+                : existingOrderResult.rows[0]?.статус;
 
             if (shouldUpdatePositions && позиции.length === 0) {
                 return res.status(400).json({ error: 'Заявка должна содержать хотя бы одну позицию' });
             }
 
-            if (shouldUpdatePositions && normalizedStatus && ['собрана', 'отгружена', 'выполнена'].includes(normalizedStatus)) {
+            if (
+                shouldUpdatePositions
+                && normalizedStatus
+                && ['собрана', 'отгружена', 'выполнена'].includes(normalizedStatus)
+                && normalizedStatus !== currentStatus
+            ) {
                 return res.status(400).json({
                     error: 'Нельзя одновременно менять позиции заявки и переводить её в поздний статус. Сначала сохраните позиции.'
                 });

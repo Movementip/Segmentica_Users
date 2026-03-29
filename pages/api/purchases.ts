@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { query } from '../../lib/db';
+import { getPool, query } from '../../lib/db';
 import { requirePermission } from '../../lib/auth';
 import { calculateVatAmountsFromLine, DEFAULT_VAT_RATE_ID, getVatRateOption, isValidVatRateId, normalizeVatRateId } from '../../lib/vat';
 import { syncOrderWorkflowStatus } from '../../lib/orderWorkflow';
@@ -8,6 +8,7 @@ import { syncOrderPositionsFromLinkedPurchases } from '../../lib/orderFulfillmen
 import { normalizeOrderExecutionMode } from '../../lib/orderModes';
 import { ensureLogisticsDeliverySchema, normalizeDeliveryCost, toBoolean } from '../../lib/logisticsDelivery';
 import { syncPurchaseWarehouseState } from '../../lib/purchaseWarehouse';
+import { syncPurchaseFinanceRecord } from '../../lib/companyFinance';
 
 const calculatePurchasePositionsTotal = (positions: Array<{ количество: number; цена: number; ндс_id?: number }>) => (
     positions.reduce((sum, item) => {
@@ -334,13 +335,15 @@ export default async function handler(
                 }
             }
 
-            // Start transaction
-            await query('BEGIN');
+            const pool = await getPool();
+            const client = await pool.connect();
 
             try {
+                await client.query('BEGIN');
+                const txQuery = (text: string, params?: any[]) => client.query(text, params);
                 let orderExecutionMode = 'warehouse';
                 if (заявка_id) {
-                    const orderModeResult = await query(
+                    const orderModeResult = await txQuery(
                         'SELECT "режим_исполнения" FROM "Заявки" WHERE id = $1 LIMIT 1',
                         [заявка_id]
                     );
@@ -348,7 +351,7 @@ export default async function handler(
                 }
 
                 // Create purchase
-                const purchaseResult = await query(`
+                const purchaseResult = await txQuery(`
           INSERT INTO "Закупки" (
             "поставщик_id", "заявка_id", "дата_заказа", "дата_поступления", 
             "статус", "общая_сумма", "использовать_доставку", "транспорт_id", "стоимость_доставки"
@@ -369,17 +372,17 @@ export default async function handler(
 
                 // Create purchase positions
                 for (const position of позиции) {
-                    await query(`
+                    await txQuery(`
             INSERT INTO "Позиции_закупки" (
               "закупка_id", "товар_id", "количество", "цена", "ндс_id"
             ) VALUES ($1, $2, $3, $4, $5)
           `, [purchaseId, position.товар_id, position.количество, position.цена, normalizeVatRateId(position.ндс_id)]);
                 }
 
-                await syncPurchaseWarehouseState({ query }, purchaseId, статус === 'получено' && orderExecutionMode !== 'direct');
+                await syncPurchaseWarehouseState({ query: txQuery }, purchaseId, статус === 'получено' && orderExecutionMode !== 'direct');
+                await syncPurchaseFinanceRecord({ query: txQuery }, purchaseId);
 
-                // Commit transaction
-                await query('COMMIT');
+                await client.query('COMMIT');
 
                 if (заявка_id) {
                     await syncOrderPositionsFromLinkedPurchases(query, Number(заявка_id));
@@ -394,9 +397,10 @@ export default async function handler(
                     общая_сумма
                 });
             } catch (transactionError) {
-                // Rollback transaction on error
-                await query('ROLLBACK');
+                await client.query('ROLLBACK');
                 throw transactionError;
+            } finally {
+                client.release();
             }
         } catch (error) {
             console.error('Error creating purchase:', error);
@@ -447,15 +451,17 @@ export default async function handler(
                 return res.status(400).json({ error: 'Нет данных для обновления' });
             }
 
-            // Start transaction
-            await query('BEGIN');
+            const pool = await getPool();
+            const client = await pool.connect();
 
             try {
+                await client.query('BEGIN');
+                const txQuery = (text: string, params?: any[]) => client.query(text, params);
                 // If supplier_id provided, validate supplier exists
                 if (typeof поставщик_id !== 'undefined') {
-                    const supplierCheck = await query('SELECT id FROM "Поставщики" WHERE id = $1', [поставщик_id]);
+                    const supplierCheck = await txQuery('SELECT id FROM "Поставщики" WHERE id = $1', [поставщик_id]);
                     if (supplierCheck.rows.length === 0) {
-                        await query('ROLLBACK');
+                        await client.query('ROLLBACK');
                         return res.status(400).json({ error: 'Поставщик не найден' });
                     }
                 }
@@ -491,14 +497,14 @@ export default async function handler(
                     : 0;
 
                 if (effectiveUseDelivery && (!effectiveTransportId || effectiveTransportId <= 0)) {
-                    await query('ROLLBACK');
+                    await client.query('ROLLBACK');
                     return res.status(400).json({ error: 'При включенной доставке нужно выбрать транспортную компанию' });
                 }
 
                 if (effectiveTransportId) {
-                    const transportCheck = await query('SELECT id FROM "Транспортные_компании" WHERE id = $1', [effectiveTransportId]);
+                    const transportCheck = await txQuery('SELECT id FROM "Транспортные_компании" WHERE id = $1', [effectiveTransportId]);
                     if (transportCheck.rows.length === 0) {
-                        await query('ROLLBACK');
+                        await client.query('ROLLBACK');
                         return res.status(400).json({ error: 'Транспортная компания не найдена' });
                     }
                 }
@@ -506,24 +512,24 @@ export default async function handler(
                 // If positions provided, validate all products exist and are valid
                 if (typeof позиции !== 'undefined') {
                     if (!Array.isArray(позиции) || позиции.length === 0) {
-                        await query('ROLLBACK');
+                        await client.query('ROLLBACK');
                         return res.status(400).json({ error: 'Позиции обязательны' });
                     }
 
                     for (const pos of позиции) {
                         if (!pos || !pos.товар_id || pos.количество <= 0 || pos.цена <= 0) {
-                            await query('ROLLBACK');
+                            await client.query('ROLLBACK');
                             return res.status(400).json({ error: 'Позиции содержат некорректные данные' });
                         }
 
                         if (!isValidVatRateId(pos?.ндс_id ?? DEFAULT_VAT_RATE_ID)) {
-                            await query('ROLLBACK');
+                            await client.query('ROLLBACK');
                             return res.status(400).json({ error: 'Позиции содержат некорректную ставку НДС' });
                         }
 
-                        const productCheck = await query('SELECT id FROM "Товары" WHERE id = $1', [pos.товар_id]);
+                        const productCheck = await txQuery('SELECT id FROM "Товары" WHERE id = $1', [pos.товар_id]);
                         if (productCheck.rows.length === 0) {
-                            await query('ROLLBACK');
+                            await client.query('ROLLBACK');
                             return res.status(400).json({ error: `Товар с ID ${pos.товар_id} не найден` });
                         }
                     }
@@ -540,7 +546,7 @@ export default async function handler(
                 if (shouldRecalculateTotal) {
                     const positionsForTotal = typeof позиции !== 'undefined'
                         ? позиции
-                        : (await query(
+                        : (await txQuery(
                             'SELECT "товар_id", "количество", "цена", "ндс_id" FROM "Позиции_закупки" WHERE "закупка_id" = $1 ORDER BY id',
                             [id]
                         )).rows;
@@ -602,7 +608,7 @@ export default async function handler(
 
                 values.push(id);
 
-                const purchaseResult = await query(`
+                const purchaseResult = await txQuery(`
           UPDATE "Закупки"
           SET ${updateFields.join(', ')}
           WHERE id = $${paramCount}
@@ -610,7 +616,7 @@ export default async function handler(
         `, values);
 
                 if (purchaseResult.rows.length === 0) {
-                    await query('ROLLBACK');
+                    await client.query('ROLLBACK');
                     return res.status(404).json({ error: 'Закупка не найдена' });
                 }
 
@@ -618,9 +624,9 @@ export default async function handler(
 
                 // Replace positions if provided
                 if (typeof позиции !== 'undefined') {
-                    await query('DELETE FROM "Позиции_закупки" WHERE "закупка_id" = $1', [id]);
+                    await txQuery('DELETE FROM "Позиции_закупки" WHERE "закупка_id" = $1', [id]);
                     for (const pos of позиции) {
-                        await query(`
+                        await txQuery(`
               INSERT INTO "Позиции_закупки" ("закупка_id", "товар_id", "количество", "цена", "ндс_id")
               VALUES ($1, $2, $3, $4, $5)
             `, [id, pos.товар_id, pos.количество, pos.цена, normalizeVatRateId(pos.ндс_id)]);
@@ -629,7 +635,7 @@ export default async function handler(
 
                 let orderExecutionMode = 'warehouse';
                 if (updatedPurchase.заявка_id != null) {
-                    const orderModeResult = await query(
+                    const orderModeResult = await txQuery(
                         'SELECT "режим_исполнения" FROM "Заявки" WHERE id = $1 LIMIT 1',
                         [updatedPurchase.заявка_id]
                     );
@@ -637,14 +643,14 @@ export default async function handler(
                 }
 
                 await syncPurchaseWarehouseState(
-                    { query },
+                    { query: txQuery },
                     Number(id),
                     normalizeOrderExecutionMode(orderExecutionMode) !== 'direct'
                     && String(updatedPurchase.статус || '').trim().toLowerCase() === 'получено'
                 );
+                await syncPurchaseFinanceRecord({ query: txQuery }, Number(id));
 
-                // Commit transaction
-                await query('COMMIT');
+                await client.query('COMMIT');
 
                 const nextOrderId = updatedPurchase.заявка_id == null ? null : Number(updatedPurchase.заявка_id);
                 const orderIdsToSync = [previousOrderId, nextOrderId].filter(
@@ -660,9 +666,10 @@ export default async function handler(
 
                 res.status(200).json(updatedPurchase);
             } catch (transactionError) {
-                // Rollback transaction on error
-                await query('ROLLBACK');
+                await client.query('ROLLBACK');
                 throw transactionError;
+            } finally {
+                client.release();
             }
         } catch (error) {
             console.error('Error updating purchase:', error);
@@ -691,10 +698,14 @@ export default async function handler(
             const purchaseStatus = String(purchaseResult.rows[0].статус || '').toLowerCase();
             const purchaseId = Number(id);
 
-            await query('BEGIN');
+            const pool = await getPool();
+            const client = await pool.connect();
 
             try {
-                const positionsResult = await query(
+                await client.query('BEGIN');
+                const txQuery = (text: string, params?: any[]) => client.query(text, params);
+
+                const positionsResult = await txQuery(
                     'SELECT "товар_id", COALESCE("количество", 0)::integer as quantity FROM "Позиции_закупки" WHERE "закупка_id" = $1',
                     [purchaseId]
                 );
@@ -704,34 +715,35 @@ export default async function handler(
                         const productId = Number(position.товар_id);
                         const quantity = Number(position.quantity) || 0;
 
-                        const warehouseResult = await query(
+                        const warehouseResult = await txQuery(
                             'SELECT COALESCE("количество", 0)::integer as quantity FROM "Склад" WHERE "товар_id" = $1',
                             [productId]
                         );
 
                         const currentQty = Number(warehouseResult.rows[0]?.quantity) || 0;
                         if (currentQty < quantity) {
-                            await query('ROLLBACK');
+                            await client.query('ROLLBACK');
                             return res.status(409).json({
                                 error: 'Нельзя удалить полученную закупку: часть товара уже использована в складе или других операциях'
                             });
                         }
 
-                        await query(
+                        await txQuery(
                             'UPDATE "Склад" SET "количество" = "количество" - $1 WHERE "товар_id" = $2',
                             [quantity, productId]
                         );
                     }
                 }
 
-                await query('DELETE FROM "Финансы_компании" WHERE "закупка_id" = $1', [purchaseId]);
-                await query('DELETE FROM "Движения_склада" WHERE "закупка_id" = $1', [purchaseId]);
-                await query('DELETE FROM "Позиции_закупки" WHERE "закупка_id" = $1', [purchaseId]);
-                const result = await query('DELETE FROM "Закупки" WHERE id = $1 RETURNING *', [purchaseId]);
+                await txQuery('DELETE FROM "Финансы_компании" WHERE "закупка_id" = $1', [purchaseId]);
+                await txQuery('DELETE FROM "Движения_склада" WHERE "закупка_id" = $1', [purchaseId]);
+                await txQuery('DELETE FROM "Позиции_закупки" WHERE "закупка_id" = $1', [purchaseId]);
+                const result = await txQuery('DELETE FROM "Закупки" WHERE id = $1 RETURNING *', [purchaseId]);
 
-                await query('COMMIT');
+                await client.query('COMMIT');
 
                 if (orderId) {
+                    await syncOrderPositionsFromLinkedPurchases(query, orderId);
                     await checkAndCreateMissingProducts(orderId);
                     await syncMissingProductsFromPurchases(orderId);
                     await syncOrderWorkflowStatus(orderId);
@@ -739,8 +751,10 @@ export default async function handler(
 
                 res.status(200).json({ message: 'Закупка успешно удалена', deletedPurchase: result.rows[0] });
             } catch (txError) {
-                await query('ROLLBACK');
+                await client.query('ROLLBACK');
                 throw txError;
+            } finally {
+                client.release();
             }
         } catch (error) {
             console.error('Error deleting purchase:', error);

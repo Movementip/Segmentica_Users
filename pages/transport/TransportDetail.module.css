@@ -432,6 +432,12 @@
   border-color: rgba(56, 142, 60, 0.25);
 }
 
+.statusPill[data-status='получено'] {
+  background: #388e3c15;
+  color: #388e3c;
+  border-color: rgba(56, 142, 60, 0.25);
+}
+
 .statusPill[data-status='отменено'] {
   background: #d32f2f15;
   color: #d32f2f;

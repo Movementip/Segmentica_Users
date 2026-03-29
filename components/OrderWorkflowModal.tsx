@@ -1,9 +1,11 @@
 import React from 'react';
 import { Badge, Box, Button, Dialog, Flex, Text } from '@radix-ui/themes';
 import styles from './OrderWorkflowModal.module.css';
+import { getOrderExecutionModeLabel, getOrderSupplyModeLabel, type OrderExecutionMode } from '../lib/orderModes';
 
 export interface OrderWorkflowModalSummary {
     orderId: number;
+    executionMode: OrderExecutionMode;
     currentStatus: string;
     derivedStatus: string;
     positionCount: number;
@@ -59,7 +61,18 @@ export interface OrderWorkflowModalSummary {
         статус: string;
     }>;
     purchases: Array<{ id: number; статус: string; дата_заказа?: string; общая_сумма?: number; использовать_доставку?: boolean; стоимость_доставки?: number }>;
-    shipments: Array<{ id: number; branchNo: number; shipmentKind: string; статус: string; дата_отгрузки?: string; транспорт_название?: string; номер_отслеживания?: string; стоимость_доставки?: number; totalUnits: number }>;
+    shipments: Array<{
+        id: number;
+        branchNo: number;
+        shipmentKind: string;
+        статус: string;
+        дата_отгрузки?: string;
+        транспорт_название?: string;
+        номер_отслеживания?: string;
+        стоимость_доставки?: number;
+        totalUnits: number;
+        positions: Array<{ товар_id: number; товар_название: string; quantity: number }>;
+    }>;
     assemblyBatches: Array<{
         id: number;
         branchNo: number;
@@ -114,6 +127,10 @@ const formatMoney = (value?: number) => {
     return value.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' });
 };
 
+const formatMissingProductHistoryLabel = (item: OrderWorkflowModalSummary['missingProducts'][number]) => (
+    item.id == null ? item.статус : `#${item.id} (${item.статус})`
+);
+
 export function OrderWorkflowModal({
     isOpen,
     onClose,
@@ -125,6 +142,12 @@ export function OrderWorkflowModal({
     onCreateShipment,
 }: OrderWorkflowModalProps): JSX.Element | null {
     if (!isOpen) return null;
+
+    const isDirectOrder = summary?.executionMode === 'direct';
+    const directPurchasedUnits = summary?.positions.reduce((sum, position) => sum + Number(position.закуплено_количество || 0), 0) ?? 0;
+    const directRemainingPurchaseUnits = summary?.positions.reduce((sum, position) => sum + Number(position.осталось_закупить || 0), 0) ?? 0;
+    const directManualPositions = summary?.positions.filter((position) => position.способ_обеспечения === 'manual').length ?? 0;
+    const directPurchaseDrivenPositions = summary?.positions.filter((position) => position.способ_обеспечения === 'purchase').length ?? 0;
 
     return (
         <Dialog.Root open={isOpen} onOpenChange={(open) => (!open ? onClose() : undefined)}>
@@ -145,44 +168,76 @@ export function OrderWorkflowModal({
                                 <Badge variant="soft" color={getStatusColor(summary.currentStatus)} highContrast className={styles.statusPill}>
                                     Статус заявки: {summary.currentStatus}
                                 </Badge>
+                                <Badge variant="soft" color={isDirectOrder ? 'cyan' : 'indigo'} highContrast className={styles.modePill}>
+                                    {getOrderExecutionModeLabel(summary.executionMode)}
+                                </Badge>
                             </Flex>
                         </div>
+
+                        {isDirectOrder ? (
+                            <div className={styles.modeBanner}>
+                                Режим «Без склада»: контур остатков и недостач не используется. Позиции проходят через закупку или ручное проведение, а этап сборки показывает фиксацию партии к отгрузке без складского списания.
+                            </div>
+                        ) : null}
 
                         <div className={styles.grid}>
                             <div className={styles.card}>
                                 <Text as="div" size="3" weight="bold" className={styles.cardTitle}>
-                                    Обеспечение товаром
+                                    {isDirectOrder ? 'Закрытие позиций' : 'Обеспечение товаром'}
                                 </Text>
+                                {isDirectOrder ? (
+                                    <>
+                                        <div className={styles.cardLine}>
+                                            <Text size="2" color="gray">Позиций в закупке</Text>
+                                            <Text size="2" weight="bold">{summary.positions.filter((position) => position.способ_обеспечения === 'purchase').length}</Text>
+                                        </div>
+                                        <div className={styles.cardLine}>
+                                            <Text size="2" color="gray">Ручных позиций</Text>
+                                            <Text size="2" weight="bold">{directManualPositions}</Text>
+                                        </div>
+                                        <div className={styles.cardLine}>
+                                            <Text size="2" color="gray">Уже закуплено единиц</Text>
+                                            <Text size="2" weight="bold">{directPurchasedUnits}</Text>
+                                        </div>
+                                        <div className={styles.cardLine}>
+                                            <Text size="2" color="gray">Осталось закупить</Text>
+                                            <Text size="2" weight="bold">{directRemainingPurchaseUnits}</Text>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className={styles.cardLine}>
+                                            <Text size="2" color="gray">Активные недостачи</Text>
+                                            <Text size="2" weight="bold">{summary.activeMissingCount}</Text>
+                                        </div>
+                                        <div className={styles.cardLine}>
+                                            <Text size="2" color="gray">Не хватает единиц</Text>
+                                            <Text size="2" weight="bold">{summary.missingUnits}</Text>
+                                        </div>
+                                        <div className={styles.cardLine}>
+                                            <Text size="2" color="gray">В работе</Text>
+                                            <Text size="2" weight="bold">{summary.missingProcessingCount}</Text>
+                                        </div>
+                                        <div className={styles.cardLine}>
+                                            <Text size="2" color="gray">Уже заказано</Text>
+                                            <Text size="2" weight="bold">{summary.missingOrderedCount}</Text>
+                                        </div>
+                                    </>
+                                )}
                                 <div className={styles.cardLine}>
-                                    <Text size="2" color="gray">Активные недостачи</Text>
-                                    <Text size="2" weight="bold">{summary.activeMissingCount}</Text>
+                                    <Text size="2" color="gray">{isDirectOrder ? 'Подтверждено к отгрузке' : 'Покрыто со склада'}</Text>
+                                    <Text size="2" weight="bold">{isDirectOrder ? summary.assembledUnits : summary.coveredFromStockUnits}</Text>
                                 </div>
                                 <div className={styles.cardLine}>
-                                    <Text size="2" color="gray">Не хватает единиц</Text>
-                                    <Text size="2" weight="bold">{summary.missingUnits}</Text>
-                                </div>
-                                <div className={styles.cardLine}>
-                                    <Text size="2" color="gray">В работе</Text>
-                                    <Text size="2" weight="bold">{summary.missingProcessingCount}</Text>
-                                </div>
-                                <div className={styles.cardLine}>
-                                    <Text size="2" color="gray">Уже заказано</Text>
-                                    <Text size="2" weight="bold">{summary.missingOrderedCount}</Text>
-                                </div>
-                                <div className={styles.cardLine}>
-                                    <Text size="2" color="gray">Покрыто со склада</Text>
-                                    <Text size="2" weight="bold">{summary.coveredFromStockUnits}</Text>
-                                </div>
-                                <div className={styles.cardLine}>
-                                    <Text size="2" color="gray">Собрано</Text>
+                                    <Text size="2" color="gray">{isDirectOrder ? 'Подготовлено' : 'Собрано'}</Text>
                                     <Text size="2" weight="bold">{summary.assembledUnits}</Text>
                                 </div>
                                 <div className={styles.cardLine}>
-                                    <Text size="2" color="gray">Фактически списано со склада</Text>
-                                    <Text size="2" weight="bold">{summary.warehouseTakenUnits}</Text>
+                                    <Text size="2" color="gray">{isDirectOrder ? 'Фактически отгружено' : 'Фактически списано со склада'}</Text>
+                                    <Text size="2" weight="bold">{isDirectOrder ? summary.shippedUnits : summary.warehouseTakenUnits}</Text>
                                 </div>
                                 <div className={styles.cardLine}>
-                                    <Text size="2" color="gray">Осталось собрать</Text>
+                                    <Text size="2" color="gray">{isDirectOrder ? 'Осталось подготовить' : 'Осталось собрать'}</Text>
                                     <Text size="2" weight="bold">{summary.remainingAssemblyUnits}</Text>
                                 </div>
                             </div>
@@ -252,11 +307,15 @@ export function OrderWorkflowModal({
                                 <div className={styles.timelineItem}>
                                     <div className={`${styles.timelineDot} ${summary.activeMissingCount > 0 ? styles.timelineDotWarn : styles.timelineDotDone}`} />
                                     <div>
-                                        <div className={styles.timelineTitle}>2. Проверка склада и недостач</div>
+                                        <div className={styles.timelineTitle}>{isDirectOrder ? '2. Режим без склада и закрытие позиций' : '2. Проверка склада и недостач'}</div>
                                         <div className={styles.timelineText}>
-                                            {summary.activeMissingCount > 0
-                                                ? `Есть активные недостачи: ${summary.activeMissingCount} поз., не хватает ${summary.missingUnits} ед.`
-                                                : `Все позиции закрыты. Со склада покрыто ${summary.coveredFromStockUnits} ед.`}
+                                            {isDirectOrder
+                                                ? directRemainingPurchaseUnits > 0
+                                                    ? `Режим «Без склада» активен. Для закрытия позиций осталось закупить ${directRemainingPurchaseUnits} ед.`
+                                                    : 'Режим «Без склада» активен. Все позиции закрыты без использования складского контура.'
+                                                : summary.activeMissingCount > 0
+                                                    ? `Есть активные недостачи: ${summary.activeMissingCount} поз., не хватает ${summary.missingUnits} ед.`
+                                                    : `Все позиции закрыты. Со склада покрыто ${summary.coveredFromStockUnits} ед.`}
                                         </div>
                                         <div className={styles.detailList}>
                                             {summary.positions.map((position) => (
@@ -266,13 +325,16 @@ export function OrderWorkflowModal({
                                                         {position.товар_артикул ? ` (${position.товар_артикул})` : ''}
                                                     </div>
                                                     <div className={styles.detailCardMeta}>
-                                                        Нужно: {position.необходимое_количество} | Собрано: {position.собранное_количество} | Отгружено: {position.отгруженное_количество} | Доставлено: {position.доставленное_количество} | Активная недостача: {position.активная_недостача}
+                                                        Нужно: {position.необходимое_количество}
+                                                        {isDirectOrder ? ` | Обеспечение: ${getOrderSupplyModeLabel(position.способ_обеспечения)} | Закуплено: ${position.закуплено_количество}` : ''}
+                                                        {' '}| Собрано: {position.собранное_количество} | Отгружено: {position.отгруженное_количество} | Доставлено: {position.доставленное_количество}
+                                                        {!isDirectOrder ? ` | Активная недостача: ${position.активная_недостача}` : ''}
                                                     </div>
                                                 </div>
                                             ))}
                                             {summary.missingProducts.length > 0 ? (
                                                 <div className={styles.sectionNote}>
-                                                    История недостач: {summary.missingProducts.map((item) => `#${item.id} (${item.статус})`).join(', ')}
+                                                    История недостач: {summary.missingProducts.map(formatMissingProductHistoryLabel).join(', ')}
                                                 </div>
                                             ) : null}
                                         </div>
@@ -286,7 +348,11 @@ export function OrderWorkflowModal({
                                         <div className={styles.timelineText}>
                                             {summary.purchaseCount > 0
                                                 ? summary.purchases.map((purchase) => `#${purchase.id} (${purchase.статус})`).join(', ')
-                                                : 'Связанной закупки пока нет.'}
+                                                : isDirectOrder && directPurchaseDrivenPositions > 0
+                                                    ? directRemainingPurchaseUnits > 0
+                                                        ? `Позиции работают через закупку, осталось закрыть ${directRemainingPurchaseUnits} ед. Связанный документ закупки в истории не найден.`
+                                                        : `Позиции работают через закупку. По составу заявки уже закрыто ${directPurchasedUnits} ед., даже если связанный документ закупки не попал в историю.`
+                                                    : 'Связанной закупки пока нет.'}
                                         </div>
                                         {summary.purchaseCount > 0 ? (
                                             <div className={styles.detailList}>
@@ -306,20 +372,28 @@ export function OrderWorkflowModal({
                                 <div className={styles.timelineItem}>
                                     <div className={`${styles.timelineDot} ${summary.canAssemble ? styles.timelineDotActive : summary.isAssembled ? styles.timelineDotDone : ''}`} />
                                     <div>
-                                        <div className={styles.timelineTitle}>4. Сборка заявки</div>
+                                        <div className={styles.timelineTitle}>{isDirectOrder ? '4. Подготовка заявки к отгрузке' : '4. Сборка заявки'}</div>
                                         <div className={styles.timelineText}>
-                                            {summary.isAssembled
-                                                ? 'Все требуемые позиции уже собраны и списаны со склада.'
-                                                : summary.canAssemble
-                                                    ? 'Следующий шаг: выполнить сборку или досборку по оставшимся позициям.'
-                                                    : 'Сборка станет доступна, когда будут закрыты недостачи и завершены закупки.'}
+                                            {isDirectOrder
+                                                ? summary.isAssembled
+                                                    ? 'Все требуемые позиции уже подготовлены к отгрузке без складского списания.'
+                                                    : summary.canAssemble
+                                                        ? 'Следующий шаг: зафиксировать новую партию или доподготовку к отгрузке.'
+                                                        : 'Подготовка станет доступна, когда будут закрыты закупки по обязательным позициям.'
+                                                : summary.isAssembled
+                                                    ? 'Все требуемые позиции уже собраны и списаны со склада.'
+                                                    : summary.canAssemble
+                                                        ? 'Следующий шаг: выполнить сборку или досборку по оставшимся позициям.'
+                                                        : 'Сборка станет доступна, когда будут закрыты недостачи и завершены закупки.'}
                                         </div>
                                         {summary.assemblyBatches.length > 0 ? (
                                             <div className={styles.detailList}>
                                                 {summary.assemblyBatches.map((batch) => (
                                                     <div key={batch.id} className={styles.detailCard}>
                                                         <div className={styles.detailCardTitle}>
-                                                            {batch.batchType === 'досборка' ? 'Досборка' : 'Сборка'} #{batch.branchNo}
+                                                            {batch.batchType === 'досборка'
+                                                                ? (isDirectOrder ? 'Доподготовка' : 'Досборка')
+                                                                : (isDirectOrder ? 'Подготовка' : 'Сборка')} #{batch.branchNo}
                                                         </div>
                                                         <div className={styles.detailCardMeta}>
                                                             {formatDate(batch.createdAt)} | Единиц: {batch.totalUnits}
@@ -361,6 +435,11 @@ export function OrderWorkflowModal({
                                                             {shipment.totalUnits ? ` | Единиц: ${shipment.totalUnits}` : ''}
                                                             {shipment.дата_отгрузки ? ` | ${formatDate(shipment.дата_отгрузки)}` : ''}
                                                         </div>
+                                                        {shipment.positions.length > 0 ? (
+                                                            <div className={styles.sectionNote}>
+                                                                {shipment.positions.map((position) => `${position.товар_название} x ${position.quantity}`).join(', ')}
+                                                            </div>
+                                                        ) : null}
                                                     </div>
                                                 ))}
                                             </div>
@@ -375,9 +454,13 @@ export function OrderWorkflowModal({
                                         <div className={styles.timelineText}>
                                             {summary.canComplete
                                                 ? 'Цепочка закрыта: заявку уже можно переводить в статус «Выполнена».'
-                                                : summary.remainingShipmentUnits > 0
-                                                    ? 'Завершение станет доступно после полной отгрузки и доставки всех оставшихся позиций.'
-                                                    : 'Завершение станет доступно после доставленной отгрузки.'}
+                                                : isDirectOrder
+                                                    ? summary.remainingShipmentUnits > 0
+                                                        ? 'Завершение станет доступно после полной отгрузки всех оставшихся позиций и закрытия активных документов.'
+                                                        : 'Завершение станет доступно после закрытия активных закупок и отгрузок по заявке.'
+                                                    : summary.remainingShipmentUnits > 0
+                                                        ? 'Завершение станет доступно после полной отгрузки и доставки всех оставшихся позиций.'
+                                                        : 'Завершение станет доступно после доставленной отгрузки.'}
                                         </div>
                                     </div>
                                 </div>

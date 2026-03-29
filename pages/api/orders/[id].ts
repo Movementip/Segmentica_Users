@@ -97,6 +97,7 @@ export default async function handler(
             SUM(
               CASE
                 WHEN COALESCE(purchases."использовать_доставку", false)
+                  AND COALESCE(purchases."статус", 'заказано') <> 'отменено'
                   THEN COALESCE(purchases."стоимость_доставки", 0)
                 ELSE 0
               END
@@ -110,6 +111,7 @@ export default async function handler(
             SUM(
               CASE
                 WHEN COALESCE(shipments."использовать_доставку", true)
+                  AND COALESCE(shipments."статус", 'в пути') <> 'отменено'
                   THEN COALESCE(shipments."стоимость_доставки", 0)
                 ELSE 0
               END

@@ -19,6 +19,7 @@ function AdminSettingsPage(): JSX.Element {
     const { user, loading: authLoading } = useAuth();
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [rebuildingDerivedState, setRebuildingDerivedState] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
     const [settings, setSettings] = useState<SettingsPayload>({
@@ -84,6 +85,34 @@ function AdminSettingsPage(): JSX.Element {
             setError(saveError instanceof Error ? saveError.message : 'Не удалось сохранить системные настройки');
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleRebuildDerivedState = async () => {
+        try {
+            setRebuildingDerivedState(true);
+            setError(null);
+            setNotice(null);
+
+            const response = await fetch('/api/admin/rebuild-derived-state', {
+                method: 'POST',
+            });
+            const data = await response.json().catch(() => ({}));
+
+            if (!response.ok) {
+                throw new Error((data as any)?.error || 'Не удалось пересобрать производные данные');
+            }
+
+            const ordersProcessed = Number((data as any)?.ordersProcessed) || 0;
+            const purchasesProcessed = Number((data as any)?.purchasesProcessed) || 0;
+            const shipmentsProcessed = Number((data as any)?.shipmentsProcessed) || 0;
+            setNotice(
+                `Производные данные пересобраны. Заявок: ${ordersProcessed}, закупок: ${purchasesProcessed}, отгрузок: ${shipmentsProcessed}.`
+            );
+        } catch (rebuildError) {
+            setError(rebuildError instanceof Error ? rebuildError.message : 'Не удалось пересобрать производные данные');
+        } finally {
+            setRebuildingDerivedState(false);
         }
     };
 
@@ -171,7 +200,7 @@ function AdminSettingsPage(): JSX.Element {
                                 <span className={styles.checkboxText}>Рассчитывать стоимость доставки по тарифу ТК</span>
                             </label>
                             <div className={styles.fieldHint}>
-                                Если флаг выключен, стоимость доставки вводится вручную. Это значение должно оставаться в отгрузке без пересчёта триггером.
+                                Если флаг выключен, стоимость доставки вводится вручную. Если включён, сайт сам пересчитывает её по тарифу ТК после сохранения позиций отгрузки.
                             </div>
                         </div>
                     </div>
@@ -180,6 +209,16 @@ function AdminSettingsPage(): JSX.Element {
                     {error ? <div className={`${styles.notice} ${styles.noticeError}`}>{error}</div> : null}
 
                     <div className={styles.actions}>
+                        <Button
+                            variant="surface"
+                            color="gray"
+                            highContrast
+                            className={styles.surfaceButton}
+                            onClick={handleRebuildDerivedState}
+                            loading={rebuildingDerivedState}
+                        >
+                            Пересобрать данные
+                        </Button>
                         <Button variant="surface" color="gray" highContrast className={styles.surfaceButton} onClick={() => void loadSettings()}>
                             Обновить
                         </Button>

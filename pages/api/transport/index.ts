@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { query } from '../../../lib/db';
-import { requireAuth, requirePermission } from '../../../lib/auth';
+import { requirePermission } from '../../../lib/auth';
+import { getTransportCompaniesAggregate } from '../../../lib/transportAnalytics';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method === 'GET') {
@@ -11,19 +12,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             const canRecentShipmentsView = actor.permissions.includes('transport.recent_shipments.view');
 
             // Get all transport companies with their shipments
-            const transportResult = await query(`
-        SELECT 
-          тк.*,
-          COALESCE(COUNT(о.id), 0)::integer as общее_количество_отгрузок,
-          COALESCE(COUNT(CASE WHEN COALESCE(о."статус", 'в пути') NOT IN ('доставлено', 'отменено') THEN 1 END), 0)::integer as активные_отгрузки,
-          COALESCE(COUNT(CASE WHEN COALESCE(о."статус", 'в пути') = 'доставлено' THEN 1 END), 0)::integer as завершенные_отгрузки,
-          COALESCE(AVG(о."стоимость_доставки"), 0) as средняя_стоимость,
-          COALESCE(SUM(о."стоимость_доставки"), 0) as общая_выручка
-        FROM "Транспортные_компании" тк
-        LEFT JOIN "Отгрузки" о ON тк.id = о."транспорт_id"
-        GROUP BY тк.id, тк."название", тк."телефон", тк.email, тк."тариф", тк.created_at
-        ORDER BY общее_количество_отгрузок DESC, тк."название" ASC
-      `);
+            const transportResult = await getTransportCompaniesAggregate({ query });
 
             const recentShipmentsResult = canRecentShipmentsView
                 ? await query(`
@@ -54,7 +43,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         JOIN "Транспортные_компании" тк ON о."транспорт_id" = тк.id
         LEFT JOIN "Заявки" з ON о."заявка_id" = з.id
         LEFT JOIN "Клиенты" к ON з."клиент_id" = к.id
-        WHERE COALESCE(о."статус", 'в пути') NOT IN ('доставлено', 'отменено')
+        WHERE COALESCE(о."статус", 'в пути') NOT IN ('доставлено', 'получено', 'отменено')
         ORDER BY о."дата_отгрузки" DESC
       `)
                 : { rows: [] as any[] };

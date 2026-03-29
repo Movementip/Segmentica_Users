@@ -1,12 +1,14 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { query } from '../../../lib/db';
+import { getPool, query } from '../../../lib/db';
 import { requirePermission } from '../../../lib/auth';
 import { calculateVatAmountsFromLine, getVatRateOption } from '../../../lib/vat';
 import { syncOrderWorkflowStatus } from '../../../lib/orderWorkflow';
 import { checkAndCreateMissingProducts, syncMissingProductsFromPurchases } from '../../../lib/missingProductsHelper';
+import { syncOrderPositionsFromLinkedPurchases } from '../../../lib/orderFulfillment';
 import { normalizeOrderExecutionMode } from '../../../lib/orderModes';
 import { ensureLogisticsDeliverySchema } from '../../../lib/logisticsDelivery';
 import { syncPurchaseWarehouseState } from '../../../lib/purchaseWarehouse';
+import { syncPurchaseFinanceRecord } from '../../../lib/companyFinance';
 
 export interface PurchaseDetail {
     id: number;
@@ -210,10 +212,12 @@ export default async function handler(
                 orderExecutionMode = normalizeOrderExecutionMode(orderModeResult.rows[0]?.режим_исполнения);
             }
 
-            // Start transaction
-            await query('BEGIN');
+            const pool = await getPool();
+            const client = await pool.connect();
 
             try {
+                await client.query('BEGIN');
+                const txQuery = (text: string, params?: any[]) => client.query(text, params);
                 // Update purchase status
                 const updateData: any[] = [статус, id];
                 let updateQuery = 'UPDATE "Закупки" SET "статус" = $1';
@@ -227,28 +231,30 @@ export default async function handler(
 
                 updateQuery += ' WHERE id = $' + updateData.length;
 
-                await query(updateQuery, updateData);
+                await txQuery(updateQuery, updateData);
 
                 await syncPurchaseWarehouseState(
-                    { query },
+                    { query: txQuery },
                     Number(id),
                     orderExecutionMode !== 'direct' && willBeReceived
                 );
+                await syncPurchaseFinanceRecord({ query: txQuery }, Number(id));
 
-                // Commit transaction
-                await query('COMMIT');
+                await client.query('COMMIT');
 
-            if (existingPurchase.заявка_id) {
-                await checkAndCreateMissingProducts(Number(existingPurchase.заявка_id));
-                await syncMissingProductsFromPurchases(Number(existingPurchase.заявка_id));
-                await syncOrderWorkflowStatus(Number(existingPurchase.заявка_id));
-            }
+                if (existingPurchase.заявка_id) {
+                    await syncOrderPositionsFromLinkedPurchases(query, Number(existingPurchase.заявка_id));
+                    await checkAndCreateMissingProducts(Number(existingPurchase.заявка_id));
+                    await syncMissingProductsFromPurchases(Number(existingPurchase.заявка_id));
+                    await syncOrderWorkflowStatus(Number(existingPurchase.заявка_id));
+                }
 
                 res.status(200).json({ message: 'Статус закупки успешно обновлен' });
             } catch (transactionError) {
-                // Rollback transaction on error
-                await query('ROLLBACK');
+                await client.query('ROLLBACK');
                 throw transactionError;
+            } finally {
+                client.release();
             }
         } catch (error) {
             console.error('Error updating purchase:', error);

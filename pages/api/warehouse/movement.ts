@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { query } from '../../../lib/db';
+import { getPool, query } from '../../../lib/db';
 import { requirePermission } from '../../../lib/auth';
 
 type MovementType = 'приход' | 'расход';
@@ -40,11 +40,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             return res.status(400).json({ error: 'количество должно быть больше 0' });
         }
 
-        await query('BEGIN');
+        const pool = await getPool();
+        const client = await pool.connect();
         try {
-            const stockRes = await query('SELECT id, "количество" FROM "Склад" WHERE "товар_id" = $1 FOR UPDATE', [productId]);
+            await client.query('BEGIN');
+            const stockRes = await client.query('SELECT id, "количество" FROM "Склад" WHERE "товар_id" = $1 FOR UPDATE', [productId]);
             if (stockRes.rows.length === 0) {
-                await query('ROLLBACK');
+                await client.query('ROLLBACK');
                 return res.status(404).json({ error: 'Товар не найден на складе' });
             }
 
@@ -54,23 +56,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             const nextQty = currentQty + delta;
 
             if (nextQty < 0) {
-                await query('ROLLBACK');
+                await client.query('ROLLBACK');
                 return res.status(400).json({ error: 'Недостаточно товара на складе для расхода' });
             }
 
-            await query('UPDATE "Склад" SET "количество" = $1, "updated_at" = CURRENT_TIMESTAMP WHERE id = $2', [nextQty, stockRow.id]);
+            await client.query('UPDATE "Склад" SET "количество" = $1, "updated_at" = CURRENT_TIMESTAMP WHERE id = $2', [nextQty, stockRow.id]);
 
-            await query(
+            await client.query(
                 'INSERT INTO "Движения_склада" ("товар_id", "тип_операции", "количество", "дата_операции", "комментарий") VALUES ($1, $2, $3, CURRENT_TIMESTAMP, $4)',
                 [productId, type, qty, комментарий || null]
             );
 
-            await query('COMMIT');
+            await client.query('COMMIT');
 
             return res.status(201).json({ message: 'Движение сохранено', nextQty });
         } catch (e) {
-            await query('ROLLBACK');
+            await client.query('ROLLBACK');
             throw e;
+        } finally {
+            client.release();
         }
     } catch (error) {
         console.error('Error creating warehouse movement:', error);
