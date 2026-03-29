@@ -3,6 +3,7 @@ import Head from 'next/head';
 import '../styles/globals.css';
 import '@radix-ui/themes/styles.css';
 import { Theme } from '@radix-ui/themes';
+import React, { useEffect, useMemo } from 'react';
 import { useRouter } from 'next/router';
 import { Sidebar } from '../layout/Sidebar/Sidebar';
 import { Header } from '../layout/Header/Header';
@@ -22,8 +23,7 @@ function DocumentTitle(): JSX.Element {
 }
 
 function MyApp({ Component, pageProps }: AppProps) {
-    const router = useRouter();
-    const isLoginPage = router.pathname === '/login';
+    const isLoginPage = useRouter().pathname === '/login';
 
     return (
         <AuthProvider skipInitialRefresh={isLoginPage}>
@@ -31,21 +31,52 @@ function MyApp({ Component, pageProps }: AppProps) {
                 <SidebarProvider>
                     <PageTitleProvider>
                         <DocumentTitle />
-                        {isLoginPage ? (
+                        <ProtectedLayoutGate isLoginPage={isLoginPage}>
                             <Component {...pageProps} />
-                        ) : (
-                            <div style={{ display: 'flex', height: '100vh' }}>
-                                <Sidebar />
-                                <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                                    <Header />
-                                    <Component {...pageProps} />
-                                </div>
-                            </div>
-                        )}
+                        </ProtectedLayoutGate>
                     </PageTitleProvider>
                 </SidebarProvider>
             </ThemedAppShell>
         </AuthProvider>
+    );
+}
+
+function ProtectedLayoutGate({
+    isLoginPage,
+    children,
+}: {
+    isLoginPage: boolean;
+    children: React.ReactNode;
+}): JSX.Element | null {
+    const router = useRouter();
+    const { user, loading } = useAuth();
+
+    const loginTarget = useMemo(() => {
+        const next = `${router.asPath || router.pathname}`;
+        return `/login?next=${encodeURIComponent(next)}`;
+    }, [router.asPath, router.pathname]);
+
+    useEffect(() => {
+        if (isLoginPage || loading || user) return;
+        void router.replace(loginTarget);
+    }, [isLoginPage, loading, user, router, loginTarget]);
+
+    if (isLoginPage) {
+        return <>{children}</>;
+    }
+
+    if (loading || !user) {
+        return null;
+    }
+
+    return (
+        <div style={{ display: 'flex', height: '100vh' }}>
+            <Sidebar />
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                <Header />
+                {children}
+            </div>
+        </div>
     );
 }
 

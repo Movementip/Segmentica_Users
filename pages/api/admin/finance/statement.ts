@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import path from 'path';
 import { promises as fs } from 'fs';
-import { requireDirector } from '../../../../lib/auth';
+import { requirePermission } from '../../../../lib/auth';
 import { buildFinanceStatementFiles, type StatementSourcePayload } from '../../../../lib/financeStatementDocument';
 import { getFinancePayload } from '../finance';
 
@@ -50,7 +50,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     let cleanupDir: string | null = null;
 
     try {
-        const actor = await requireDirector(req, res);
+        const actor = await requirePermission(req, res, 'admin.finance');
         if (!actor) return;
 
         if (req.method !== 'GET') {

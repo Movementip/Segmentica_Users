@@ -264,23 +264,45 @@
 
 .profileSectionHeader {
   padding: 20px 20px 16px;
-  border-bottom: 1px solid #f0f0f0;
 }
 
 .profileTabsList {
-  display: grid !important;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  display: flex !important;
+  flex-wrap: wrap;
   gap: 8px;
-  padding: 6px;
-  border-radius: 9999px;
-  background: #f3f4f6;
+  padding: 0;
+  background: transparent;
   margin-bottom: 20px;
+  box-shadow: none;
 }
 
 .profileTabsList :global(.rt-TabsTrigger) {
-  min-height: 48px;
-  border-radius: 9999px;
+  min-height: 42px;
+  padding: 0 16px;
+  border-radius: 14px;
   font-weight: 600;
+  font-size: 14px;
+  color: #5f6773;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  box-shadow: none !important;
+  transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.profileTabsList :global(.rt-TabsTrigger:hover) {
+  background: #eceff3;
+  border-color: #d9dee7;
+  color: #222831;
+}
+
+.profileTabsList :global(.rt-TabsTrigger[data-state='active']) {
+  background: #111111;
+  border-color: #111111;
+  color: #ffffff;
+}
+
+.profileTabsList :global(.rt-TabsTrigger[data-state='active']::after) {
+  display: none;
 }
 
 .profileTabContent {
@@ -524,8 +546,7 @@
 
 @media (max-width: 900px) {
   .profileTabsList {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    border-radius: 24px;
+    gap: 6px;
   }
 
   .calendarGrid,

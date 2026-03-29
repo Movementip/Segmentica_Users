@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { query, withTransaction } from '../../../lib/db';
-import { requireDirector } from '../../../lib/auth';
+import { requirePermission } from '../../../lib/auth';
 import { ensureLogisticsDeliverySchema } from '../../../lib/logisticsDelivery';
 import { recalculateShipmentDeliveryCostIfNeeded } from '../../../lib/shipmentDeliveryCost';
 import { syncPurchaseFinanceRecord, syncStandaloneShipmentFinanceRecord } from '../../../lib/companyFinance';
@@ -24,7 +24,7 @@ export default async function handler(
     req: NextApiRequest,
     res: NextApiResponse<ResponsePayload>
 ) {
-    const actor = await requireDirector(req, res);
+    const actor = await requirePermission(req, res, 'admin.settings');
     if (!actor) return;
 
     if (req.method !== 'POST') {

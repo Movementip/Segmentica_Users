@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { getPool, query } from '../../../lib/db';
-import { requireDirector } from '../../../lib/auth';
+import { requirePermission } from '../../../lib/auth';
 
 export type FinanceSettings = {
     paymentsPerMonth: 1 | 2;
@@ -726,7 +726,7 @@ export const getFinancePayload = async (monthsRequested: number): Promise<Financ
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse<FinanceResponse | { ok: true } | { error: string }>) {
     try {
-        const actor = await requireDirector(req, res);
+        const actor = await requirePermission(req, res, 'admin.finance');
         if (!actor) return;
 
         if (req.method === 'GET') {

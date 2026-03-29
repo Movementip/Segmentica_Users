@@ -28,6 +28,7 @@ const pageTitles: Record<string, string> = {
     '/admin': 'Администрирование',
     '/admin/audit': 'Аудит-лог',
     '/admin/finance': 'Финансы',
+    '/admin/schedule-board': 'График сотрудников',
     '/admin/settings': 'Настройки системы'
 };
 

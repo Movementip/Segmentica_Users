@@ -49,6 +49,12 @@ export function Header(): JSX.Element {
     const [dbStatus, setDbStatus] = useState<{ isRemote: boolean; mode: 'local' | 'remote'; remoteAvailable: boolean } | null>(null);
     const [isDbLoading, setIsDbLoading] = useState(true);
     const [isDbSwitching, setIsDbSwitching] = useState(false);
+    const can = (key: string) => Boolean(user?.permissions?.includes(key));
+    const canViewAdminFinance = can('admin.finance');
+    const canViewScheduleBoard = can('admin.schedule_board') || (can('managers.list') && can('schedule.manage'));
+    const canViewAdminSettings = can('admin.settings');
+    const canViewAdminAudit = can('admin.audit');
+    const canViewAdminRbac = can('admin.users') || can('admin.roles');
 
     const fetchDbStatus = async () => {
         try {
@@ -631,41 +637,59 @@ export function Header(): JSX.Element {
                             </DropdownMenu.SubContent>
                         </DropdownMenu.Sub>
 
-                        {user?.roles?.includes('director') ? (
+                        {canViewAdminFinance || canViewScheduleBoard || canViewAdminSettings || canViewAdminRbac || canViewAdminAudit ? (
                             <>
                                 <DropdownMenu.Separator />
-                                <DropdownMenu.Item
-                                    onSelect={async (e) => {
-                                        e?.preventDefault?.();
-                                        await router.push('/admin/finance');
-                                    }}
-                                >
-                                    Финансы
-                                </DropdownMenu.Item>
-                                <DropdownMenu.Item
-                                    onSelect={async (e) => {
-                                        e?.preventDefault?.();
-                                        await router.push('/admin/settings');
-                                    }}
-                                >
-                                    Настройки системы
-                                </DropdownMenu.Item>
-                                <DropdownMenu.Item
-                                    onSelect={async (e) => {
-                                        e?.preventDefault?.();
-                                        await router.push('/admin');
-                                    }}
-                                >
-                                    Администрирование
-                                </DropdownMenu.Item>
-                                <DropdownMenu.Item
-                                    onSelect={async (e) => {
-                                        e?.preventDefault?.();
-                                        await router.push('/admin/audit');
-                                    }}
-                                >
-                                    Аудит-лог
-                                </DropdownMenu.Item>
+                                {canViewAdminFinance ? (
+                                    <DropdownMenu.Item
+                                        onSelect={async (e) => {
+                                            e?.preventDefault?.();
+                                            await router.push('/admin/finance');
+                                        }}
+                                    >
+                                        Финансы
+                                    </DropdownMenu.Item>
+                                ) : null}
+                                {canViewScheduleBoard ? (
+                                    <DropdownMenu.Item
+                                        onSelect={async (e) => {
+                                            e?.preventDefault?.();
+                                            await router.push('/admin/schedule-board');
+                                        }}
+                                    >
+                                        График сотрудников
+                                    </DropdownMenu.Item>
+                                ) : null}
+                                {canViewAdminSettings ? (
+                                    <DropdownMenu.Item
+                                        onSelect={async (e) => {
+                                            e?.preventDefault?.();
+                                            await router.push('/admin/settings');
+                                        }}
+                                    >
+                                        Настройки системы
+                                    </DropdownMenu.Item>
+                                ) : null}
+                                {canViewAdminRbac ? (
+                                    <DropdownMenu.Item
+                                        onSelect={async (e) => {
+                                            e?.preventDefault?.();
+                                            await router.push('/admin');
+                                        }}
+                                    >
+                                        Администрирование
+                                    </DropdownMenu.Item>
+                                ) : null}
+                                {canViewAdminAudit ? (
+                                    <DropdownMenu.Item
+                                        onSelect={async (e) => {
+                                            e?.preventDefault?.();
+                                            await router.push('/admin/audit');
+                                        }}
+                                    >
+                                        Аудит-лог
+                                    </DropdownMenu.Item>
+                                ) : null}
                             </>
                         ) : null}
 

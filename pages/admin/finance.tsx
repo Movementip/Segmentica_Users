@@ -165,7 +165,7 @@ function AdminFinancePage(): JSX.Element {
     const [totals, setTotals] = useState<FinancePayload['totals']>({ activeEmployees: 0, totalPaid: 0, paymentCount: 0 });
     const previewFrameRef = useRef<HTMLIFrameElement | null>(null);
 
-    const isDirector = Boolean(user?.roles?.includes('director'));
+    const canViewFinance = Boolean(user?.permissions?.includes('admin.finance'));
 
     const loadData = useCallback(async () => {
         try {
@@ -195,9 +195,9 @@ function AdminFinancePage(): JSX.Element {
 
     useEffect(() => {
         if (authLoading) return;
-        if (!isDirector) return;
+        if (!canViewFinance) return;
         void loadData();
-    }, [authLoading, isDirector, loadData]);
+    }, [authLoading, canViewFinance, loadData]);
 
     const filteredEmployees = useMemo(() => {
         const q = search.trim().toLowerCase();
@@ -435,7 +435,7 @@ function AdminFinancePage(): JSX.Element {
         );
     }
 
-    if (!isDirector) {
+    if (!canViewFinance) {
         return <NoAccessPage />;
     }
 

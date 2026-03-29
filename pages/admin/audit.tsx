@@ -266,7 +266,7 @@ function AuditPage(): JSX.Element {
     const [minRefreshSpinActive, setMinRefreshSpinActive] = useState(false);
     const [refreshClickKey, setRefreshClickKey] = useState(0);
 
-    const canView = Boolean(user?.roles?.includes('director'));
+    const canView = Boolean(user?.permissions?.includes('admin.audit'));
 
     useEffect(() => {
         if (isDetailsOpen) return;

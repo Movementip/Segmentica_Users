@@ -28,7 +28,7 @@ function AdminSettingsPage(): JSX.Element {
         autoCalculateShipmentDeliveryCost: false,
     });
 
-    const isDirector = Boolean(user?.roles?.includes('director'));
+    const canManageSettings = Boolean(user?.permissions?.includes('admin.settings'));
 
     const loadSettings = useCallback(async () => {
         try {
@@ -54,9 +54,9 @@ function AdminSettingsPage(): JSX.Element {
     }, []);
 
     useEffect(() => {
-        if (authLoading || !isDirector) return;
+        if (authLoading || !canManageSettings) return;
         void loadSettings();
-    }, [authLoading, isDirector, loadSettings]);
+    }, [authLoading, canManageSettings, loadSettings]);
 
     const currentVat = useMemo(
         () => getVatRateOption(settings.defaultVatRateId),
@@ -124,7 +124,7 @@ function AdminSettingsPage(): JSX.Element {
         );
     }
 
-    if (!isDirector) {
+    if (!canManageSettings) {
         return <NoAccessPage />;
     }
 

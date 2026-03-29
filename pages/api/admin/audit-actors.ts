@@ -1,12 +1,12 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { query } from '../../../lib/db';
-import { requireDirector } from '../../../lib/auth';
+import { requirePermission } from '../../../lib/auth';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
     try {
-        const user = await requireDirector(req, res);
+        const user = await requirePermission(req, res, 'admin.audit');
         if (!user) return;
 
         const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';

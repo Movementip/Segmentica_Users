@@ -2,6 +2,15 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { query } from '../../../lib/db';
 import { setSessionCookie } from '../../../lib/auth';
 
+const getNextMondayExpiration = (now: Date): Date => {
+    const next = new Date(now);
+    next.setHours(0, 0, 0, 0);
+    const currentWeekday = next.getDay(); // 0 Sunday ... 6 Saturday
+    const daysUntilNextMonday = currentWeekday === 1 ? 7 : ((8 - currentWeekday) % 7 || 7);
+    next.setDate(next.getDate() + daysUntilNextMonday);
+    return next;
+};
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -46,8 +55,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             return res.status(401).json({ error: 'Неверные учетные данные' });
         }
 
-        const ttlSeconds = rem ? 60 * 60 * 24 * 30 : 60 * 60 * 12;
-        const expiresAt = new Date(Date.now() + ttlSeconds * 1000);
+        const now = new Date();
+        const expiresAt = rem
+            ? getNextMondayExpiration(now)
+            : new Date(now.getTime() + 12 * 60 * 60 * 1000);
 
         const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').toString().slice(0, 200);
         const userAgent = (req.headers['user-agent'] || '').toString().slice(0, 500);
@@ -64,7 +75,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             return res.status(500).json({ error: 'Не удалось создать сессию' });
         }
 
-        setSessionCookie(res, sessionId, { rememberMe: rem });
+        setSessionCookie(res, sessionId, { expiresAt });
         return res.status(200).json({ ok: true });
     } catch (e) {
         console.error(e);

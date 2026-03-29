@@ -45,8 +45,17 @@ export const parseCookies = (cookieHeader?: string): Record<string, string> => {
     return out;
 };
 
-export const setSessionCookie = (res: NextApiResponse, sessionId: string, opts: { rememberMe: boolean }) => {
-    const maxAge = opts.rememberMe ? 60 * 60 * 24 * 30 : undefined; // 30 days
+export const setSessionCookie = (
+    res: NextApiResponse,
+    sessionId: string,
+    opts?: { expiresAt?: Date | null }
+) => {
+    const expiresAt = opts?.expiresAt instanceof Date && Number.isFinite(opts.expiresAt.getTime())
+        ? opts.expiresAt
+        : null;
+    const maxAge = expiresAt
+        ? Math.max(0, Math.floor((expiresAt.getTime() - Date.now()) / 1000))
+        : undefined;
     const parts = [
         `${SESSION_COOKIE_NAME}=${encodeURIComponent(sessionId)}`,
         'Path=/',
@@ -55,6 +64,7 @@ export const setSessionCookie = (res: NextApiResponse, sessionId: string, opts: 
     ];
     if (process.env.NODE_ENV === 'production') parts.push('Secure');
     if (typeof maxAge === 'number') parts.push(`Max-Age=${maxAge}`);
+    if (expiresAt) parts.push(`Expires=${expiresAt.toUTCString()}`);
     res.setHeader('Set-Cookie', parts.join('; '));
 };
 

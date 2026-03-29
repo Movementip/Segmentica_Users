@@ -1,6 +1,7 @@
 import React from 'react';
+import Link from 'next/link';
 import { withLayout } from '../../layout';
-import { Box, Text } from '@radix-ui/themes';
+import { Box, Button, Flex, Text } from '@radix-ui/themes';
 import { useAuth } from '../../context/AuthContext';
 import styles from './AdminRbac.module.css';
 import { UsersAdmin } from '../../components/AdminRbac/UsersAdmin';
@@ -29,6 +30,14 @@ function AdminHome(): JSX.Element {
                         <h1 className={styles.title}>Администрирование</h1>
                         <div className={styles.subtitle}>RBAC (доступ: director)</div>
                     </div>
+                    <Flex gap="3" wrap="wrap">
+                        <Button asChild variant="surface" color="gray" highContrast>
+                            <Link href="/admin/schedule-board">График сотрудников</Link>
+                        </Button>
+                        <Button asChild variant="surface" color="gray" highContrast>
+                            <Link href="/admin/settings">Настройки системы</Link>
+                        </Button>
+                    </Flex>
                 </div>
             </div>
 

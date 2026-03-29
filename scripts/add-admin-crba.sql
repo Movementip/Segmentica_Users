@@ -145,6 +145,9 @@ WITH src_permissions(key, name, description) AS (
     ('managers.attachments.view', 'Просмотр документов сотрудников', 'Действие'),
     ('managers.attachments.upload', 'Загрузка документов сотрудников', 'Действие'),
     ('managers.attachments.delete', 'Удаление документов сотрудников', 'Действие'),
+    ('schedule.manage', 'Управление графиком сотрудников', 'Действие'),
+    ('schedule.self.edit', 'Редактирование собственного графика', 'Действие'),
+    ('schedule.self.apply_pattern', 'Применение шаблона к собственному графику', 'Действие'),
 
     -- missing-products actions
     ('missing_products.list', 'Просмотр списка недостающих товаров', 'Действие'),
@@ -214,7 +217,10 @@ WITH src_permissions(key, name, description) AS (
     -- special
     ('admin.users', 'Управление пользователями', 'Специальное право'),
     ('admin.roles', 'Управление ролями', 'Специальное право'),
-    ('admin.settings', 'Управление настройками системы', 'Специальное право')
+    ('admin.settings', 'Управление настройками системы', 'Специальное право'),
+    ('admin.finance', 'Доступ к странице "Финансы"', 'Специальное право'),
+    ('admin.schedule_board', 'Доступ к странице "График сотрудников"', 'Специальное право'),
+    ('admin.audit', 'Доступ к странице "Аудит-лог"', 'Специальное право')
 )
 INSERT INTO public.permissions(key, name, description)
 SELECT key, name, description
@@ -369,6 +375,12 @@ WITH src_role_perms(role_key, perm_key) AS (
     ('director', 'admin.users'),
     ('director', 'admin.roles'),
     ('director', 'admin.settings'),
+    ('director', 'admin.finance'),
+    ('director', 'admin.schedule_board'),
+    ('director', 'admin.audit'),
+    ('director', 'schedule.manage'),
+    ('director', 'schedule.self.edit'),
+    ('director', 'schedule.self.apply_pattern'),
     ('director', 'reports.overview.view'),
     ('director', 'reports.sales.view'),
     ('director', 'reports.products.view'),
@@ -439,6 +451,8 @@ WITH src_role_perms(role_key, perm_key) AS (
     ('manager', 'reports.custom.sales_by_period.export.excel'),
     ('manager', 'clients.create'),
     ('manager', 'clients.edit'),
+    ('manager', 'schedule.self.edit'),
+    ('manager', 'schedule.self.apply_pattern'),
 
     -- purchaser
     ('purchaser', 'orders.purchases.create'),
@@ -468,6 +482,8 @@ WITH src_role_perms(role_key, perm_key) AS (
     ('purchaser', 'reports.custom.suppliers_analysis.export.excel'),
     ('purchaser', 'suppliers.create'),
     ('purchaser', 'suppliers.edit'),
+    ('purchaser', 'schedule.self.edit'),
+    ('purchaser', 'schedule.self.apply_pattern'),
 
     -- warehouse_manager
     ('warehouse_manager', 'warehouse.list'),
@@ -500,6 +516,8 @@ WITH src_role_perms(role_key, perm_key) AS (
     ('warehouse_manager', 'reports.custom.warehouse_movements.view'),
     ('warehouse_manager', 'reports.custom.warehouse_movements.export.word'),
     ('warehouse_manager', 'reports.custom.warehouse_movements.export.excel'),
+    ('warehouse_manager', 'schedule.self.edit'),
+    ('warehouse_manager', 'schedule.self.apply_pattern'),
 
     -- logistics
     ('logistics', 'shipments.list'),
@@ -526,6 +544,8 @@ WITH src_role_perms(role_key, perm_key) AS (
     ('logistics', 'reports.custom.transport_stats.view'),
     ('logistics', 'reports.custom.transport_stats.export.word'),
     ('logistics', 'reports.custom.transport_stats.export.excel'),
+    ('logistics', 'schedule.self.edit'),
+    ('logistics', 'schedule.self.apply_pattern'),
 
     -- viewer
 
@@ -539,6 +559,7 @@ WITH src_role_perms(role_key, perm_key) AS (
     ('accountant', 'dashboard.top_products.view'),
     ('accountant', 'dashboard.top_clients.view'),
     ('accountant', 'dashboard.transport_performance.view'),
+    ('accountant', 'admin.finance'),
     ('accountant', 'reports.overview.view'),
     ('accountant', 'reports.sales.view'),
     ('accountant', 'reports.products.view'),
@@ -565,7 +586,9 @@ WITH src_role_perms(role_key, perm_key) AS (
     ('accountant', 'reports.custom.transport_stats.export.excel'),
     ('accountant', 'reports.custom.finance_overview.view'),
     ('accountant', 'reports.custom.finance_overview.export.word'),
-    ('accountant', 'reports.custom.finance_overview.export.excel')
+    ('accountant', 'reports.custom.finance_overview.export.excel'),
+    ('accountant', 'schedule.self.edit'),
+    ('accountant', 'schedule.self.apply_pattern')
 ),
 resolved AS (
   SELECT
