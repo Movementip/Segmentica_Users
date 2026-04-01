@@ -768,6 +768,38 @@
     color: #6b7280;
 }
 
+.typeBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 9999px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.2px;
+    border: 1px solid transparent;
+    margin-top: 6px;
+}
+
+.typeBadge_organization {
+    color: #1d4ed8;
+    background: rgba(59, 130, 246, 0.12);
+    border-color: rgba(59, 130, 246, 0.22);
+}
+
+.typeBadge_entrepreneur {
+    color: #7c3aed;
+    background: rgba(139, 92, 246, 0.12);
+    border-color: rgba(139, 92, 246, 0.22);
+}
+
+.typeBadge_person {
+    color: #15803d;
+    background: rgba(34, 197, 94, 0.12);
+    border-color: rgba(34, 197, 94, 0.22);
+}
+
 .contactStack {
     display: flex;
     flex-direction: column;

@@ -35,6 +35,26 @@ import { REPORT_TAB_PERMISSIONS, REPORT_VIEW_PERMISSIONS } from '../../lib/repor
 type Period = 'all' | '6m' | '3m' | '1m';
 type AnalyticsTab = 'overview' | 'sales' | 'products' | 'clients' | 'logistics' | 'custom';
 
+const ACCOUNT_LABELS: Record<string, string> = {
+    '10.мат': '10.мат Материалы и сырье',
+    '10.дет': '10.дет Детали, комплектующие и полуфабрикаты',
+    '10.см': '10.см Топливо',
+    '10.зап': '10.зап Запасные части',
+    '10.стр': '10.стр Строительные материалы',
+    '10.хоз': '10.хоз Хозяйственные принадлежности и инвентарь',
+    '10.спец': '10.спец Специальная одежда',
+    '10.тара': '10.тара Тара',
+    '10.пр': '10.пр Прочие материалы',
+    '20': '20 Основное производство',
+    '23': '23 Вспомогательные производства',
+    '25': '25 Общепроизводственные расходы',
+    '26': '26 Общехозяйственные (управленческие) расходы',
+    '29': '29 Обслуживающие производства и хозяйства',
+    '44': '44 Расходы на продажу (коммерческие расходы)',
+    '91.02': '91.02 Прочие расходы',
+    '97': '97 Расходы будущих периодов',
+};
+
 interface DashboardStats {
     activeOrders: number;
     totalProducts: number;
@@ -51,6 +71,64 @@ type ViewRow = Record<string, any>;
 type OverviewData = {
     byMonth: Array<{ month: string; revenue: number; expense: number; profit: number; orders: number }>;
     byCategory: Array<{ name: string; value: number; percent: number }>;
+};
+
+type AccountAnalyticsRow = {
+    account: string;
+    amount: number;
+    share: number;
+    quantity?: number;
+    items?: number;
+    positions?: number;
+    products?: number;
+};
+
+type AccountingMovementRow = {
+    account: string;
+    openingAmount: number;
+    incomingAmount: number;
+    outgoingAmount: number;
+    closingAmount: number;
+    openingQuantity: number;
+    incomingQuantity: number;
+    outgoingQuantity: number;
+    closingQuantity: number;
+};
+
+type ExpenseMonthRow = {
+    month: string;
+    total: number;
+    accounts: Array<{
+        account: string;
+        amount: number;
+        share: number;
+    }>;
+};
+
+type ExpenseDetailRow = {
+    account: string;
+    productId: number | null;
+    productName: string;
+    nomenclatureType: string | null;
+    amount: number;
+    records: number;
+    share: number;
+    shareWithinAccount: number;
+};
+
+type AccountsData = {
+    inventoryByAccount: AccountAnalyticsRow[];
+    accountingMovement: AccountingMovementRow[];
+    expenseByAccount: AccountAnalyticsRow[];
+    expenseStructure: {
+        topAccounts: string[];
+        byMonth: ExpenseMonthRow[];
+    };
+    expenseDetails: ExpenseDetailRow[];
+    totals: {
+        inventoryAmount: number;
+        expenseAmount: number;
+    };
 };
 
 type TopProductRow = {
@@ -133,6 +211,8 @@ const findDateColumnKey = (columns: string[]): string | null => {
     return columns.find((k) => /дата|date/i.test(k)) || columns.find((k) => /_at$/i.test(k)) || null;
 };
 
+const getAccountLabel = (account: string): string => ACCOUNT_LABELS[account] || account;
+
 const ReportsPage = () => {
     const router = useRouter();
     const { user, loading: authLoading } = useAuth();
@@ -153,6 +233,9 @@ const ReportsPage = () => {
 
     const [overviewData, setOverviewData] = useState<OverviewData | null>(null);
     const [overviewLoading, setOverviewLoading] = useState(false);
+
+    const [accountsData, setAccountsData] = useState<AccountsData | null>(null);
+    const [accountsLoading, setAccountsLoading] = useState(false);
 
     const [topProducts, setTopProducts] = useState<TopProductRow[] | null>(null);
     const [topProductsLoading, setTopProductsLoading] = useState(false);
@@ -316,6 +399,24 @@ const ReportsPage = () => {
         };
         void run();
     }, [activeTab, canOverviewTab, canSalesTab, period]);
+
+    useEffect(() => {
+        if (activeTab !== 'overview' || !canOverviewTab) return;
+        const run = async () => {
+            try {
+                setAccountsLoading(true);
+                const res = await fetch(`/api/reports/accounts?period=${encodeURIComponent(period)}`);
+                if (!res.ok) throw new Error('Failed');
+                const json = (await res.json()) as AccountsData;
+                setAccountsData(json);
+            } catch {
+                setAccountsData(null);
+            } finally {
+                setAccountsLoading(false);
+            }
+        };
+        void run();
+    }, [activeTab, canOverviewTab, period]);
 
     useEffect(() => {
         if (activeTab !== 'logistics' || !canLogisticsTab) return;
@@ -483,6 +584,24 @@ const ReportsPage = () => {
         const shipped = (stats?.warehouseMovements || []).filter((m) => String(m.operation_type).toLowerCase() === 'расход').length;
         return { revenue, orders, shipped, avgCheck };
     }, [salesRows, stats?.warehouseMovements]);
+
+    const expenseStructureChartData = useMemo(() => {
+        const rows = accountsData?.expenseStructure?.byMonth || [];
+        return rows.map((row) => {
+            const values = row.accounts.reduce<Record<string, number>>((acc, entry) => {
+                acc[entry.account] = Number(entry.amount) || 0;
+                return acc;
+            }, {});
+
+            return {
+                month: row.month,
+                total: Number(row.total) || 0,
+                ...values,
+            };
+        });
+    }, [accountsData]);
+
+    const expenseStructureKeys = accountsData?.expenseStructure?.topAccounts || [];
 
     const formatCurrency = (amount: number) =>
         new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(amount);
@@ -738,6 +857,281 @@ const ReportsPage = () => {
                                                 </BarChart>
                                             </ResponsiveContainerAny>
                                         )}
+                                    </div>
+                                </Card>
+
+                                <Card className={styles.chartCardWide}>
+                                    <Flex justify="between" align="center" className={styles.blockHeader}>
+                                        <Flex direction="column" gap="1">
+                                            <Text size="3" weight="bold" className={styles.blockTitle}>
+                                                Остатки по счетам учета
+                                            </Text>
+                                            {!accountsLoading && accountsData ? (
+                                                <Text size="2" color="gray">
+                                                    Всего в остатках: {formatCurrency(Number(accountsData.totals.inventoryAmount) || 0)}
+                                                </Text>
+                                            ) : null}
+                                        </Flex>
+                                    </Flex>
+
+                                    <div className={styles.tableWrapper}>
+                                        <Table.Root variant="surface" className={styles.table}>
+                                            <Table.Header>
+                                                <Table.Row>
+                                                    <Table.ColumnHeaderCell>Счет</Table.ColumnHeaderCell>
+                                                    <Table.ColumnHeaderCell>Сумма</Table.ColumnHeaderCell>
+                                                    <Table.ColumnHeaderCell>Кол-во</Table.ColumnHeaderCell>
+                                                    <Table.ColumnHeaderCell>Товаров</Table.ColumnHeaderCell>
+                                                    <Table.ColumnHeaderCell>Доля</Table.ColumnHeaderCell>
+                                                </Table.Row>
+                                            </Table.Header>
+                                            <Table.Body>
+                                                {accountsLoading ? (
+                                                    <Table.Row>
+                                                        <Table.Cell colSpan={5}>
+                                                            <Text size="2" color="gray">Загрузка...</Text>
+                                                        </Table.Cell>
+                                                    </Table.Row>
+                                                ) : accountsData?.inventoryByAccount?.length ? (
+                                                    accountsData.inventoryByAccount.map((row) => (
+                                                        <Table.Row key={`inventory-${row.account}`} className={styles.tableRow}>
+                                                            <Table.Cell>
+                                                                <div className={styles.cellContent}>{getAccountLabel(row.account)}</div>
+                                                            </Table.Cell>
+                                                            <Table.Cell>{formatCurrency(Number(row.amount) || 0)}</Table.Cell>
+                                                            <Table.Cell>{formatCell(Number(row.quantity) || 0)}</Table.Cell>
+                                                            <Table.Cell>{formatCell(Number(row.items) || 0)}</Table.Cell>
+                                                            <Table.Cell>{`${Number(row.share || 0).toFixed(1)}%`}</Table.Cell>
+                                                        </Table.Row>
+                                                    ))
+                                                ) : (
+                                                    <Table.Row>
+                                                        <Table.Cell colSpan={5}>
+                                                            <Text size="2" color="gray">Нет данных</Text>
+                                                        </Table.Cell>
+                                                    </Table.Row>
+                                                )}
+                                            </Table.Body>
+                                        </Table.Root>
+                                    </div>
+                                </Card>
+
+                                <Card className={styles.chartCardWide}>
+                                    <Flex justify="between" align="center" className={styles.blockHeader}>
+                                        <Flex direction="column" gap="1">
+                                            <Text size="3" weight="bold" className={styles.blockTitle}>
+                                                Движение по счетам учета
+                                            </Text>
+                                            <Text size="2" color="gray">
+                                                Остаток на начало, закупки, выбытие и остаток на конец периода
+                                            </Text>
+                                        </Flex>
+                                    </Flex>
+
+                                    <div className={styles.tableWrapper}>
+                                        <Table.Root variant="surface" className={styles.table}>
+                                            <Table.Header>
+                                                <Table.Row>
+                                                    <Table.ColumnHeaderCell>Счет</Table.ColumnHeaderCell>
+                                                    <Table.ColumnHeaderCell>Начало</Table.ColumnHeaderCell>
+                                                    <Table.ColumnHeaderCell>Закупки</Table.ColumnHeaderCell>
+                                                    <Table.ColumnHeaderCell>Выбытие</Table.ColumnHeaderCell>
+                                                    <Table.ColumnHeaderCell>Конец</Table.ColumnHeaderCell>
+                                                    <Table.ColumnHeaderCell>Кол-во начало</Table.ColumnHeaderCell>
+                                                    <Table.ColumnHeaderCell>Кол-во приход</Table.ColumnHeaderCell>
+                                                    <Table.ColumnHeaderCell>Кол-во расход</Table.ColumnHeaderCell>
+                                                    <Table.ColumnHeaderCell>Кол-во конец</Table.ColumnHeaderCell>
+                                                </Table.Row>
+                                            </Table.Header>
+                                            <Table.Body>
+                                                {accountsLoading ? (
+                                                    <Table.Row>
+                                                        <Table.Cell colSpan={9}>
+                                                            <Text size="2" color="gray">Загрузка...</Text>
+                                                        </Table.Cell>
+                                                    </Table.Row>
+                                                ) : accountsData?.accountingMovement?.length ? (
+                                                    accountsData.accountingMovement.map((row) => (
+                                                        <Table.Row key={`movement-${row.account}`} className={styles.tableRow}>
+                                                            <Table.Cell>
+                                                                <div className={styles.cellContent}>{getAccountLabel(row.account)}</div>
+                                                            </Table.Cell>
+                                                            <Table.Cell>{formatCurrency(Number(row.openingAmount) || 0)}</Table.Cell>
+                                                            <Table.Cell>{formatCurrency(Number(row.incomingAmount) || 0)}</Table.Cell>
+                                                            <Table.Cell>{formatCurrency(Number(row.outgoingAmount) || 0)}</Table.Cell>
+                                                            <Table.Cell>{formatCurrency(Number(row.closingAmount) || 0)}</Table.Cell>
+                                                            <Table.Cell>{formatCell(Number(row.openingQuantity) || 0)}</Table.Cell>
+                                                            <Table.Cell>{formatCell(Number(row.incomingQuantity) || 0)}</Table.Cell>
+                                                            <Table.Cell>{formatCell(Number(row.outgoingQuantity) || 0)}</Table.Cell>
+                                                            <Table.Cell>{formatCell(Number(row.closingQuantity) || 0)}</Table.Cell>
+                                                        </Table.Row>
+                                                    ))
+                                                ) : (
+                                                    <Table.Row>
+                                                        <Table.Cell colSpan={9}>
+                                                            <Text size="2" color="gray">Нет данных</Text>
+                                                        </Table.Cell>
+                                                    </Table.Row>
+                                                )}
+                                            </Table.Body>
+                                        </Table.Root>
+                                    </div>
+                                </Card>
+
+                                <Card className={styles.chartCardWide}>
+                                    <Flex justify="between" align="center" className={styles.blockHeader}>
+                                        <Flex direction="column" gap="1">
+                                            <Text size="3" weight="bold" className={styles.blockTitle}>
+                                                Расходы по счетам затрат
+                                            </Text>
+                                            {!accountsLoading && accountsData ? (
+                                                <Text size="2" color="gray">
+                                                    Учтено расходов за период: {formatCurrency(Number(accountsData.totals.expenseAmount) || 0)}
+                                                </Text>
+                                            ) : null}
+                                        </Flex>
+                                    </Flex>
+
+                                    <div className={styles.tableWrapper}>
+                                        <Table.Root variant="surface" className={styles.table}>
+                                            <Table.Header>
+                                                <Table.Row>
+                                                    <Table.ColumnHeaderCell>Счет</Table.ColumnHeaderCell>
+                                                    <Table.ColumnHeaderCell>Сумма</Table.ColumnHeaderCell>
+                                                    <Table.ColumnHeaderCell>Позиций</Table.ColumnHeaderCell>
+                                                    <Table.ColumnHeaderCell>Товаров</Table.ColumnHeaderCell>
+                                                    <Table.ColumnHeaderCell>Доля</Table.ColumnHeaderCell>
+                                                </Table.Row>
+                                            </Table.Header>
+                                            <Table.Body>
+                                                {accountsLoading ? (
+                                                    <Table.Row>
+                                                        <Table.Cell colSpan={5}>
+                                                            <Text size="2" color="gray">Загрузка...</Text>
+                                                        </Table.Cell>
+                                                    </Table.Row>
+                                                ) : accountsData?.expenseByAccount?.length ? (
+                                                    accountsData.expenseByAccount.map((row) => (
+                                                        <Table.Row key={`expense-${row.account}`} className={styles.tableRow}>
+                                                            <Table.Cell>
+                                                                <div className={styles.cellContent}>{getAccountLabel(row.account)}</div>
+                                                            </Table.Cell>
+                                                            <Table.Cell>{formatCurrency(Number(row.amount) || 0)}</Table.Cell>
+                                                            <Table.Cell>{formatCell(Number(row.positions) || 0)}</Table.Cell>
+                                                            <Table.Cell>{formatCell(Number(row.products) || 0)}</Table.Cell>
+                                                            <Table.Cell>{`${Number(row.share || 0).toFixed(1)}%`}</Table.Cell>
+                                                        </Table.Row>
+                                                    ))
+                                                ) : (
+                                                    <Table.Row>
+                                                        <Table.Cell colSpan={5}>
+                                                            <Text size="2" color="gray">Нет данных</Text>
+                                                        </Table.Cell>
+                                                    </Table.Row>
+                                                )}
+                                            </Table.Body>
+                                        </Table.Root>
+                                    </div>
+                                </Card>
+
+                                <Card className={styles.chartCardWide}>
+                                    <Flex align="center" gap="2" className={styles.chartHeader}>
+                                        <Text size="3" weight="bold">Структура затрат по месяцам</Text>
+                                    </Flex>
+                                    <div className={styles.chartBox}>
+                                        {accountsLoading ? (
+                                            <Text size="2" color="gray">Загрузка...</Text>
+                                        ) : expenseStructureChartData.length ? (
+                                            <ResponsiveContainerAny width="100%" height={280}>
+                                                <BarChart data={expenseStructureChartData} margin={{ left: 12, right: 12, top: 8, bottom: 8 }}>
+                                                    <CartesianGridAny strokeDasharray="3 3" stroke="#eeeeee" />
+                                                    <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                                                    <YAxis tick={{ fontSize: 12 }} />
+                                                    <Tooltip
+                                                        formatter={(value: any, name: any) => [formatCurrency(Number(value) || 0), getAccountLabel(String(name))]}
+                                                        labelFormatter={(label: any) => String(label)}
+                                                    />
+                                                    <Legend formatter={(value: string) => getAccountLabel(value)} />
+                                                    {expenseStructureKeys.map((account, idx) => (
+                                                        <Bar
+                                                            key={account}
+                                                            dataKey={account}
+                                                            name={account}
+                                                            stackId="expense-accounts"
+                                                            fill={chartColors[idx % chartColors.length]}
+                                                            radius={idx === expenseStructureKeys.length - 1 ? [6, 6, 0, 0] : [0, 0, 0, 0]}
+                                                        />
+                                                    ))}
+                                                </BarChart>
+                                            </ResponsiveContainerAny>
+                                        ) : (
+                                            <Text size="2" color="gray">Нет данных</Text>
+                                        )}
+                                    </div>
+                                </Card>
+
+                                <Card className={styles.chartCardWide}>
+                                    <Flex justify="between" align="center" className={styles.blockHeader}>
+                                        <Flex direction="column" gap="1">
+                                            <Text size="3" weight="bold" className={styles.blockTitle}>
+                                                Детализация расходов до товара
+                                            </Text>
+                                            {!accountsLoading && accountsData?.expenseDetails?.length ? (
+                                                <Text size="2" color="gray">
+                                                    Топ позиций по расходам внутри счетов затрат
+                                                </Text>
+                                            ) : null}
+                                        </Flex>
+                                    </Flex>
+
+                                    <div className={styles.tableWrapper}>
+                                        <Table.Root variant="surface" className={styles.table}>
+                                            <Table.Header>
+                                                <Table.Row>
+                                                    <Table.ColumnHeaderCell>Счет</Table.ColumnHeaderCell>
+                                                    <Table.ColumnHeaderCell>Товар</Table.ColumnHeaderCell>
+                                                    <Table.ColumnHeaderCell>Тип</Table.ColumnHeaderCell>
+                                                    <Table.ColumnHeaderCell>Сумма</Table.ColumnHeaderCell>
+                                                    <Table.ColumnHeaderCell>Записей</Table.ColumnHeaderCell>
+                                                    <Table.ColumnHeaderCell>Доля в счете</Table.ColumnHeaderCell>
+                                                    <Table.ColumnHeaderCell>Доля общая</Table.ColumnHeaderCell>
+                                                </Table.Row>
+                                            </Table.Header>
+                                            <Table.Body>
+                                                {accountsLoading ? (
+                                                    <Table.Row>
+                                                        <Table.Cell colSpan={7}>
+                                                            <Text size="2" color="gray">Загрузка...</Text>
+                                                        </Table.Cell>
+                                                    </Table.Row>
+                                                ) : accountsData?.expenseDetails?.length ? (
+                                                    accountsData.expenseDetails.map((row) => (
+                                                        <Table.Row
+                                                            key={`expense-detail-${row.account}-${row.productId ?? row.productName}`}
+                                                            className={styles.tableRow}
+                                                        >
+                                                            <Table.Cell>
+                                                                <div className={styles.cellContent}>{getAccountLabel(row.account)}</div>
+                                                            </Table.Cell>
+                                                            <Table.Cell>
+                                                                <div className={styles.cellContent}>{row.productName}</div>
+                                                            </Table.Cell>
+                                                            <Table.Cell>{row.nomenclatureType ? formatCell(row.nomenclatureType) : '-'}</Table.Cell>
+                                                            <Table.Cell>{formatCurrency(Number(row.amount) || 0)}</Table.Cell>
+                                                            <Table.Cell>{formatCell(Number(row.records) || 0)}</Table.Cell>
+                                                            <Table.Cell>{`${Number(row.shareWithinAccount || 0).toFixed(1)}%`}</Table.Cell>
+                                                            <Table.Cell>{`${Number(row.share || 0).toFixed(1)}%`}</Table.Cell>
+                                                        </Table.Row>
+                                                    ))
+                                                ) : (
+                                                    <Table.Row>
+                                                        <Table.Cell colSpan={7}>
+                                                            <Text size="2" color="gray">Нет данных</Text>
+                                                        </Table.Cell>
+                                                    </Table.Row>
+                                                )}
+                                            </Table.Body>
+                                        </Table.Root>
                                     </div>
                                 </Card>
                             </Grid>

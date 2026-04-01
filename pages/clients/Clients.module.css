@@ -142,7 +142,7 @@
     background-color: #000000;
         color: white;
         border-color: #000000;
-        width: 175px;
+        width: 205px;
 }
 .headerActionButtonCreate:hover {
     background-color: #333333;
@@ -937,19 +937,43 @@
     border: 1px solid transparent;
 }
 
-.typeRetail {
-    background-color: rgba(25, 118, 210, 0.082);
+.typeOrganization {
+    background-color: rgba(56, 142, 60, 0.082);
+    color: rgb(46, 125, 50);
+    border: 1px solid rgba(56, 142, 60, 0.25);
+}
+
+.typeEntrepreneur {
+    background-color: rgba(56, 142, 60, 0.082);
     color: rgb(25, 118, 210);
     border: 1px solid rgba(25, 118, 210, 0.25);
 }
 
-.typeCorporate {
-    background-color: rgba(56, 142, 60, 0.082);
-    color: rgb(56, 142, 60);
-    border: 1px solid rgba(56, 142, 60, 0.25);
+.typePerson {
+    background-color: rgba(123, 31, 162, 0.082);
+    color: rgb(123, 31, 162);
+    border: 1px solid rgba(123, 31, 162, 0.25);
 }
 
-.typeOther {
+.typeAdvocate {
+    background-color: rgba(245, 124, 0, 0.082);
+    color: rgb(230, 81, 0);
+    border: 1px solid rgba(245, 124, 0, 0.25);
+}
+
+.typeNotary {
+    background-color: rgba(0, 121, 107, 0.082);
+    color: rgb(0, 121, 107);
+    border: 1px solid rgba(0, 121, 107, 0.25);
+}
+
+.typeFarm {
+    background-color: rgba(142, 36, 170, 0.082);
+    color: rgb(106, 27, 154);
+    border: 1px solid rgba(142, 36, 170, 0.25);
+}
+
+.typeForeign {
     background-color: rgba(97, 97, 97, 0.082);
     color: rgb(97, 97, 97);
     border: 1px solid rgba(97, 97, 97, 0.25);

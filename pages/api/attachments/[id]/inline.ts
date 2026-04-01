@@ -1,36 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { query } from '../../../../lib/db';
-import { requirePermission } from '../../../../lib/auth';
-
-const getAttachmentPermissionKey = (entityType: string, action: 'view', opts?: { scope?: string | null }) => {
-    const t = String(entityType || '').trim().toLowerCase();
-
-    if (t === 'product' && String(opts?.scope || '').trim().toLowerCase() === 'warehouse') {
-        return `warehouse-products.attachments.${action}`;
-    }
-
-    const prefix =
-        t === 'order'
-            ? 'orders'
-            : t === 'product'
-                ? 'products'
-                : t === 'client'
-                    ? 'clients'
-                    : t === 'purchase'
-                        ? 'purchases'
-                        : t === 'shipment'
-                            ? 'shipments'
-                            : t === 'supplier'
-                                ? 'suppliers'
-                                : t === 'transport'
-                                    ? 'transport'
-                                    : t === 'manager'
-                                        ? 'managers'
-                                        : null;
-
-    if (!prefix) return null;
-    return `${prefix}.attachments.${action}`;
-};
+import { hasPermission, requireAuth } from '../../../../lib/auth';
+import { canAccessAttachmentByLinks, DOCUMENT_PERMISSIONS } from '../../../../lib/attachmentPermissions';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'GET') {
@@ -47,29 +18,28 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             return res.status(400).json({ error: 'ID вложения обязателен' });
         }
 
+        const actor = await requireAuth(req, res);
+        if (!actor) return;
+
         const linkRes = await query(
             `
             SELECT entity_type
             FROM public.attachment_links
             WHERE attachment_id = $1
             ORDER BY entity_type ASC
-            LIMIT 1
             `,
             [attachmentId]
         );
 
-        const entityType = linkRes.rows?.[0]?.entity_type as string | undefined;
-        if (!entityType) {
-            return res.status(404).json({ error: 'Вложение не найдено' });
-        }
+        const links = linkRes.rows as Array<{ entity_type: string }>;
 
-        const perm = getAttachmentPermissionKey(entityType, 'view', { scope: permScope });
-        if (!perm) {
-            return res.status(400).json({ error: 'Некорректный entity_type' });
-        }
+        const canOpen = links.length === 0
+            ? hasPermission(actor, DOCUMENT_PERMISSIONS.view)
+            : canAccessAttachmentByLinks(actor, links, { scope: permScope });
 
-        const actor = await requirePermission(req, res, perm);
-        if (!actor) return;
+        if (!canOpen) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
 
         const result = await query(
             `

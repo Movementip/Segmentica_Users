@@ -73,6 +73,12 @@ type ProfilePayload = {
 
 type ProfileTab = 'profile' | 'permissions' | 'salary' | 'schedule' | 'password';
 
+const PROFILE_TABS: ProfileTab[] = ['profile', 'permissions', 'salary', 'schedule', 'password'];
+
+const isProfileTab = (value: string | undefined): value is ProfileTab => {
+    return Boolean(value && PROFILE_TABS.includes(value as ProfileTab));
+};
+
 const PROFILE_PERMISSION_LABELS = new Map<string, string>([
     ['dashboard', 'Дашборд'],
     ['reports', 'Отчеты'],
@@ -139,7 +145,6 @@ function ManagerDetailPage(): JSX.Element {
     const [attachmentsUploading, setAttachmentsUploading] = useState(false);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
     const [previewAttachment, setPreviewAttachment] = useState<AttachmentItem | null>(null);
-    const [profileTab, setProfileTab] = useState<ProfileTab>('profile');
     const [profileForm, setProfileForm] = useState({ fio: '', phone: '', email: '' });
     const [profileSaving, setProfileSaving] = useState(false);
     const [profileMessage, setProfileMessage] = useState<string | null>(null);
@@ -168,7 +173,9 @@ function ManagerDetailPage(): JSX.Element {
     const canAttachmentsView = Boolean(user?.permissions?.includes('managers.attachments.view'));
     const canAttachmentsUpload = Boolean(user?.permissions?.includes('managers.attachments.upload'));
     const canAttachmentsDelete = Boolean(user?.permissions?.includes('managers.attachments.delete'));
-    const isSelfProfileMode = isOwnProfile && (Array.isArray(router.query.mode) ? router.query.mode[0] : router.query.mode) === 'profile';
+    const rawMode = Array.isArray(router.query.mode) ? router.query.mode[0] : router.query.mode;
+    const profileTab = isProfileTab(rawMode) ? rawMode : 'profile';
+    const isSelfProfileMode = isOwnProfile && (!canView || isProfileTab(rawMode));
     const canAccessPage = canView || isOwnProfile;
 
     const fetchAttachments = useCallback(async (managerId: number) => {
@@ -352,6 +359,21 @@ function ManagerDetailPage(): JSX.Element {
             setAttachmentsError(e instanceof Error ? e.message : 'Ошибка удаления вложения');
         }
     }, [canAttachmentsDelete, fetchAttachments, manager?.id]);
+
+    const handleProfileTabChange = useCallback(async (value: string) => {
+        if (!isProfileTab(value)) return;
+        await router.replace(
+            {
+                pathname: router.pathname,
+                query: {
+                    ...router.query,
+                    mode: value,
+                },
+            },
+            undefined,
+            { shallow: true }
+        );
+    }, [router]);
 
     useEffect(() => {
         if (authLoading) return;
@@ -708,7 +730,7 @@ function ManagerDetailPage(): JSX.Element {
                     </div>
 
                     <Box px="5" pb="5">
-                        <Tabs.Root value={profileTab} onValueChange={(value) => setProfileTab(value as ProfileTab)}>
+                        <Tabs.Root value={profileTab} onValueChange={(value) => void handleProfileTabChange(value)}>
                             <Tabs.List className={styles.profileTabsList}>
                                 <Tabs.Trigger value="profile">Профиль</Tabs.Trigger>
                                 <Tabs.Trigger value="permissions">Права</Tabs.Trigger>

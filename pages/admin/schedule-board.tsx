@@ -204,51 +204,53 @@ function AdminScheduleBoardPage(): JSX.Element {
             </div>
 
             <div className={styles.toolbar}>
-                <div className={styles.monthPanel}>
-                    <Button
-                        variant="surface"
-                        color="gray"
-                        highContrast
-                        className={styles.iconButton}
-                        onClick={() => setMonthKey((current) => shiftMonth(current, -1))}
-                    >
-                        <FiChevronLeft />
-                    </Button>
-                    <div className={styles.monthCenter}>
-                        <div className={styles.monthCaption}>Период</div>
-                        <div className={styles.monthTitle}>{payload?.monthLabel || monthKey}</div>
+                <div className={styles.toolbarBlock}>
+                    <div className={styles.monthPanel}>
+                        <Button
+                            variant="surface"
+                            color="gray"
+                            highContrast
+                            className={styles.iconButton}
+                            onClick={() => setMonthKey((current) => shiftMonth(current, -1))}
+                        >
+                            <FiChevronLeft />
+                        </Button>
+                        <div className={styles.monthCenter}>
+                            <div className={styles.monthCaption}>Период</div>
+                            <div className={styles.monthTitle}>{payload?.monthLabel || monthKey}</div>
+                        </div>
+                        <Button
+                            variant="surface"
+                            color="gray"
+                            highContrast
+                            className={styles.iconButton}
+                            onClick={() => setMonthKey((current) => shiftMonth(current, 1))}
+                        >
+                            <FiChevronRight />
+                        </Button>
                     </div>
-                    <Button
-                        variant="surface"
-                        color="gray"
-                        highContrast
-                        className={styles.iconButton}
-                        onClick={() => setMonthKey((current) => shiftMonth(current, 1))}
-                    >
-                        <FiChevronRight />
-                    </Button>
-                </div>
 
-                <div className={styles.toolbarAside}>
-                    <label className={styles.toggleRow}>
-                        <Switch
-                            checked={includeInactive}
-                            onCheckedChange={setIncludeInactive}
-                            className={styles.toggleSwitch}
-                        />
-                        <span>Показывать неактивных</span>
-                    </label>
-                    <Button
-                        variant="surface"
-                        color="gray"
-                        highContrast
-                        className={styles.surfaceButton}
-                        onClick={() => void loadBoard(monthKey, includeInactive)}
-                        loading={refreshing}
-                    >
-                        <FiRefreshCw />
-                        Обновить
-                    </Button>
+                    <div className={styles.toolbarAside}>
+                        <label className={styles.toggleRow}>
+                            <Switch
+                                checked={includeInactive}
+                                onCheckedChange={setIncludeInactive}
+                                className={styles.toggleSwitch}
+                            />
+                            <span>Показывать неактивных</span>
+                        </label>
+                        <Button
+                            variant="surface"
+                            color="gray"
+                            highContrast
+                            className={styles.surfaceButton}
+                            onClick={() => void loadBoard(monthKey, includeInactive)}
+                            loading={refreshing}
+                        >
+                            <FiRefreshCw />
+                            Обновить
+                        </Button>
+                    </div>
                 </div>
             </div>
 

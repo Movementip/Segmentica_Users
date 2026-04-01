@@ -7,10 +7,11 @@ import { ChangeSupplierRatingModal } from '../../components/ChangeSupplierRating
 import { EditSupplierModal } from '../../components/EditSupplierModal';
 import styles from './SupplierDetail.module.css';
 import deleteConfirmStyles from '../../components/DeleteConfirmation.module.css';
-import { Box, Button, Dialog, Card, Flex, Table, Tabs, Text, TextField } from '@radix-ui/themes';
+import { Badge, Box, Button, Dialog, Card, Flex, Grid, Table, Tabs, Text, TextField } from '@radix-ui/themes';
 import { FiArrowLeft, FiDownload, FiEdit2, FiFile, FiPaperclip, FiPlus, FiRefreshCw, FiSearch, FiTrash2, FiTruck, FiUploadCloud } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { getSupplierContragentTypeLabel, getSupplierContragentTypeTheme, normalizeSupplierContragentType, type SupplierBankAccount, type SupplierContragent } from '../../lib/supplierContragents';
 
 interface SupplierProduct {
     id: number;
@@ -32,13 +33,9 @@ interface SupplierPurchase {
     заявка_id?: number;
 }
 
-interface SupplierDetail {
-    id: number;
-    название: string;
-    телефон?: string;
-    email?: string;
+interface SupplierDetail extends SupplierContragent {
     рейтинг: number;
-    created_at: string;
+    bankAccounts?: SupplierBankAccount[];
     ассортимент: SupplierProduct[];
     закупки: SupplierPurchase[];
 }
@@ -257,6 +254,30 @@ function SupplierDetailPage(): JSX.Element {
         }).format(amount);
     };
 
+    const formatTextValue = (value?: string | null) => {
+        const normalized = typeof value === 'string' ? value.trim() : '';
+        return normalized || 'Не указан';
+    };
+
+    const getSupplierIdentity = () => {
+        const type = normalizeSupplierContragentType(supplier?.тип);
+        if (type === 'Организация') {
+            return formatTextValue(supplier?.полноеНазвание || supplier?.краткоеНазвание || supplier?.название);
+        }
+        const fullName = [supplier?.фамилия, supplier?.имя, supplier?.отчество]
+            .map((item) => typeof item === 'string' ? item.trim() : '')
+            .filter(Boolean)
+            .join(' ');
+        return fullName || formatTextValue(supplier?.название);
+    };
+
+    const getRegistrationLabel = () => {
+        const type = normalizeSupplierContragentType(supplier?.тип);
+        if (type === 'Организация') return 'Адрес по ЕГРЮЛ';
+        if (type === 'Индивидуальный предприниматель') return 'Адрес по ЕГРИП';
+        return 'Адрес по ФИАС';
+    };
+
     const getStatusColor = (status: string) => {
         switch (status.toLowerCase()) {
             case 'заказано': return '#2196f3';
@@ -396,14 +417,17 @@ function SupplierDetailPage(): JSX.Element {
     const purchasesCount = supplier.закупки.length;
     const purchasesInTransit = supplier.закупки.filter((p) => (p.статус || '').toLowerCase() === 'в пути').length;
     const purchasesSum = supplier.закупки.reduce((sum, p) => sum + (Number(p.общая_сумма) || 0), 0);
+    const supplierTypeTheme = getSupplierContragentTypeTheme(supplier.тип);
 
     return (
         <div className={styles.container}>
             <div className={styles.header}>
                 <div className={styles.headerLeft}>
                     <div className={styles.titleRow}>
-
                         <h1 className={styles.title}>{supplier.название}</h1>
+                        <Badge className={`${styles.typeBadge} ${styles[`typeBadge_${supplierTypeTheme}`]}`} variant="soft" highContrast>
+                            {getSupplierContragentTypeLabel(supplier.тип)}
+                        </Badge>
                     </div>
                     <p className={styles.subtitle}>Карточка поставщика и история закупок</p>
                 </div>
@@ -506,29 +530,143 @@ function SupplierDetailPage(): JSX.Element {
                     </div>
                 </div>
 
-                <div className={styles.infoRow}>
-                    <div className={styles.infoKey}>ID</div>
-                    <div className={styles.infoVal}>#{supplier.id}</div>
-                </div>
-                <div className={styles.infoRow}>
-                    <div className={styles.infoKey}>Дата регистрации</div>
-                    <div className={styles.infoVal}>{formatDate(supplier.created_at)}</div>
-                </div>
-                <div className={styles.infoRow}>
-                    <div className={styles.infoKey}>Телефон</div>
-                    <div className={styles.infoVal}>{supplier.телефон || '—'}</div>
-                </div>
-                <div className={styles.infoRow}>
-                    <div className={styles.infoKey}>Email</div>
-                    <div className={styles.infoVal}>{supplier.email || '—'}</div>
-                </div>
-                <div className={styles.infoRow}>
-                    <div className={styles.infoKey}>Рейтинг</div>
-                    <div className={styles.infoVal}>
-                        <span className={`${styles.badge} ${supplier.рейтинг >= 4 ? styles.badgeSuccess : styles.badgeWarn}`}>{supplier.рейтинг} / 5</span>
-                    </div>
-                </div>
+                <Grid columns={{ initial: '1', md: '2' }} gap="4" mt="4">
+                    <Card size="2" variant="surface" className={styles.detailCard}>
+                        <Flex direction="column" gap="3">
+                            <Box>
+                                <Text as="div" className={styles.infoLabel}>ID</Text>
+                                <Text as="div" className={styles.infoValue}>#{supplier.id}</Text>
+                            </Box>
+                            <Box>
+                                <Text as="div" className={styles.infoLabel}>Дата регистрации</Text>
+                                <Text as="div" className={styles.infoValue}>{formatDate(supplier.created_at || '')}</Text>
+                            </Box>
+                            <Box>
+                                <Text as="div" className={styles.infoLabel}>Полное имя / название</Text>
+                                <Text as="div" className={styles.infoValue}>{getSupplierIdentity()}</Text>
+                            </Box>
+                            <Box>
+                                <Text as="div" className={styles.infoLabel}>Краткое название</Text>
+                                <Text as="div" className={styles.infoValue}>{formatTextValue(supplier.краткоеНазвание || supplier.название)}</Text>
+                            </Box>
+                        </Flex>
+                    </Card>
+
+                    <Card size="2" variant="surface" className={styles.detailCard}>
+                        <Flex direction="column" gap="3">
+                            <Box>
+                                <Text as="div" className={styles.infoLabel}>ИНН</Text>
+                                <Text as="div" className={styles.infoValue}>{formatTextValue(supplier.инн)}</Text>
+                            </Box>
+                            <Box>
+                                <Text as="div" className={styles.infoLabel}>КПП</Text>
+                                <Text as="div" className={styles.infoValue}>{formatTextValue(supplier.кпп)}</Text>
+                            </Box>
+                            <Box>
+                                <Text as="div" className={styles.infoLabel}>{normalizeSupplierContragentType(supplier.тип) === 'Организация' ? 'ОГРН' : 'ОГРНИП'}</Text>
+                                <Text as="div" className={styles.infoValue}>{formatTextValue(supplier.огрн || supplier.огрнип)}</Text>
+                            </Box>
+                            <Box>
+                                <Text as="div" className={styles.infoLabel}>ОКПО</Text>
+                                <Text as="div" className={styles.infoValue}>{formatTextValue(supplier.окпо)}</Text>
+                            </Box>
+                        </Flex>
+                    </Card>
+                </Grid>
+
+                <Grid columns={{ initial: '1', md: '2' }} gap="4" mt="4">
+                    <Card size="2" variant="surface" className={styles.detailCard}>
+                        <Flex direction="column" gap="3">
+                            <Box>
+                                <Text as="div" className={styles.infoLabel}>Телефон</Text>
+                                <Text as="div" className={styles.infoValue}>{formatTextValue(supplier.телефон)}</Text>
+                            </Box>
+                            <Box>
+                                <Text as="div" className={styles.infoLabel}>Email</Text>
+                                <Text as="div" className={styles.infoValue}>{formatTextValue(supplier.email)}</Text>
+                            </Box>
+                            <Box>
+                                <Text as="div" className={styles.infoLabel}>{getRegistrationLabel()}</Text>
+                                <Text as="div" className={styles.infoValue}>{formatTextValue(supplier.адресРегистрации)}</Text>
+                            </Box>
+                            <Box>
+                                <Text as="div" className={styles.infoLabel}>Адрес для документов</Text>
+                                <Text as="div" className={styles.infoValue}>{formatTextValue(supplier.адресПечати || supplier.адрес)}</Text>
+                            </Box>
+                        </Flex>
+                    </Card>
+
+                    <Card size="2" variant="surface" className={styles.detailCard}>
+                        <Flex direction="column" gap="3">
+                            <Box>
+                                <Text as="div" className={styles.infoLabel}>Рейтинг</Text>
+                                <Text as="div" className={styles.infoValue}>
+                                    <span className={`${styles.badge} ${supplier.рейтинг >= 4 ? styles.badgeSuccess : styles.badgeWarn}`}>{supplier.рейтинг} / 5</span>
+                                </Text>
+                            </Box>
+                            <Box>
+                                <Text as="div" className={styles.infoLabel}>Комментарий</Text>
+                                <Text as="div" className={styles.infoValue}>{formatTextValue(supplier.комментарий)}</Text>
+                            </Box>
+                            {normalizeSupplierContragentType(supplier.тип) === 'Физическое лицо' ? (
+                                <Box>
+                                    <Text as="div" className={styles.infoLabel}>Паспорт</Text>
+                                    <Text as="div" className={styles.infoValue}>
+                                        {[
+                                            supplier.паспортСерия && `серия ${supplier.паспортСерия}`,
+                                            supplier.паспортНомер && `номер ${supplier.паспортНомер}`,
+                                            supplier.паспортДатаВыдачи && `от ${formatDate(supplier.паспортДатаВыдачи)}`,
+                                        ].filter(Boolean).join(', ') || 'Не указан'}
+                                    </Text>
+                                </Box>
+                            ) : null}
+                        </Flex>
+                    </Card>
+                </Grid>
             </Card>
+
+            {supplier.bankAccounts?.length ? (
+                <div className={styles.sectionBlock}>
+                    <div className={styles.sectionHeaderRow}>
+                        <Text as="div" size="3" weight="bold" className={styles.sectionTitle}>
+                            Расчетные счета
+                        </Text>
+                    </div>
+
+                    <Grid columns={{ initial: '1', md: '2' }} gap="4" px="4">
+                        {supplier.bankAccounts.map((account, index) => (
+                            <Card key={`${account.id || 'bank'}-${index}`} size="2" variant="surface" className={styles.detailCard}>
+                                <Flex direction="column" gap="3">
+                                    <Box>
+                                        <Text as="div" className={styles.infoLabel}>Название</Text>
+                                        <Text as="div" className={styles.infoValue}>{formatTextValue(account.name)}</Text>
+                                    </Box>
+                                    <Box>
+                                        <Text as="div" className={styles.infoLabel}>Банк</Text>
+                                        <Text as="div" className={styles.infoValue}>{formatTextValue(account.bankName)}</Text>
+                                    </Box>
+                                    <Box>
+                                        <Text as="div" className={styles.infoLabel}>БИК</Text>
+                                        <Text as="div" className={styles.infoValue}>{formatTextValue(account.bik)}</Text>
+                                    </Box>
+                                    <Box>
+                                        <Text as="div" className={styles.infoLabel}>Корреспондентский счет</Text>
+                                        <Text as="div" className={styles.infoValue}>{formatTextValue(account.correspondentAccount)}</Text>
+                                    </Box>
+                                    <Box>
+                                        <Text as="div" className={styles.infoLabel}>Расчетный счет</Text>
+                                        <Text as="div" className={styles.infoValue}>{formatTextValue(account.settlementAccount)}</Text>
+                                    </Box>
+                                    <Box>
+                                        <Text as="div" className={styles.infoLabel}>Статус</Text>
+                                        <Text as="div" className={styles.infoValue}>{account.isPrimary ? 'Основной' : 'Дополнительный'}</Text>
+                                    </Box>
+                                </Flex>
+                            </Card>
+                        ))}
+                    </Grid>
+                </div>
+            ) : null}
 
             <div className={styles.tableSection}>
                 {canAttachmentsView ? (

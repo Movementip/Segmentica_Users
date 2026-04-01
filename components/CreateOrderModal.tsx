@@ -31,6 +31,7 @@ interface Product {
     цена_продажи?: number;
     артикул?: string;
     единица_измерения?: string;
+    ндс_id?: number;
 }
 
 interface OrderPosition {
@@ -63,6 +64,7 @@ const CreateOrderModal: React.FC<CreateOrderModalProps> = ({ isOpen, onClose, on
 
     const blocked = canCreate === false;
     const getProductSalePrice = (product?: Product | null) => Number(product?.цена_продажи ?? product?.цена ?? 0);
+    const getProductVatRateId = (product?: Product | null) => Number(product?.ндс_id) || defaultVatRateId;
 
     const canSubmit = useMemo(() => {
         if (blocked) return false;
@@ -153,6 +155,9 @@ const CreateOrderModal: React.FC<CreateOrderModalProps> = ({ isOpen, onClose, on
                     const product = products.find(p => p.id === value);
                     if (product) {
                         updatedPos.цена = getProductSalePrice(product);
+                        updatedPos.ндс_id = getProductVatRateId(product);
+                    } else {
+                        updatedPos.ндс_id = defaultVatRateId;
                     }
                 }
                 return updatedPos;

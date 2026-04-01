@@ -10,14 +10,15 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { FiEdit2, FiEye, FiFilter, FiMail, FiMoreHorizontal, FiPhone, FiPlus, FiRefreshCw, FiSearch, FiTrash2, FiTruck } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import {
+    SUPPLIER_CONTRAGENT_TYPES,
+    getSupplierContragentTypeLabel,
+    getSupplierContragentTypeTheme,
+    normalizeSupplierContragentType,
+    type SupplierContragent,
+} from '../../lib/supplierContragents';
 
-interface Supplier {
-    id: number;
-    название: string;
-    телефон?: string;
-    email?: string;
-    рейтинг?: number;
-    created_at: string;
+interface Supplier extends SupplierContragent {
     количество_товаров?: number;
     общая_сумма_закупок?: number;
     закупки_в_пути?: number;
@@ -58,6 +59,7 @@ function SuppliersPage(): JSX.Element {
     const [filters, setFilters] = useState({
         inTransit: 'all',
         supplierName: '',
+        type: 'all',
         rating: 'all',
         sortBy: 'name-asc',
     });
@@ -74,7 +76,7 @@ function SuppliersPage(): JSX.Element {
     const canShowOrdersHistory = canOrdersHistoryView && canPurchasesList;
     const hasRowActions = canView || canEdit || canDelete || canShowOrdersHistory;
 
-    const syncSuppliersUrl = (next: { q: string; inTransit: string; rating: string; supplierName: string; sort: string }) => {
+    const syncSuppliersUrl = (next: { q: string; inTransit: string; rating: string; supplierName: string; type: string; sort: string }) => {
         const query = { ...router.query } as Record<string, any>;
 
         if ((next.q || '').trim()) query.q = String(next.q).trim();
@@ -88,6 +90,9 @@ function SuppliersPage(): JSX.Element {
 
         if ((next.supplierName || '').trim()) query.name = String(next.supplierName).trim();
         else delete query.name;
+
+        if (next.type && next.type !== 'all') query.type = String(next.type);
+        else delete query.type;
 
         if (next.sort && next.sort !== 'name-asc') query.sort = String(next.sort);
         else delete query.sort;
@@ -113,18 +118,21 @@ function SuppliersPage(): JSX.Element {
         const inTransitRaw = router.query.inTransit;
         const ratingRaw = router.query.rating;
         const nameRaw = router.query.name;
+        const typeRaw = router.query.type;
         const sortRaw = router.query.sort;
 
         const q = Array.isArray(qRaw) ? qRaw[0] : qRaw;
         const inTransit = Array.isArray(inTransitRaw) ? inTransitRaw[0] : inTransitRaw;
         const rating = Array.isArray(ratingRaw) ? ratingRaw[0] : ratingRaw;
         const name = Array.isArray(nameRaw) ? nameRaw[0] : nameRaw;
+        const type = Array.isArray(typeRaw) ? typeRaw[0] : typeRaw;
         const sort = Array.isArray(sortRaw) ? sortRaw[0] : sortRaw;
 
         const nextQ = q !== undefined ? String(q) : '';
         const nextInTransit = inTransit ? String(inTransit) : 'all';
         const nextRating = rating ? String(rating) : 'all';
         const nextName = name !== undefined ? String(name) : '';
+        const nextType = type ? String(type) : 'all';
         const nextSort = sort ? String(sort) : 'name-asc';
 
         setSearchQuery(nextQ);
@@ -134,10 +142,11 @@ function SuppliersPage(): JSX.Element {
             inTransit: nextInTransit,
             rating: nextRating,
             supplierName: nextName,
+            type: nextType,
             sortBy: nextSort,
         }));
 
-        const nextSignature = JSON.stringify({ q: nextQ, inTransit: nextInTransit, rating: nextRating, name: nextName, sort: nextSort });
+        const nextSignature = JSON.stringify({ q: nextQ, inTransit: nextInTransit, rating: nextRating, name: nextName, type: nextType, sort: nextSort });
         lastSyncedQueryRef.current = nextSignature;
     }, [router.isReady, router.query]);
 
@@ -149,6 +158,7 @@ function SuppliersPage(): JSX.Element {
             inTransit: filters.inTransit,
             rating: filters.rating,
             name: filters.supplierName,
+            type: filters.type,
             sort: filters.sortBy,
         });
 
@@ -160,10 +170,11 @@ function SuppliersPage(): JSX.Element {
             inTransit: filters.inTransit,
             rating: filters.rating,
             supplierName: filters.supplierName,
+            type: filters.type,
             sort: filters.sortBy,
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [router.isReady, searchQuery, filters.inTransit, filters.rating, filters.supplierName, filters.sortBy]);
+    }, [router.isReady, searchQuery, filters.inTransit, filters.rating, filters.supplierName, filters.type, filters.sortBy]);
 
     const supplierNameOptions = useMemo((): string[] => {
         const set = new Set<string>();
@@ -328,6 +339,10 @@ function SuppliersPage(): JSX.Element {
             }
         }
 
+        if (filters.type !== 'all') {
+            list = list.filter((s) => normalizeSupplierContragentType(s.тип) === filters.type);
+        }
+
         if (filters.supplierName.trim()) {
             const q = filters.supplierName.trim().toLowerCase();
             list = list.filter((s) => (s.название || '').toLowerCase().includes(q));
@@ -351,7 +366,7 @@ function SuppliersPage(): JSX.Element {
         });
 
         return sorted;
-    }, [filters.inTransit, filters.rating, filters.sortBy, filters.supplierName, searchQuery, suppliers]);
+    }, [filters.inTransit, filters.rating, filters.sortBy, filters.supplierName, filters.type, searchQuery, suppliers]);
 
     useEffect(() => {
         if (!isFiltersOpen) return;
@@ -434,16 +449,19 @@ function SuppliersPage(): JSX.Element {
         setIsCreateModalOpen(false);
     };
 
-    const openEditModal = (supplier: Supplier) => {
+    const openEditModal = async (supplier: Supplier) => {
         if (!canEdit) return;
-        setEditSupplier({
-            id: supplier.id,
-            название: supplier.название,
-            телефон: supplier.телефон,
-            email: supplier.email,
-            рейтинг: supplier.рейтинг,
-        });
-        setIsEditModalOpen(true);
+        try {
+            const response = await fetch(`/api/suppliers/${supplier.id}`);
+            if (!response.ok) {
+                throw new Error('Ошибка загрузки карточки поставщика');
+            }
+            const detail = await response.json();
+            setEditSupplier(detail);
+            setIsEditModalOpen(true);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Ошибка загрузки карточки поставщика');
+        }
     };
 
     if (authLoading) {
@@ -598,6 +616,7 @@ function SuppliersPage(): JSX.Element {
                                             <Tabs.List className={styles.filtersTabs}>
                                                 <Tabs.Trigger value="inTransit">В работе</Tabs.Trigger>
                                                 <Tabs.Trigger value="name">Поставщик</Tabs.Trigger>
+                                                <Tabs.Trigger value="type">Тип</Tabs.Trigger>
                                                 <Tabs.Trigger value="rating">Рейтинг</Tabs.Trigger>
                                             </Tabs.List>
 
@@ -667,6 +686,26 @@ function SuppliersPage(): JSX.Element {
                                                     </Box>
                                                 </Tabs.Content>
 
+                                                <Tabs.Content value="type">
+                                                    <Box>
+                                                        <Text as="label" size="2" weight="medium">Тип контрагента</Text>
+                                                        <Select.Root
+                                                            value={filters.type}
+                                                            onValueChange={(value) => {
+                                                                setFilters((prev) => ({ ...prev, type: value }));
+                                                            }}
+                                                        >
+                                                            <Select.Trigger variant="surface" color="gray" className={styles.selectTrigger} />
+                                                            <Select.Content position="popper" variant="solid" color="gray" highContrast>
+                                                                <Select.Item value="all">Все</Select.Item>
+                                                                {SUPPLIER_CONTRAGENT_TYPES.map((type) => (
+                                                                    <Select.Item key={type} value={type}>{type}</Select.Item>
+                                                                ))}
+                                                            </Select.Content>
+                                                        </Select.Root>
+                                                    </Box>
+                                                </Tabs.Content>
+
                                                 <Tabs.Content value="rating">
                                                     <Box>
                                                         <Text as="label" size="2" weight="medium">Рейтинг</Text>
@@ -700,7 +739,7 @@ function SuppliersPage(): JSX.Element {
                                                 highContrast
                                                 onClick={() => {
                                                     setSupplierNameQuery('');
-                                                    setFilters((prev) => ({ ...prev, inTransit: 'all', supplierName: '', rating: 'all' }));
+                                                    setFilters((prev) => ({ ...prev, inTransit: 'all', supplierName: '', type: 'all', rating: 'all' }));
                                                 }}
                                             >
                                                 Сбросить
@@ -770,6 +809,7 @@ function SuppliersPage(): JSX.Element {
                                     <AnimatePresence>
                                         {filteredSuppliers.map((supplier) => {
                                             const inTransit = supplier.закупки_в_пути || 0;
+                                            const supplierTypeTheme = getSupplierContragentTypeTheme(supplier.тип);
 
                                             return (
                                                 <MotionTableRow
@@ -791,6 +831,9 @@ function SuppliersPage(): JSX.Element {
                                                     </Table.Cell>
                                                     <Table.Cell className={styles.tableCell}>
                                                         <div className={styles.itemTitle}>{supplier.название}</div>
+                                                        <div className={`${styles.typeBadge} ${styles[`typeBadge_${supplierTypeTheme}`]}`}>
+                                                            {getSupplierContragentTypeLabel(supplier.тип)}
+                                                        </div>
                                                         <div className={styles.itemSub}>Рейтинг: {supplier.рейтинг ?? '—'} / 5</div>
                                                     </Table.Cell>
                                                     <Table.Cell className={styles.tableCell}>

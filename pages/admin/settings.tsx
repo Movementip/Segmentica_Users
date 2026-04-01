@@ -161,7 +161,7 @@ function AdminSettingsPage(): JSX.Element {
                                 </Select.Content>
                             </Select.Root>
                             <div className={styles.fieldHint}>
-                                Будет использоваться для новых позиций заявки и закупки, если пользователь не выберет ставку вручную.
+                                Используется как начальная ставка НДС для новых позиций заявки и закупки, если в таковых НДС не указан. В заявках после выбора товара ставка может быть автоматически подставлена из карточки товара.
                             </div>
                         </div>
 
@@ -228,29 +228,7 @@ function AdminSettingsPage(): JSX.Element {
                     </div>
                 </section>
 
-                <aside className={styles.card}>
-                    <h2 className={styles.sectionTitle}>Сводка</h2>
-                    <p className={styles.sectionText}>
-                        Короткая шпаргалка по текущим системным значениям для новых документов и отгрузок.
-                    </p>
 
-                    <div className={styles.metrics}>
-                        <div className={styles.metric}>
-                            <div className={styles.metricLabel}>НДС по умолчанию</div>
-                            <div className={styles.metricValue}>{currentVat.label}</div>
-                        </div>
-                        <div className={styles.metric}>
-                            <div className={styles.metricLabel}>Режим новых заявок</div>
-                            <div className={styles.metricValue}>{getOrderExecutionModeLabel(settings.defaultOrderExecutionMode)}</div>
-                        </div>
-                        <div className={styles.metric}>
-                            <div className={styles.metricLabel}>Стоимость доставки</div>
-                            <div className={styles.metricValue}>
-                                {settings.autoCalculateShipmentDeliveryCost ? 'По тарифу ТК' : 'Вводится вручную'}
-                            </div>
-                        </div>
-                    </div>
-                </aside>
             </div>
         </div>
     );

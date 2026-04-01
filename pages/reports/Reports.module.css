@@ -277,7 +277,7 @@
 }
 
 .tableWrapper {
-    overflow-x: hidden;
+    overflow-x: auto;
 }
 
 .table:global(.rt-TableRootTable) {
@@ -286,7 +286,8 @@
     font-size: 14px;
     background-color: #ffffff;
     border: none;
-    table-layout: fixed;
+    table-layout: auto;
+    min-width: 900px;
 }
 
 .table:global(.rt-TableRoot) {
@@ -338,7 +339,7 @@
 }
 
 .cellContent {
-    max-width: 300px;
+    max-width: 420px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: normal;

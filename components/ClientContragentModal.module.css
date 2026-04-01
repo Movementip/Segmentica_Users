@@ -1,0 +1,304 @@
+.modalContent {
+  width: min(980px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  border-radius: 22px;
+  padding: 28px 32px 24px;
+  background: #ffffff;
+}
+
+.closeButton {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 9999px;
+  background: transparent;
+  color: #8b8b8b;
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.closeButton::before {
+  content: '×';
+}
+
+.modalTitle {
+  margin-bottom: 18px;
+  font-size: 28px;
+  font-weight: 500;
+  color: #202020;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.labelCol {
+  padding-top: 10px;
+}
+
+.label {
+  font-size: 18px;
+  color: #2b2b2b;
+  line-height: 1.25;
+}
+
+.labelMuted {
+  margin-top: 4px;
+  font-size: 14px;
+  color: #8e8e8e;
+  line-height: 1.2;
+}
+
+.fieldCol {
+  min-width: 0;
+}
+
+.textField,
+.selectTrigger,
+.textArea {
+  width: 100%;
+}
+
+.textField:global(.rt-TextFieldRoot),
+.selectTrigger:global(.rt-SelectTrigger),
+.textArea:global(.rt-TextArea) {
+  border-radius: 14px;
+  border: 1px solid #e4e4e4;
+  background: #ffffff;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+.textField:global(.rt-TextFieldRoot),
+.selectTrigger:global(.rt-SelectTrigger) {
+  min-height: 52px;
+}
+
+.textArea:global(.rt-TextArea) {
+  min-height: 86px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.textField:global(.rt-TextFieldRoot):focus-within,
+.selectTrigger:global(.rt-SelectTrigger):focus-visible,
+.textArea:global(.rt-TextArea):focus {
+  outline: none;
+  border-color: #d6d6d6;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.16);
+}
+
+.shortField {
+  max-width: 240px;
+}
+
+.subLabel {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #767676;
+}
+
+.passportGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 18px;
+}
+
+.passportWide {
+  grid-column: 1 / -1;
+}
+
+.addressField {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.addressHint {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  color: #2f2f2f;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.sectionTitle {
+  font-size: 20px;
+  font-weight: 600;
+  color: #262626;
+}
+
+.bankAccountsList {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.bankCard {
+  border: 1px solid #e8e8e8;
+  border-radius: 18px;
+  padding: 18px;
+  background: #ffffff;
+}
+
+.bankCardHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.bankCardTitle {
+  font-size: 16px;
+  font-weight: 500;
+  color: #232323;
+}
+
+.iconButton {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px solid #ececec;
+  background: #ffffff;
+  color: #6f6f6f;
+  cursor: pointer;
+}
+
+.bankGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 18px;
+}
+
+.bankGridWide {
+  grid-column: 1 / -1;
+}
+
+.checkboxRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 2px;
+  margin-top: 14px;
+  cursor: pointer;
+}
+
+.checkboxInput {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #111111;
+  cursor: pointer;
+}
+
+.checkboxText {
+  font-size: 14px;
+  color: #212121;
+  line-height: 1.4;
+}
+
+.primaryButton:global(.rt-Button),
+.secondaryButton:global(.rt-Button) {
+  min-height: 48px;
+  padding-inline: 24px;
+  border-radius: 16px;
+}
+
+.primaryButton:global(.rt-Button) {
+  background: #2d2d2d;
+  border-color: #2d2d2d;
+  color: #ffffff;
+}
+
+.primaryButton:global(.rt-Button):hover {
+  background: #404040;
+  border-color: #404040;
+}
+
+.secondaryButton:global(.rt-Button) {
+  background: #ffffff;
+  border: 1px solid #e1e1e1;
+  color: #2f2f2f;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+
+.actions {
+  padding-top: 22px;
+  border-top: 1px solid #ededed;
+}
+
+.errorBox {
+  border-radius: 14px;
+  border: 1px solid #f1c4c4;
+  background: #fff3f3;
+  color: #9a3434;
+  padding: 12px 14px;
+}
+
+@media (max-width: 900px) {
+  .modalContent {
+    width: calc(100vw - 24px);
+    padding: 20px 18px 20px;
+  }
+
+  .row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .labelCol {
+    padding-top: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .passportGrid,
+  .bankGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .bankGridWide,
+  .passportWide {
+    grid-column: auto;
+  }
+
+  .actions {
+    flex-direction: column;
+  }
+
+  .primaryButton:global(.rt-Button),
+  .secondaryButton:global(.rt-Button) {
+    width: 100%;
+  }
+}

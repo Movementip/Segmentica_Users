@@ -7,6 +7,32 @@ body {
   color: #222;
 }
 
+
+
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus {
+  -webkit-text-fill-color: inherit;
+  -webkit-box-shadow: 0 0 0 1000px transparent inset;
+  box-shadow: 0 0 0 1000px transparent inset;
+  transition: background-color 5000s ease-in-out 0s;
+  caret-color: inherit;
+  font-size: 16px;
+
+}
+input:-webkit-autofill::first-line {
+    font-size: 20px !important;
+    /* Укажите ваш нужный размер */
+  
+}
+
+
 :where(.radix-themes) button:focus:not(.rt-SelectTrigger):not(.rt-BaseSelectTrigger),
 :where(.radix-themes) button:focus-visible:not(.rt-SelectTrigger):not(.rt-BaseSelectTrigger),
 :where(.radix-themes) .rt-BaseButton:focus,
@@ -65,6 +91,11 @@ body {
 :where(.radix-themes) .rt-TextAreaInput:focus,
 :where(.radix-themes) .rt-TextAreaInput:focus-visible {
   outline: none !important;
+}
+
+:where(.radix-themes) .rt-TextFieldRoot:where(.rt-variant-surface):where(:has(.rt-TextFieldInput:where(:autofill, [data-com-onepassword-filled]):not(:disabled, :read-only))),
+:where(.radix-themes) .rt-TextFieldRoot:where(.rt-variant-surface):where(:has(.rt-TextFieldInput:where(:-webkit-autofill, [data-com-onepassword-filled]):not(:disabled, :read-only))) {
+box-shadow: inset 0 0 0 var(--text-field-border-width) var(--gray-a7) !important; 
 }
 
 :where(.radix-themes) .rt-SelectTrigger,

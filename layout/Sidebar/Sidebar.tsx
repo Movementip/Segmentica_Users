@@ -1,5 +1,4 @@
 import React from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/router';
 import styles from './Sidebar.module.css';
 import Image from 'next/legacy/image';
@@ -24,6 +23,7 @@ import {
     TbArchive,
     TbSettings
 } from 'react-icons/tb';
+import { FiPaperclip } from 'react-icons/fi';
 
 const menuSections = [
     {
@@ -63,6 +63,7 @@ const menuSections = [
         items: [
             { id: 7, name: 'Сотрудники', icon: <TbUser size={16} />, route: '/managers' },
             { id: 13, name: 'Архив', icon: <TbArchive size={16} />, route: '/archive' },
+            { id: 15, name: 'Документы', icon: <FiPaperclip size={16} />, route: '/documents' },
         ]
     }
 ];
@@ -78,6 +79,8 @@ const SidebarContent = React.memo(function SidebarContent(): JSX.Element {
     const { saveScrollPosition } = useSidebarScroll();
     const { closeMobileMenu } = useSidebarContext();
     const dashboardAccess = React.useMemo(() => getDashboardAccess(user?.permissions), [user?.permissions]);
+    const isNavigatingRef = React.useRef(false);
+    const pendingHrefRef = React.useRef<string | null>(null);
 
     const can = React.useCallback((key: string) => Boolean(user?.permissions?.includes(key)), [user?.permissions]);
 
@@ -87,12 +90,56 @@ const SidebarContent = React.memo(function SidebarContent(): JSX.Element {
         return currentPath === route || currentPath.startsWith(`${route}/`);
     };
 
-    const handleLinkClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
-        // Сохраняем позицию скролла перед переходом
-        saveScrollPosition();
+    const performLatestNavigation = React.useCallback(async () => {
+        if (isNavigatingRef.current) return;
 
-        // Закрываем мобильное меню если нужно
+        isNavigatingRef.current = true;
+
+        try {
+            while (pendingHrefRef.current) {
+                const nextHref = pendingHrefRef.current;
+                pendingHrefRef.current = null;
+
+                const currentPath = String(router.asPath || '').split('?')[0].split('#')[0];
+                if (!nextHref || currentPath === nextHref || router.pathname === nextHref) {
+                    continue;
+                }
+
+                try {
+                    await router.push(nextHref);
+                } catch (error) {
+                    if (!(error as { cancelled?: boolean } | null)?.cancelled) {
+                        console.error('Sidebar navigation error:', error);
+                    }
+                }
+            }
+        } finally {
+            isNavigatingRef.current = false;
+            if (pendingHrefRef.current) {
+                void performLatestNavigation();
+            }
+        }
+    }, [router]);
+
+    const handleLinkClick = (e: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+        if (
+            e.defaultPrevented
+            || e.button !== 0
+            || e.metaKey
+            || e.ctrlKey
+            || e.shiftKey
+            || e.altKey
+        ) {
+            return;
+        }
+
+        e.preventDefault();
+
+        saveScrollPosition();
         closeMobileMenu();
+
+        pendingHrefRef.current = href;
+        void performLatestNavigation();
     };
 
     return (
@@ -129,6 +176,7 @@ const SidebarContent = React.memo(function SidebarContent(): JSX.Element {
                                     if (item.route === '/suppliers') return can('suppliers.list');
                                     if (item.route === '/transport') return can('transport.list');
                                     if (item.route === '/managers') return can('managers.list');
+                                    if (item.route === '/documents') return can('documents.view');
                                     if (item.route === '/reports')
                                         return (
                                             can('reports.overview.view') ||
@@ -151,14 +199,14 @@ const SidebarContent = React.memo(function SidebarContent(): JSX.Element {
                                 })
                                 .map(item => (
                                     <li key={item.id} className={styles.menuItem}>
-                                        <Link
+                                        <a
                                             href={item.route}
-                                            onClick={handleLinkClick}
+                                            onClick={(e) => handleLinkClick(e, item.route)}
                                             className={`${styles.menuLink} ${isRouteActive(item.route) ? styles.active : ''}`}
                                         >
                                             <span className={styles.menuIcon}>{item.icon}</span>
                                             <span className={styles.menuText}>{item.name}</span>
-                                        </Link>
+                                        </a>
                                     </li>
                                 ))}
                         </ul>

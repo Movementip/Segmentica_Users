@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
 import { withLayout } from '../../layout/Layout';
@@ -14,6 +14,8 @@ import { Badge, Box, Button, Card, Dialog, DropdownMenu, Flex, Grid, Separator, 
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
 import { calculateVatAmountsFromLine, getVatRateOption } from '../../lib/vat';
+import { getClientContragentTypeLabel, normalizeClientContragentType } from '../../lib/clientContragents';
+import { getSupplierContragentTypeLabel, normalizeSupplierContragentType } from '../../lib/supplierContragents';
 import { getPurchaseDeliveryLabel } from '../../lib/logisticsDeliveryLabels';
 
 interface PurchasePosition {
@@ -39,6 +41,26 @@ interface Purchase {
     поставщик_название: string;
     поставщик_телефон: string;
     поставщик_email: string;
+    поставщик_адрес?: string | null;
+    поставщик_тип?: string | null;
+    поставщик_краткое_название?: string | null;
+    поставщик_полное_название?: string | null;
+    поставщик_фамилия?: string | null;
+    поставщик_имя?: string | null;
+    поставщик_отчество?: string | null;
+    поставщик_инн?: string | null;
+    поставщик_кпп?: string | null;
+    поставщик_огрн?: string | null;
+    поставщик_огрнип?: string | null;
+    поставщик_окпо?: string | null;
+    поставщик_адрес_регистрации?: string | null;
+    поставщик_адрес_печати?: string | null;
+    поставщик_паспорт_серия?: string | null;
+    поставщик_паспорт_номер?: string | null;
+    поставщик_паспорт_кем_выдан?: string | null;
+    поставщик_паспорт_дата_выдачи?: string | null;
+    поставщик_паспорт_код_подразделения?: string | null;
+    поставщик_комментарий?: string | null;
     заявка_id?: number;
     дата_заказа: string;
     дата_поступления?: string;
@@ -48,6 +70,25 @@ interface Purchase {
     транспорт_id?: number | null;
     стоимость_доставки?: number | null;
     транспорт_название?: string;
+    клиент_id?: number | null;
+    клиент_название?: string | null;
+    клиент_телефон?: string | null;
+    клиент_email?: string | null;
+    клиент_адрес?: string | null;
+    клиент_тип?: string | null;
+    клиент_краткое_название?: string | null;
+    клиент_полное_название?: string | null;
+    клиент_фамилия?: string | null;
+    клиент_имя?: string | null;
+    клиент_отчество?: string | null;
+    клиент_инн?: string | null;
+    клиент_кпп?: string | null;
+    клиент_огрн?: string | null;
+    клиент_огрнип?: string | null;
+    клиент_окпо?: string | null;
+    клиент_адрес_регистрации?: string | null;
+    клиент_адрес_печати?: string | null;
+    клиент_комментарий?: string | null;
     позиции: PurchasePosition[];
 }
 
@@ -93,15 +134,9 @@ function PurchaseDetailPage(): JSX.Element {
     const canAttachmentsUpload = Boolean(user?.permissions?.includes('purchases.attachments.upload'));
     const canAttachmentsDelete = Boolean(user?.permissions?.includes('purchases.attachments.delete'));
 
-    useEffect(() => {
-        if (authLoading) return;
-        if (!canView) return;
-        if (id) {
-            fetchPurchase();
-        }
-    }, [authLoading, canView, id]);
 
-    const fetchPurchase = async () => {
+
+    const fetchPurchase = useCallback(async () => {
         try {
             setLoading(true);
             const response = await fetch(`/api/purchases?id=${id}`);
@@ -120,8 +155,14 @@ function PurchaseDetailPage(): JSX.Element {
         } finally {
             setLoading(false);
         }
-    };
-
+    }, [canAttachmentsView, id]);
+    useEffect(() => {
+        if (authLoading) return;
+        if (!canView) return;
+        if (id) {
+            fetchPurchase();
+        }
+    }, [authLoading, canView, fetchPurchase, id]);
     if (authLoading) {
         return (
             <Box p="5">
@@ -273,6 +314,51 @@ function PurchaseDetailPage(): JSX.Element {
             style: 'currency',
             currency: 'RUB'
         }).format(amount);
+    };
+
+    const formatTextValue = (value?: string | null) => {
+        const normalized = typeof value === 'string' ? value.trim() : '';
+        return normalized || 'Не указан';
+    };
+
+    const getPurchaseSupplierIdentity = () => {
+        const type = normalizeSupplierContragentType(purchase?.поставщик_тип);
+        if (type === 'Организация') {
+            return formatTextValue(purchase?.поставщик_полное_название || purchase?.поставщик_краткое_название || purchase?.поставщик_название);
+        }
+        const fullName = [purchase?.поставщик_фамилия, purchase?.поставщик_имя, purchase?.поставщик_отчество]
+            .map((item) => typeof item === 'string' ? item.trim() : '')
+            .filter(Boolean)
+            .join(' ');
+        return fullName || formatTextValue(purchase?.поставщик_название);
+    };
+
+    const getPurchaseSupplierRegistrationNumberLabel = () => {
+        return normalizeSupplierContragentType(purchase?.поставщик_тип) === 'Организация' ? 'ОГРН' : 'ОГРНИП';
+    };
+
+    const getPurchaseSupplierRegistrationAddressLabel = () => {
+        return normalizeSupplierContragentType(purchase?.поставщик_тип) === 'Организация' ? 'Юридический адрес' : 'Адрес регистрации';
+    };
+
+    const getPurchaseSupplierPassportSummary = () => {
+        return [
+            purchase?.поставщик_паспорт_серия && `серия ${purchase.поставщик_паспорт_серия}`,
+            purchase?.поставщик_паспорт_номер && `номер ${purchase.поставщик_паспорт_номер}`,
+            purchase?.поставщик_паспорт_дата_выдачи && `от ${formatDate(purchase.поставщик_паспорт_дата_выдачи)}`,
+        ].filter(Boolean).join(', ') || 'Не указан';
+    };
+
+    const getPurchaseClientIdentity = () => {
+        const type = normalizeClientContragentType(purchase?.клиент_тип);
+        if (type === 'Организация') {
+            return formatTextValue(purchase?.клиент_полное_название || purchase?.клиент_краткое_название || purchase?.клиент_название);
+        }
+        const fullName = [purchase?.клиент_фамилия, purchase?.клиент_имя, purchase?.клиент_отчество]
+            .map((item) => typeof item === 'string' ? item.trim() : '')
+            .filter(Boolean)
+            .join(' ');
+        return fullName || formatTextValue(purchase?.клиент_название);
     };
 
     const getVatSummary = (position: PurchasePosition) => {
@@ -587,20 +673,84 @@ function PurchaseDetailPage(): JSX.Element {
                                 Информация о поставщике
                             </Text>
                             <Separator size="4" />
-                            <Flex direction="column" gap="2">
-                                <Box>
-                                    <Text as="div" size="1" color="gray">Поставщик</Text>
-                                    <Text as="div" size="2" weight="medium">{purchase.поставщик_название || 'Не указан'}</Text>
-                                </Box>
-                                <Box>
-                                    <Text as="div" size="1" color="gray">Телефон</Text>
-                                    <Text as="div" size="2">{purchase.поставщик_телефон || 'Не указан'}</Text>
-                                </Box>
-                                <Box>
-                                    <Text as="div" size="1" color="gray">Email</Text>
-                                    <Text as="div" size="2">{purchase.поставщик_email || 'Не указан'}</Text>
-                                </Box>
-                            </Flex>
+                            <Grid columns={{ initial: '1', sm: '2' }} gap="3">
+                                <Flex direction="column" gap="2">
+                                    <Box>
+                                        <Text as="div" size="1" color="gray">Поставщик</Text>
+                                        <Text as="div" size="2" weight="medium">{formatTextValue(purchase.поставщик_название)}</Text>
+                                    </Box>
+                                    <Box>
+                                        <Text as="div" size="1" color="gray">Тип контрагента</Text>
+                                        <Badge variant="soft" color="blue">{getSupplierContragentTypeLabel(purchase.поставщик_тип)}</Badge>
+                                    </Box>
+                                    <Box>
+                                        <Text as="div" size="1" color="gray">Полное имя / название</Text>
+                                        <Text as="div" size="2">{getPurchaseSupplierIdentity()}</Text>
+                                    </Box>
+                                    <Box>
+                                        <Text as="div" size="1" color="gray">Краткое название</Text>
+                                        <Text as="div" size="2">{formatTextValue(purchase.поставщик_краткое_название || purchase.поставщик_название)}</Text>
+                                    </Box>
+                                    <Box>
+                                        <Text as="div" size="1" color="gray">Телефон</Text>
+                                        <Text as="div" size="2">{formatTextValue(purchase.поставщик_телефон)}</Text>
+                                    </Box>
+                                    <Box>
+                                        <Text as="div" size="1" color="gray">Email</Text>
+                                        <Text as="div" size="2">{formatTextValue(purchase.поставщик_email)}</Text>
+                                    </Box>
+                                    <Box>
+                                        <Text as="div" size="1" color="gray">Адрес</Text>
+                                        <Text as="div" size="2">{formatTextValue(purchase.поставщик_адрес)}</Text>
+                                    </Box>
+                                </Flex>
+
+                                <Flex direction="column" gap="2">
+                                    <Box>
+                                        <Text as="div" size="1" color="gray">ИНН / КПП</Text>
+                                        <Text as="div" size="2">{`${formatTextValue(purchase.поставщик_инн)} / ${formatTextValue(purchase.поставщик_кпп)}`}</Text>
+                                    </Box>
+                                    <Box>
+                                        <Text as="div" size="1" color="gray">{getPurchaseSupplierRegistrationNumberLabel()}</Text>
+                                        <Text as="div" size="2">{formatTextValue(purchase.поставщик_огрн || purchase.поставщик_огрнип)}</Text>
+                                    </Box>
+                                    <Box>
+                                        <Text as="div" size="1" color="gray">ОКПО</Text>
+                                        <Text as="div" size="2">{formatTextValue(purchase.поставщик_окпо)}</Text>
+                                    </Box>
+                                    <Box>
+                                        <Text as="div" size="1" color="gray">{getPurchaseSupplierRegistrationAddressLabel()}</Text>
+                                        <Text as="div" size="2">{formatTextValue(purchase.поставщик_адрес_регистрации)}</Text>
+                                    </Box>
+                                    <Box>
+                                        <Text as="div" size="1" color="gray">Адрес для документов</Text>
+                                        <Text as="div" size="2">{formatTextValue(purchase.поставщик_адрес_печати || purchase.поставщик_адрес)}</Text>
+                                    </Box>
+                                    <Box>
+                                        <Text as="div" size="1" color="gray">Комментарий</Text>
+                                        <Text as="div" size="2">{formatTextValue(purchase.поставщик_комментарий)}</Text>
+                                    </Box>
+                                </Flex>
+                            </Grid>
+                            {normalizeSupplierContragentType(purchase.поставщик_тип) === 'Физическое лицо' ? (
+                                <>
+                                    <Separator size="4" />
+                                    <Grid columns={{ initial: '1', sm: '2' }} gap="3">
+                                        <Box>
+                                            <Text as="div" size="1" color="gray">Паспорт</Text>
+                                            <Text as="div" size="2">{getPurchaseSupplierPassportSummary()}</Text>
+                                        </Box>
+                                        <Box>
+                                            <Text as="div" size="1" color="gray">Код подразделения</Text>
+                                            <Text as="div" size="2">{formatTextValue(purchase.поставщик_паспорт_код_подразделения)}</Text>
+                                        </Box>
+                                        <Box style={{ gridColumn: '1 / -1' }}>
+                                            <Text as="div" size="1" color="gray">Кем выдан</Text>
+                                            <Text as="div" size="2">{formatTextValue(purchase.поставщик_паспорт_кем_выдан)}</Text>
+                                        </Box>
+                                    </Grid>
+                                </>
+                            ) : null}
                         </Flex>
                     </Card>
 
@@ -669,6 +819,74 @@ function PurchaseDetailPage(): JSX.Element {
                         </Flex>
                     </Card>
                 </Grid>
+
+                {purchase.клиент_id ? (
+                    <Grid columns={{ initial: '1', md: '1' }} gap="4" mt="4">
+                        <Card size="2" variant="surface">
+                            <Flex direction="column" gap="3">
+                                <Text as="div" size="2" weight="bold" className={styles.sectionTitle}>
+                                    Клиент по связанной заявке
+                                </Text>
+                                <Separator size="4" />
+                                <Grid columns={{ initial: '1', md: '2' }} gap="4">
+                                    <Flex direction="column" gap="2">
+                                        <Box>
+                                            <Text as="div" size="1" color="gray">Клиент</Text>
+                                            <Text as="div" size="2" weight="medium">{formatTextValue(purchase.клиент_название)}</Text>
+                                        </Box>
+                                        <Box>
+                                            <Text as="div" size="1" color="gray">Тип контрагента</Text>
+                                            <Text as="div" size="2">{getClientContragentTypeLabel(purchase.клиент_тип)}</Text>
+                                        </Box>
+                                        <Box>
+                                            <Text as="div" size="1" color="gray">Полное имя / название</Text>
+                                            <Text as="div" size="2">{getPurchaseClientIdentity()}</Text>
+                                        </Box>
+                                        <Box>
+                                            <Text as="div" size="1" color="gray">Телефон</Text>
+                                            <Text as="div" size="2">{formatTextValue(purchase.клиент_телефон)}</Text>
+                                        </Box>
+                                        <Box>
+                                            <Text as="div" size="1" color="gray">Email</Text>
+                                            <Text as="div" size="2">{formatTextValue(purchase.клиент_email)}</Text>
+                                        </Box>
+                                        <Box>
+                                            <Text as="div" size="1" color="gray">Адрес</Text>
+                                            <Text as="div" size="2">{formatTextValue(purchase.клиент_адрес)}</Text>
+                                        </Box>
+                                    </Flex>
+
+                                    <Flex direction="column" gap="2">
+                                        <Box>
+                                            <Text as="div" size="1" color="gray">ИНН / КПП</Text>
+                                            <Text as="div" size="2">{`${formatTextValue(purchase.клиент_инн)} / ${formatTextValue(purchase.клиент_кпп)}`}</Text>
+                                        </Box>
+                                        <Box>
+                                            <Text as="div" size="1" color="gray">ОГРН / ОГРНИП</Text>
+                                            <Text as="div" size="2">{formatTextValue(purchase.клиент_огрн || purchase.клиент_огрнип)}</Text>
+                                        </Box>
+                                        <Box>
+                                            <Text as="div" size="1" color="gray">ОКПО</Text>
+                                            <Text as="div" size="2">{formatTextValue(purchase.клиент_окпо)}</Text>
+                                        </Box>
+                                        <Box>
+                                            <Text as="div" size="1" color="gray">Адрес регистрации</Text>
+                                            <Text as="div" size="2">{formatTextValue(purchase.клиент_адрес_регистрации)}</Text>
+                                        </Box>
+                                        <Box>
+                                            <Text as="div" size="1" color="gray">Адрес для документов</Text>
+                                            <Text as="div" size="2">{formatTextValue(purchase.клиент_адрес_печати || purchase.клиент_адрес)}</Text>
+                                        </Box>
+                                        <Box>
+                                            <Text as="div" size="1" color="gray">Комментарий</Text>
+                                            <Text as="div" size="2">{formatTextValue(purchase.клиент_комментарий)}</Text>
+                                        </Box>
+                                    </Flex>
+                                </Grid>
+                            </Flex>
+                        </Card>
+                    </Grid>
+                ) : null}
 
                 <div className={styles.sectionBlock}>
                     <div className={styles.sectionHeaderRow}>

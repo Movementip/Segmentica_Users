@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { query } from '../../lib/db';
 import { hasPermission, requireAuth } from '../../lib/auth';
 import { getOrderWorkflowSummary, getWorkflowDisplayStatus } from '../../lib/orderWorkflow';
+import { getSupplierContragentTypeLabel } from '../../lib/supplierContragents';
 
 interface SearchResult {
     id: number;
@@ -387,11 +388,14 @@ async function searchCategories(searchPatterns: string[]): Promise<SearchResult[
 async function searchSuppliers(searchPatterns: string[]): Promise<SearchResult[]> {
     try {
         const result = await query(
-            `SELECT id, название, телефон, email, рейтинг, created_at
+            `SELECT id, название, телефон, email, рейтинг, created_at, тип, инн, краткое_название, полное_название
        FROM "Поставщики"
        WHERE "название" LIKE ANY($1)
+       OR COALESCE("краткое_название", '') LIKE ANY($1)
+       OR COALESCE("полное_название", '') LIKE ANY($1)
        OR "телефон" LIKE ANY($1)
        OR "email" LIKE ANY($1)
+       OR COALESCE("инн", '') LIKE ANY($1)
        ORDER BY "название"
        LIMIT 10`,
             [searchPatterns]
@@ -401,7 +405,13 @@ async function searchSuppliers(searchPatterns: string[]): Promise<SearchResult[]
             id: supplier.id,
             type: 'supplier' as const,
             title: supplier.название,
-            subtitle: [supplier.телефон, supplier.email, supplier.рейтинг ? `Рейтинг: ${supplier.рейтинг}` : ''].filter(Boolean).join(' • ')
+            subtitle: [
+                supplier.тип ? getSupplierContragentTypeLabel(supplier.тип) : '',
+                supplier.инн ? `ИНН: ${supplier.инн}` : '',
+                supplier.телефон,
+                supplier.email,
+                supplier.рейтинг ? `Рейтинг: ${supplier.рейтинг}` : ''
+            ].filter(Boolean).join(' • ')
         }));
     } catch (error) {
         console.error('Error searching suppliers:', error);

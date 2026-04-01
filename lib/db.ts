@@ -1,16 +1,23 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { Pool, PoolClient } from 'pg';
 import { getRequestContext } from './requestContext';
+const globalForDb = globalThis as typeof globalThis & {
+    __segmenticaDbPool?: Pool | null;
+    __segmenticaDbPoolPromise?: Promise<Pool> | null;
+    __segmenticaDbCheckInterval?: NodeJS.Timeout | null;
+    __segmenticaDbExitHandlerRegistered?: boolean;
+};
 export let isRemote = false;
 export type DbMode = 'local' | 'remote';
 export let dbMode: DbMode = 'local';
 export let remoteAvailable = false;
-let checkInterval: NodeJS.Timeout | null = null;
+let checkInterval: NodeJS.Timeout | null = globalForDb.__segmenticaDbCheckInterval ?? null;
 const testDatabaseConnection = async (connectionString: string): Promise<boolean> => {
+    let testPool: Pool | null = null;
     let client: PoolClient | null = null;
     try {
-        const pool = new Pool({ connectionString, connectionTimeoutMillis: 5000 });
-        client = await pool.connect();
+        testPool = new Pool({ connectionString, connectionTimeoutMillis: 5000 });
+        client = await testPool.connect();
         await client.query('SELECT 1');
         return true;
     } catch (error) {
@@ -20,6 +27,9 @@ const testDatabaseConnection = async (connectionString: string): Promise<boolean
     } finally {
         if (client) {
             await client.release();
+        }
+        if (testPool) {
+            await testPool.end().catch(() => undefined);
         }
     }
 };
@@ -103,10 +113,16 @@ const diffRows = (beforeRow: any, afterRow: any): { field: string; from: any; to
     return changes;
 };
 
-const startConnectionCheck = (remoteUrl: string, checkIntervalMs: number = 10000) => {
+const stopConnectionCheck = () => {
     if (checkInterval) {
         clearInterval(checkInterval);
     }
+    checkInterval = null;
+    globalForDb.__segmenticaDbCheckInterval = null;
+};
+
+const startConnectionCheck = (remoteUrl: string, checkIntervalMs: number = 10000) => {
+    stopConnectionCheck();
 
     const checkConnection = async () => {
         const isConnected = await testDatabaseConnection(remoteUrl);
@@ -120,12 +136,12 @@ const startConnectionCheck = (remoteUrl: string, checkIntervalMs: number = 10000
     checkConnection();
 
     checkInterval = setInterval(checkConnection, checkIntervalMs);
+    globalForDb.__segmenticaDbCheckInterval = checkInterval;
 
-    process.on('exit', () => {
-        if (checkInterval) {
-            clearInterval(checkInterval);
-        }
-    });
+    if (!globalForDb.__segmenticaDbExitHandlerRegistered) {
+        process.once('exit', stopConnectionCheck);
+        globalForDb.__segmenticaDbExitHandlerRegistered = true;
+    }
 };
 
 if (process.env.DATABASE_URL) {
@@ -151,8 +167,8 @@ const getConnectionString = async (): Promise<{ connectionString: string; isRemo
     };
 };
 
-let poolPromise: Promise<Pool> | null = null;
-let pool: Pool | null = null;
+let poolPromise: Promise<Pool> | null = globalForDb.__segmenticaDbPoolPromise ?? null;
+let pool: Pool | null = globalForDb.__segmenticaDbPool ?? null;
 const transactionClientStorage = new AsyncLocalStorage<PoolClient>();
 
 const createPool = async () => {
@@ -175,8 +191,10 @@ const ensurePool = async () => {
     if (!poolPromise) {
         poolPromise = createPool().then((p) => {
             pool = p;
+            globalForDb.__segmenticaDbPool = p;
             return p;
         });
+        globalForDb.__segmenticaDbPoolPromise = poolPromise;
     }
     return poolPromise;
 };
@@ -407,6 +425,8 @@ export const resetPool = async () => {
     }
     pool = null;
     poolPromise = null;
+    globalForDb.__segmenticaDbPool = null;
+    globalForDb.__segmenticaDbPoolPromise = null;
     await ensurePool();
 };
 

@@ -2,6 +2,42 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { getPool, query } from '../../lib/db';
 import { requireAuth, requirePermission } from '../../lib/auth';
 
+const PRODUCT_NOMENCLATURE_TYPES = new Set([
+    'товар',
+    'материал',
+    'продукция',
+    'входящая_услуга',
+    'исходящая_услуга',
+    'внеоборотный_актив'
+]);
+
+const DEFAULT_PRODUCT_NOMENCLATURE_TYPE = 'товар';
+const ALLOWED_PRODUCT_VAT_RATE_IDS = new Set([1, 4, 5]);
+const DEFAULT_PRODUCT_VAT_RATE_ID = 5;
+
+const normalizeNullableText = (value: unknown): string | null => {
+    if (typeof value !== 'string') return null;
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+};
+
+const normalizeNomenclatureType = (value: unknown): string => {
+    const normalized = normalizeNullableText(value);
+    if (!normalized) return DEFAULT_PRODUCT_NOMENCLATURE_TYPE;
+    return PRODUCT_NOMENCLATURE_TYPES.has(normalized) ? normalized : DEFAULT_PRODUCT_NOMENCLATURE_TYPE;
+};
+
+const normalizeProductVatRateId = (value: unknown): number => {
+    const id = Number(value);
+    return ALLOWED_PRODUCT_VAT_RATE_IDS.has(id) ? id : DEFAULT_PRODUCT_VAT_RATE_ID;
+};
+
+const normalizeCategoryId = (value: unknown): number | null => {
+    if (value === null || value === undefined || value === '') return null;
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method === 'GET') {
         const actor = await requirePermission(req, res, 'warehouse.list');
@@ -93,6 +129,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             const {
                 название,
                 артикул,
+                категория,
+                тип_номенклатуры,
+                счет_учета,
+                счет_затрат,
+                ндс_id,
+                комментарий,
                 категория_id,
                 единица_измерения,
                 минимальный_остаток,
@@ -116,13 +158,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                 return res.status(400).json({ error: 'Товар с таким артикулом уже существует' });
             }
 
-            let resolvedCategoryId: number | null = null;
-            if (typeof категория_id === 'number') {
-                resolvedCategoryId = категория_id;
-            } else if (typeof категория_id === 'string' && категория_id.trim()) {
-                const parsedCategoryId = Number(категория_id);
-                resolvedCategoryId = Number.isFinite(parsedCategoryId) ? parsedCategoryId : null;
-            }
+            const resolvedCategoryId = normalizeCategoryId(категория_id);
+            const normalizedType = normalizeNomenclatureType(тип_номенклатуры);
+            const normalizedAccountingAccount = normalizedType === 'материал' ? normalizeNullableText(счет_учета) : null;
+            const normalizedExpenseAccount = normalizedType === 'входящая_услуга' ? normalizeNullableText(счет_затрат) : null;
+            const normalizedVatRateId = normalizeProductVatRateId(ндс_id);
+            const normalizedComment = normalizeNullableText(комментарий);
 
             const pool = await getPool();
             const client = await pool.connect();
@@ -130,24 +171,55 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             try {
                 await client.query('BEGIN');
                 const txQuery = (text: string, params?: any[]) => client.query(text, params);
+                let resolvedCategoryName = normalizeNullableText(категория);
+
+                if (resolvedCategoryId) {
+                    const categoryResult = await txQuery(
+                        'SELECT "название" FROM "Категории_товаров" WHERE id = $1',
+                        [resolvedCategoryId]
+                    );
+                    resolvedCategoryName = categoryResult.rows[0]?.название || resolvedCategoryName;
+                }
+
                 // Create product
                 const productResult = await txQuery(`
           INSERT INTO "Товары" (
-            "название", "артикул", "категория_id", "единица_измерения",
+            "название", "артикул", "категория", "тип_номенклатуры", "счет_учета", "счет_затрат",
+            "ндс_id", "комментарий", "категория_id", "единица_измерения",
             "минимальный_остаток", "цена_закупки", "цена_продажи"
-          ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
           RETURNING id
         `, [
-                    название,
-                    артикул,
+                    normalizeNullableText(название),
+                    normalizeNullableText(артикул),
+                    resolvedCategoryName,
+                    normalizedType,
+                    normalizedAccountingAccount,
+                    normalizedExpenseAccount,
+                    normalizedVatRateId,
+                    normalizedComment,
                     resolvedCategoryId,
-                    единица_измерения,
+                    normalizeNullableText(единица_измерения) || 'шт',
                     минимальный_остаток || 0,
                     цена_закупки || 0,
                     цена_продажи || 0
                 ]);
 
                 const productId = productResult.rows[0].id;
+
+                await txQuery(
+                    `
+                        INSERT INTO "История_цен_товаров" (
+                            "товар_id",
+                            "цена_закупки",
+                            "цена_продажи",
+                            "источник",
+                            "комментарий"
+                        )
+                        VALUES ($1, $2, $3, $4, $5)
+                    `,
+                    [productId, цена_закупки || 0, цена_продажи || 0, 'product_create', 'Начальное создание товара']
+                );
 
                 // Add to warehouse with initial quantity
                 const warehouseInsertQuery = начальное_количество > 0
@@ -307,16 +379,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           "цена_продажи" = $8
         WHERE id = $9
       `, [
-                название,
-                артикул,
-                resolvedCategoryName,
-                resolvedCategoryId,
-                единица_измерения,
-                минимальный_остаток || 0,
-                цена_закупки || 0,
-                цена_продажи || 0,
-                id
-            ]);
+                    название,
+                    артикул,
+                    resolvedCategoryName,
+                    resolvedCategoryId,
+                    единица_измерения,
+                    минимальный_остаток || 0,
+                    цена_закупки || 0,
+                    цена_продажи || 0,
+                    id
+                ]);
 
                 if (updateResult.rowCount === 0) {
                     await client.query('ROLLBACK');

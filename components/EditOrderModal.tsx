@@ -30,6 +30,7 @@ interface Product {
     цена_продажи?: number;
     артикул?: string;
     единица_измерения?: string;
+    ндс_id?: number;
 }
 
 interface OrderPosition {
@@ -117,6 +118,7 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ isOpen, onClose, onSubm
 
     const blocked = canEdit === false;
     const getProductSalePrice = (product?: Product | null) => Number(product?.цена_продажи ?? product?.цена ?? 0);
+    const getProductVatRateId = (product?: Product | null) => Number(product?.ндс_id) || defaultVatRateId;
 
     useEffect(() => {
         if (isOpen && order) {
@@ -273,6 +275,9 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ isOpen, onClose, onSubm
                     const product = products.find(p => p.id === value);
                     if (product) {
                         updatedPos.цена = getProductSalePrice(product);
+                        updatedPos.ндс_id = getProductVatRateId(product);
+                    } else {
+                        updatedPos.ндс_id = defaultVatRateId;
                     }
                 }
                 return updatedPos;
@@ -420,27 +425,27 @@ const EditOrderModal: React.FC<EditOrderModalProps> = ({ isOpen, onClose, onSubm
                             <Text as="label" size="2" weight="medium">
                                 Статус *
                             </Text>
-                                <Select.Root value={status} onValueChange={setStatus}>
-                                    <Select.Trigger variant="surface" color="gray" className={styles.selectTrigger} />
-                                    <Select.Content position="popper" variant="solid" color="gray" highContrast>
-                                        {statusOptions.map((option) => (
-                                            <Select.Item key={option.value} value={option.value} disabled={option.disabled}>
-                                                {option.label}
-                                            </Select.Item>
-                                        ))}
-                                    </Select.Content>
-                                </Select.Root>
-                                {(hasActiveMissingProducts || workflowGuard) && (
-                                    <Text as="p" size="1" color="gray" mt="2">
-                                        {hasActiveMissingProducts
-                                            ? 'Статусы «Собрана», «Отгружена» и «Выполнена» закрыты, пока по заявке есть активные недостачи.'
-                                            : workflowGuard?.canComplete
-                                                ? 'Заявку уже можно завершать: у нее есть доставленная отгрузка.'
-                                                : workflowGuard?.readyForShipment
-                                                    ? 'Заявка собрана и готова к созданию отгрузки.'
-                                                    : 'Поздние статусы откроются автоматически по мере прохождения обеспечения, сборки и отгрузки.'}
-                                    </Text>
-                                )}
+                            <Select.Root value={status} onValueChange={setStatus}>
+                                <Select.Trigger variant="surface" color="gray" className={styles.selectTrigger} />
+                                <Select.Content position="popper" variant="solid" color="gray" highContrast>
+                                    {statusOptions.map((option) => (
+                                        <Select.Item key={option.value} value={option.value} disabled={option.disabled}>
+                                            {option.label}
+                                        </Select.Item>
+                                    ))}
+                                </Select.Content>
+                            </Select.Root>
+                            {(hasActiveMissingProducts || workflowGuard) && (
+                                <Text as="p" size="1" color="gray" mt="2">
+                                    {hasActiveMissingProducts
+                                        ? 'Статусы «Собрана», «Отгружена» и «Выполнена» закрыты, пока по заявке есть активные недостачи.'
+                                        : workflowGuard?.canComplete
+                                            ? 'Заявку уже можно завершать: у нее есть доставленная отгрузка.'
+                                            : workflowGuard?.readyForShipment
+                                                ? 'Заявка собрана и готова к созданию отгрузки.'
+                                                : 'Поздние статусы откроются автоматически по мере прохождения обеспечения, сборки и отгрузки.'}
+                                </Text>
+                            )}
                         </Box>
 
                         <Box className={styles.formGroup}>

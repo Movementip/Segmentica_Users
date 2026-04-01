@@ -7,7 +7,7 @@ interface PageTitleContextType {
 
 const PageTitleContext = createContext<PageTitleContextType>({
     pageTitle: 'Дашборд',
-    setPageTitle: () => {}
+    setPageTitle: () => { }
 });
 
 export const usePageTitle = () => useContext(PageTitleContext);

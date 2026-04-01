@@ -169,6 +169,12 @@ WITH src_permissions(key, name, description) AS (
     ('products.attachments.upload', 'Загрузка документов товаров', 'Действие'),
     ('products.attachments.delete', 'Удаление документов товаров', 'Действие'),
 
+    -- global documents registry
+    ('documents.view', 'Просмотр реестра документов', 'Специальное право'),
+    ('documents.upload', 'Загрузка документов в общий реестр', 'Специальное право'),
+    ('documents.attach', 'Привязка документов к сущностям', 'Специальное право'),
+    ('documents.delete', 'Удаление документов из общего реестра', 'Специальное право'),
+
     -- dashboard actions
     ('dashboard.view', 'Доступ к странице "Дашборд"', 'Специальное право'),
     ('dashboard.quick_actions.view', 'Просмотр блока "Быстрые действия" на дашборде', 'Специальное право'),
@@ -359,8 +365,14 @@ WITH src_role_perms(role_key, perm_key) AS (
     ('director', 'products.delete'),
     ('director', 'products.price_history.view'),
     ('director', 'products.attachments.view'),
+    ('director', 'products.attachments.upload'),
+    ('director', 'products.attachments.delete'),
     ('director', 'products.import'),
     ('director', 'products.export.excel'),
+    ('director', 'documents.view'),
+    ('director', 'documents.upload'),
+    ('director', 'documents.attach'),
+    ('director', 'documents.delete'),
     ('director', 'dashboard.view'),
     ('director', 'dashboard.quick_actions.view'),
     ('director', 'dashboard.summary.view'),

@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { AppContextProvider, TopLevelCategory } from '../context/app.context';
 import { usePageTitle } from '../context/PageTitleContext';
 import styles from './Layout.module.css';
+import Head from 'next/head';
 
 interface LayoutProps {
     children: React.ReactNode;
@@ -10,26 +11,35 @@ interface LayoutProps {
 
 const pageTitles: Record<string, string> = {
     '/': 'Дашборд',
+    '/login': 'Авторизация',
     '/dashboard': 'Дашборд',
     '/orders': 'Заявки',
     '/warehouse': 'Склад',
     '/suppliers': 'Поставщики',
     '/transport': 'ТК',
+    '/logistics': 'Логистика',
     '/clients': 'Контрагенты',
     '/managers': 'Сотрудники',
     '/products': 'Товары',
     '/categories': 'Категории',
     '/purchases': 'Закупки',
     '/shipments': 'Отгрузки',
+    '/documents': 'Документы',
     '/missing-products': 'Недостающие товары',
     '/archive': 'Архив',
     '/reports': 'Отчеты',
+    '/reports/view': 'Просмотр отчета',
     '/settings': 'Настройки',
     '/admin': 'Администрирование',
     '/admin/audit': 'Аудит-лог',
     '/admin/finance': 'Финансы',
+    '/admin/users': 'Пользователи',
+    '/admin/roles': 'Роли',
+    '/admin/permissions': 'Разрешения',
+    '/admin/role-permissions': 'Права ролей',
     '/admin/schedule-board': 'График сотрудников',
-    '/admin/settings': 'Настройки системы'
+    '/admin/settings': 'Настройки системы',
+    '/500': 'Ошибка 500'
 };
 
 const detailTitleByPathname: Record<string, (id: string) => string> = {

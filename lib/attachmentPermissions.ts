@@ -50,6 +50,29 @@ export const ATTACHMENT_ENTITY_OPTIONS: Array<{ value: AttachmentEntityType; lab
     { value: 'product', label: 'Товар' },
 ];
 
+export const getAttachmentEntityHref = (entityType: AttachmentEntityType, entityId: number) => {
+    switch (entityType) {
+        case 'order':
+            return `/orders/${entityId}`;
+        case 'client':
+            return `/clients/${entityId}`;
+        case 'purchase':
+            return `/purchases/${entityId}`;
+        case 'shipment':
+            return `/shipments/${entityId}`;
+        case 'supplier':
+            return `/suppliers/${entityId}`;
+        case 'transport':
+            return `/transport/${entityId}`;
+        case 'manager':
+            return `/managers/${entityId}`;
+        case 'product':
+            return `/products/${entityId}`;
+        default:
+            return null;
+    }
+};
+
 export const normalizeAttachmentEntityType = (value: unknown): AttachmentEntityType | null => {
     const normalized = String(value || '').trim().toLowerCase();
     if (

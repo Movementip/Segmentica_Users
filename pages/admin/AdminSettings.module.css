@@ -28,10 +28,8 @@
 }
 
 .grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 360px);
-  gap: 20px;
-  align-items: start;
+  display: flex;
+  width: 100%;
 }
 
 .card {
@@ -40,6 +38,8 @@
   border-radius: 24px;
   padding: 24px;
   box-shadow: 0 16px 40px rgba(15, 23, 42, 0.05);
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .sectionTitle {

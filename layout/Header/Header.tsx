@@ -38,6 +38,7 @@ export function Header(): JSX.Element {
     const [isSearching, setIsSearching] = useState(false);
     const [searchMode, setSearchMode] = useState<'default' | 'sku' | 'supplier' | 'category'>('default');
     const searchRef = useRef<HTMLDivElement>(null);
+    const isNavigatingRef = useRef(false);
     const [searchResults, setSearchResults] = useState<SearchResults>({
         orders: [],
         clients: [],
@@ -55,6 +56,7 @@ export function Header(): JSX.Element {
     const canViewAdminSettings = can('admin.settings');
     const canViewAdminAudit = can('admin.audit');
     const canViewAdminRbac = can('admin.users') || can('admin.roles');
+    const canViewDocuments = can('documents.view');
 
     const fetchDbStatus = async () => {
         try {
@@ -165,24 +167,38 @@ export function Header(): JSX.Element {
         };
     }, []);
 
+    useEffect(() => {
+        const handleRouteEnd = () => {
+            isNavigatingRef.current = false;
+        };
+
+        router.events.on('routeChangeComplete', handleRouteEnd);
+        router.events.on('routeChangeError', handleRouteEnd);
+
+        return () => {
+            router.events.off('routeChangeComplete', handleRouteEnd);
+            router.events.off('routeChangeError', handleRouteEnd);
+        };
+    }, [router.events]);
+
     const handleResultClick = (result: SearchResult) => {
         setIsSearchOpen(false);
 
         switch (result.type) {
             case 'product':
-                router.push(`/products/${result.id}`);
+                void safePush(`/products/${result.id}`);
                 break;
             case 'client':
-                router.push(`/clients/${result.id}`);
+                void safePush(`/clients/${result.id}`);
                 break;
             case 'order':
-                router.push(`/orders/${result.id}`);
+                void safePush(`/orders/${result.id}`);
                 break;
             case 'category':
-                router.push(`/categories/${result.id}`);
+                void safePush(`/categories/${result.id}`);
                 break;
             case 'supplier':
-                router.push(`/suppliers/${result.id}`);
+                void safePush(`/suppliers/${result.id}`);
                 break;
         }
     };
@@ -204,6 +220,23 @@ export function Header(): JSX.Element {
             const el = searchRef.current?.querySelector('input') as HTMLInputElement | null;
             el?.focus();
         }, 0);
+    };
+
+    const safePush = async (href: string) => {
+        if (!href) return;
+        if (isNavigatingRef.current) return;
+        if (href === router.asPath || href === router.pathname) return;
+
+        try {
+            isNavigatingRef.current = true;
+            await router.push(href);
+        } catch (error) {
+            isNavigatingRef.current = false;
+            if ((error as { cancelled?: boolean } | null)?.cancelled) {
+                return;
+            }
+            console.error('Navigation error:', error);
+        }
     };
 
     const placeholder =
@@ -604,7 +637,7 @@ export function Header(): JSX.Element {
                             onSelect={async (e) => {
                                 e?.preventDefault?.();
                                 if (!user?.employee?.id) return;
-                                await router.push(`/managers/${user.employee.id}?mode=profile`);
+                                await safePush(`/managers/${user.employee.id}?mode=profile`);
                             }}
                         >
                             Профиль
@@ -637,14 +670,24 @@ export function Header(): JSX.Element {
                             </DropdownMenu.SubContent>
                         </DropdownMenu.Sub>
 
-                        {canViewAdminFinance || canViewScheduleBoard || canViewAdminSettings || canViewAdminRbac || canViewAdminAudit ? (
+                        {canViewDocuments || canViewAdminFinance || canViewScheduleBoard || canViewAdminSettings || canViewAdminRbac || canViewAdminAudit ? (
                             <>
                                 <DropdownMenu.Separator />
+                                {canViewDocuments ? (
+                                    <DropdownMenu.Item
+                                        onSelect={async (e) => {
+                                            e?.preventDefault?.();
+                                            await safePush('/documents');
+                                        }}
+                                    >
+                                        Документы
+                                    </DropdownMenu.Item>
+                                ) : null}
                                 {canViewAdminFinance ? (
                                     <DropdownMenu.Item
                                         onSelect={async (e) => {
                                             e?.preventDefault?.();
-                                            await router.push('/admin/finance');
+                                            await safePush('/admin/finance');
                                         }}
                                     >
                                         Финансы
@@ -654,7 +697,7 @@ export function Header(): JSX.Element {
                                     <DropdownMenu.Item
                                         onSelect={async (e) => {
                                             e?.preventDefault?.();
-                                            await router.push('/admin/schedule-board');
+                                            await safePush('/admin/schedule-board');
                                         }}
                                     >
                                         График сотрудников
@@ -664,7 +707,7 @@ export function Header(): JSX.Element {
                                     <DropdownMenu.Item
                                         onSelect={async (e) => {
                                             e?.preventDefault?.();
-                                            await router.push('/admin/settings');
+                                            await safePush('/admin/settings');
                                         }}
                                     >
                                         Настройки системы
@@ -674,7 +717,7 @@ export function Header(): JSX.Element {
                                     <DropdownMenu.Item
                                         onSelect={async (e) => {
                                             e?.preventDefault?.();
-                                            await router.push('/admin');
+                                            await safePush('/admin');
                                         }}
                                     >
                                         Администрирование
@@ -684,7 +727,7 @@ export function Header(): JSX.Element {
                                     <DropdownMenu.Item
                                         onSelect={async (e) => {
                                             e?.preventDefault?.();
-                                            await router.push('/admin/audit');
+                                            await safePush('/admin/audit');
                                         }}
                                     >
                                         Аудит-лог
@@ -698,7 +741,6 @@ export function Header(): JSX.Element {
                             onSelect={async (e) => {
                                 e?.preventDefault?.();
                                 await logout();
-                                await router.push('/login');
                             }}
                         >
                             Выйти

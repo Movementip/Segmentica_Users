@@ -10,6 +10,41 @@ import { FiArrowLeft, FiDownload, FiEdit2, FiFile, FiPaperclip, FiRefreshCw, FiT
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
 
+const PRODUCT_TYPE_LABELS: Record<string, string> = {
+    товар: 'Товар',
+    материал: 'Материал',
+    продукция: 'Продукция',
+    входящая_услуга: 'Входящая услуга',
+    исходящая_услуга: 'Исходящая услуга',
+    внеоборотный_актив: 'Внеоборотный актив',
+};
+
+const PRODUCT_VAT_LABELS: Record<number, string> = {
+    1: 'Без НДС',
+    4: '10%',
+    5: '22%',
+};
+
+const ACCOUNT_LABELS: Record<string, string> = {
+    '10.мат': '10.мат Материалы и сырье',
+    '10.дет': '10.дет Детали, комплектующие и полуфабрикаты',
+    '10.см': '10.см Топливо',
+    '10.зап': '10.зап Запасные части',
+    '10.стр': '10.стр Строительные материалы',
+    '10.хоз': '10.хоз Хозяйственные принадлежности и инвентарь',
+    '10.спец': '10.спец Специальная одежда',
+    '10.тара': '10.тара Тара',
+    '10.пр': '10.пр Прочие материалы',
+    '20': '20 Основное производство',
+    '23': '23 Вспомогательные производства',
+    '25': '25 Общепроизводственные расходы',
+    '26': '26 Общехозяйственные (управленческие) расходы',
+    '29': '29 Обслуживающие производства и хозяйства',
+    '44': '44 Расходы на продажу (коммерческие расходы)',
+    '91.02': '91.02 Прочие расходы',
+    '97': '97 Расходы будущих периодов',
+};
+
 interface ProductPriceHistory {
     id: number;
     товар_id: number;
@@ -25,6 +60,11 @@ interface ProductDetail {
     название: string;
     артикул: string;
     категория?: string;
+    тип_номенклатуры?: string;
+    счет_учета?: string;
+    счет_затрат?: string;
+    ндс_id?: number;
+    комментарий?: string;
     цена_закупки?: number;
     цена_продажи: number;
     единица_измерения: string;
@@ -264,6 +304,13 @@ function ProductDetailPage(): JSX.Element {
         }).format(amount);
     };
 
+    const productTypeLabel = product
+        ? PRODUCT_TYPE_LABELS[product.тип_номенклатуры || 'товар'] || product.тип_номенклатуры || 'Товар'
+        : 'Товар';
+    const vatLabel = product ? PRODUCT_VAT_LABELS[product.ндс_id || 5] || '22%' : '22%';
+    const accountingAccountLabel = product?.счет_учета ? ACCOUNT_LABELS[product.счет_учета] || product.счет_учета : null;
+    const expenseAccountLabel = product?.счет_затрат ? ACCOUNT_LABELS[product.счет_затрат] || product.счет_затрат : null;
+
     const goBack = () => {
         router.push('/products');
     };
@@ -425,6 +472,30 @@ function ProductDetailPage(): JSX.Element {
                                 <Box>
                                     <Text as="div" size="1" color="gray">Категория</Text>
                                     <Text as="div" size="2">{product.категория || 'Не указана'}</Text>
+                                </Box>
+                                <Box>
+                                    <Text as="div" size="1" color="gray">Тип номенклатуры</Text>
+                                    <Text as="div" size="2">{productTypeLabel}</Text>
+                                </Box>
+                                <Box>
+                                    <Text as="div" size="1" color="gray">Ставка НДС</Text>
+                                    <Text as="div" size="2">{vatLabel}</Text>
+                                </Box>
+                                {product.счет_учета ? (
+                                    <Box>
+                                        <Text as="div" size="1" color="gray">Счет учета</Text>
+                                        <Text as="div" size="2">{accountingAccountLabel}</Text>
+                                    </Box>
+                                ) : null}
+                                {product.счет_затрат ? (
+                                    <Box>
+                                        <Text as="div" size="1" color="gray">Счет затрат</Text>
+                                        <Text as="div" size="2">{expenseAccountLabel}</Text>
+                                    </Box>
+                                ) : null}
+                                <Box>
+                                    <Text as="div" size="1" color="gray">Комментарий</Text>
+                                    <Text as="div" size="2">{product.комментарий || 'Не указан'}</Text>
                                 </Box>
                             </Flex>
                         </Flex>

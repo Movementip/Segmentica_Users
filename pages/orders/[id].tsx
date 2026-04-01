@@ -17,6 +17,7 @@ import DeleteConfirmation from '../../components/DeleteConfirmation';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
 import { calculateVatAmountsFromLine, getVatRateOption } from '../../lib/vat';
+import { getClientContragentTypeLabel, normalizeClientContragentType } from '../../lib/clientContragents';
 import type { OrderWorkflowModalSummary } from '../../components/OrderWorkflowModal';
 import {
     getOrderExecutionModeLabel,
@@ -72,6 +73,19 @@ interface OrderDetail {
     клиент_email?: string;
     клиент_адрес?: string;
     клиент_тип?: string;
+    клиент_краткое_название?: string;
+    клиент_полное_название?: string;
+    клиент_фамилия?: string;
+    клиент_имя?: string;
+    клиент_отчество?: string;
+    клиент_инн?: string;
+    клиент_кпп?: string;
+    клиент_огрн?: string;
+    клиент_огрнип?: string;
+    клиент_окпо?: string;
+    клиент_адрес_регистрации?: string;
+    клиент_адрес_печати?: string;
+    клиент_комментарий?: string;
     менеджер_фио?: string;
     менеджер_телефон?: string;
     позиции: OrderPosition[];
@@ -426,6 +440,23 @@ function OrderDetailPage(): JSX.Element {
             style: 'currency',
             currency: 'RUB'
         }).format(amount);
+    };
+
+    const formatTextValue = (value?: string | null) => {
+        const normalized = typeof value === 'string' ? value.trim() : '';
+        return normalized || 'Не указан';
+    };
+
+    const getOrderClientIdentity = () => {
+        const type = normalizeClientContragentType(order?.клиент_тип);
+        if (type === 'Организация') {
+            return formatTextValue(order?.клиент_полное_название || order?.клиент_краткое_название || order?.клиент_название);
+        }
+        const fullName = [order?.клиент_фамилия, order?.клиент_имя, order?.клиент_отчество]
+            .map((item) => typeof item === 'string' ? item.trim() : '')
+            .filter(Boolean)
+            .join(' ');
+        return fullName || formatTextValue(order?.клиент_название);
     };
 
     const purchaseDeliveryTotal = (workflow?.purchases || []).reduce(
@@ -1022,6 +1053,14 @@ function OrderDetailPage(): JSX.Element {
                                     <Text as="div" size="2" weight="medium">{order.клиент_название || 'Не указан'}</Text>
                                 </Box>
                                 <Box>
+                                    <Text as="div" size="1" color="gray">Тип контрагента</Text>
+                                    <Text as="div" size="2">{getClientContragentTypeLabel(order.клиент_тип)}</Text>
+                                </Box>
+                                <Box>
+                                    <Text as="div" size="1" color="gray">Полное имя / название</Text>
+                                    <Text as="div" size="2">{getOrderClientIdentity()}</Text>
+                                </Box>
+                                <Box>
                                     <Text as="div" size="1" color="gray">Телефон</Text>
                                     <Text as="div" size="2">{order.клиент_телефон || 'Не указан'}</Text>
                                 </Box>
@@ -1032,6 +1071,30 @@ function OrderDetailPage(): JSX.Element {
                                 <Box>
                                     <Text as="div" size="1" color="gray">Адрес</Text>
                                     <Text as="div" size="2">{order.клиент_адрес || 'Не указан'}</Text>
+                                </Box>
+                                <Box>
+                                    <Text as="div" size="1" color="gray">ИНН / КПП</Text>
+                                    <Text as="div" size="2">{`${formatTextValue(order.клиент_инн)} / ${formatTextValue(order.клиент_кпп)}`}</Text>
+                                </Box>
+                                <Box>
+                                    <Text as="div" size="1" color="gray">ОГРН / ОГРНИП</Text>
+                                    <Text as="div" size="2">{formatTextValue(order.клиент_огрн || order.клиент_огрнип)}</Text>
+                                </Box>
+                                <Box>
+                                    <Text as="div" size="1" color="gray">ОКПО</Text>
+                                    <Text as="div" size="2">{formatTextValue(order.клиент_окпо)}</Text>
+                                </Box>
+                                <Box>
+                                    <Text as="div" size="1" color="gray">Адрес регистрации</Text>
+                                    <Text as="div" size="2">{formatTextValue(order.клиент_адрес_регистрации)}</Text>
+                                </Box>
+                                <Box>
+                                    <Text as="div" size="1" color="gray">Адрес для документов</Text>
+                                    <Text as="div" size="2">{formatTextValue(order.клиент_адрес_печати || order.клиент_адрес)}</Text>
+                                </Box>
+                                <Box>
+                                    <Text as="div" size="1" color="gray">Комментарий</Text>
+                                    <Text as="div" size="2">{formatTextValue(order.клиент_комментарий)}</Text>
                                 </Box>
                             </Flex>
                         </Flex>

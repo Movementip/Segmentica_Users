@@ -549,13 +549,15 @@ export function EmployeeSchedulePanel({ employeeId, canEdit = false, canApplyPat
                                 <Text as="div" size="2" color="gray">График по дням с быстрым выбором смены</Text>
                             </div>
                             <div className={styles.monthControls}>
-                                <Button type="button" variant="surface" color="gray" highContrast className={styles.iconButton} onClick={() => handleMonthShift(-1)}>
-                                    <FiChevronLeft size={16} />
-                                </Button>
-                                <Text size="3" weight="bold" className={styles.monthTitle}>{formatMonthTitle(monthKey)}</Text>
-                                <Button type="button" variant="surface" color="gray" highContrast className={styles.iconButton} onClick={() => handleMonthShift(1)}>
-                                    <FiChevronRight size={16} />
-                                </Button>
+                                <div className={styles.periodNav}>
+                                    <Button type="button" variant="surface" color="gray" highContrast className={styles.iconButton} onClick={() => handleMonthShift(-1)} aria-label="Предыдущий месяц">
+                                        <FiChevronLeft size={16} />
+                                    </Button>
+                                    <Text size="3" weight="bold" className={styles.monthTitle}>{formatMonthTitle(monthKey)}</Text>
+                                    <Button type="button" variant="surface" color="gray" highContrast className={styles.iconButton} onClick={() => handleMonthShift(1)} aria-label="Следующий месяц">
+                                        <FiChevronRight size={16} />
+                                    </Button>
+                                </div>
                             </div>
                         </div>
 

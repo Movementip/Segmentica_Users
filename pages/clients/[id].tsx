@@ -9,18 +9,11 @@ import EditClientModal from '../../components/EditClientModal';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { getClientContragentTypeLabel, getClientContragentTypeTheme, normalizeClientContragentType, type ClientContragent } from '../../lib/clientContragents';
 
 const MotionTableRow = motion(Table.Row);
 
-interface Client {
-    id: number;
-    название: string;
-    телефон?: string;
-    email?: string;
-    адрес?: string;
-    тип?: string;
-    created_at: string;
-}
+type Client = ClientContragent;
 
 interface Order {
     id: number;
@@ -330,6 +323,42 @@ function ClientDetailPage(): JSX.Element {
         }).format(amount);
     };
 
+    const formatTextValue = (value?: string | null) => {
+        const normalized = typeof value === 'string' ? value.trim() : '';
+        return normalized || '-';
+    };
+
+    const getClientIdentity = (value: Client) => {
+        const type = normalizeClientContragentType(value.тип);
+        if (type === 'Организация') {
+            return {
+                label: 'Полное название',
+                value: formatTextValue(value.полноеНазвание || value.краткоеНазвание || value.название),
+            };
+        }
+        if (type === 'Иностранный контрагент') {
+            return {
+                label: 'Название',
+                value: formatTextValue(value.название),
+            };
+        }
+        const fullName = [value.фамилия, value.имя, value.отчество]
+            .map((item) => typeof item === 'string' ? item.trim() : '')
+            .filter(Boolean)
+            .join(' ');
+        return {
+            label: 'ФИО',
+            value: fullName || formatTextValue(value.название),
+        };
+    };
+
+    const getRegistrationLabel = (value: Client) => {
+        const type = normalizeClientContragentType(value.тип);
+        if (type === 'Организация') return 'Адрес по ЕГРЮЛ';
+        if (type === 'Индивидуальный предприниматель') return 'Адрес по ЕГРИП';
+        return 'Адрес по ФИАС';
+    };
+
     const statusBadge = (statusRaw: string) => {
         const status = (statusRaw || '').toLowerCase();
         const map: Record<string, { label: string; color: any }> = {
@@ -357,14 +386,24 @@ function ClientDetailPage(): JSX.Element {
         );
     };
 
-    const clientTypeBadge = (raw?: string) => {
-        const t = (raw || '').toLowerCase();
-        const isRetail = /розн/.test(t) || t === 'розничный';
-        const isCorp = /корп/.test(t) || /юр/.test(t) || t === 'корпоративный';
-        const color = isCorp ? 'purple' : isRetail ? 'green' : 'gray';
+    const clientTypeBadge = (raw?: string | null) => {
+        const theme = getClientContragentTypeTheme(raw);
+        const color = theme === 'organization'
+            ? 'purple'
+            : theme === 'foreign'
+                ? 'gray'
+                : theme === 'person'
+                    ? 'violet'
+                    : theme === 'advocate'
+                        ? 'orange'
+                        : theme === 'notary'
+                            ? 'teal'
+                            : theme === 'farm'
+                                ? 'iris'
+                                : 'blue';
         return (
             <Badge variant="soft" color={color} highContrast>
-                {raw || 'розничный'}
+                {getClientContragentTypeLabel(raw)}
             </Badge>
         );
     };
@@ -472,7 +511,7 @@ function ClientDetailPage(): JSX.Element {
             <Card size="3" variant="surface">
                 <div className={styles.sectionHeader}>
                     <Text as="div" size="3" weight="bold" className={styles.sectionTitle}>
-                        Детали клиента
+                        Карточка контрагента
                     </Text>
                     <Text as="div" size="1" color="gray" className={styles.infoLabel}>
                         Регистрация: {client.created_at ? formatDate(client.created_at) : '-'}
@@ -491,12 +530,12 @@ function ClientDetailPage(): JSX.Element {
                                 <Box mt="1">{clientTypeBadge(client.тип)}</Box>
                             </Box>
                             <Box>
-                                <Text as="div" className={styles.infoLabel}>Телефон</Text>
-                                <Text as="div" className={styles.infoValue}>{client.телефон || '-'}</Text>
+                                <Text as="div" className={styles.infoLabel}>{getClientIdentity(client).label}</Text>
+                                <Text as="div" className={styles.infoValue}>{getClientIdentity(client).value}</Text>
                             </Box>
                             <Box>
-                                <Text as="div" className={styles.infoLabel}>Email</Text>
-                                <Text as="div" className={styles.infoValue}>{client.email || '-'}</Text>
+                                <Text as="div" className={styles.infoLabel}>Краткое название</Text>
+                                <Text as="div" className={styles.infoValue}>{formatTextValue(client.краткоеНазвание || client.название)}</Text>
                             </Box>
                         </Flex>
                     </Card>
@@ -504,9 +543,49 @@ function ClientDetailPage(): JSX.Element {
                     <Card size="2" variant="surface">
                         <Flex direction="column" gap="3">
                             <Box>
-                                <Text as="div" className={styles.infoLabel}>Адрес</Text>
-                                <Text as="div" className={styles.infoValue}>{client.адрес || '-'}</Text>
+                                <Text as="div" className={styles.infoLabel}>ИНН</Text>
+                                <Text as="div" className={styles.infoValue}>{formatTextValue(client.инн)}</Text>
                             </Box>
+                            <Box>
+                                <Text as="div" className={styles.infoLabel}>КПП</Text>
+                                <Text as="div" className={styles.infoValue}>{formatTextValue(client.кпп)}</Text>
+                            </Box>
+                            <Box>
+                                <Text as="div" className={styles.infoLabel}>{normalizeClientContragentType(client.тип) === 'Организация' ? 'ОГРН' : 'ОГРНИП'}</Text>
+                                <Text as="div" className={styles.infoValue}>{formatTextValue(client.огрн || client.огрнип)}</Text>
+                            </Box>
+                            <Box>
+                                <Text as="div" className={styles.infoLabel}>ОКПО</Text>
+                                <Text as="div" className={styles.infoValue}>{formatTextValue(client.окпо)}</Text>
+                            </Box>
+                        </Flex>
+                    </Card>
+                </Grid>
+
+                <Grid columns={{ initial: '1', md: '2' }} gap="4" mt="4">
+                    <Card size="2" variant="surface">
+                        <Flex direction="column" gap="3">
+                            <Box>
+                                <Text as="div" className={styles.infoLabel}>Телефон</Text>
+                                <Text as="div" className={styles.infoValue}>{formatTextValue(client.телефон)}</Text>
+                            </Box>
+                            <Box>
+                                <Text as="div" className={styles.infoLabel}>Email</Text>
+                                <Text as="div" className={styles.infoValue}>{formatTextValue(client.email)}</Text>
+                            </Box>
+                            <Box>
+                                <Text as="div" className={styles.infoLabel}>{getRegistrationLabel(client)}</Text>
+                                <Text as="div" className={styles.infoValue}>{formatTextValue(client.адресРегистрации)}</Text>
+                            </Box>
+                            <Box>
+                                <Text as="div" className={styles.infoLabel}>Адрес для документов</Text>
+                                <Text as="div" className={styles.infoValue}>{formatTextValue(client.адресПечати || client.адрес)}</Text>
+                            </Box>
+                        </Flex>
+                    </Card>
+
+                    <Card size="2" variant="surface">
+                        <Flex direction="column" gap="3">
                             <Box>
                                 <Text as="div" className={styles.infoLabel}>Заявок</Text>
                                 <Text as="div" className={styles.infoValue}>{orders.length}</Text>
@@ -515,9 +594,68 @@ function ClientDetailPage(): JSX.Element {
                                 <Text as="div" className={styles.infoLabel}>Сумма по заявкам</Text>
                                 <Text as="div" className={styles.infoValue}>{formatCurrency(ordersTotal)}</Text>
                             </Box>
+                            <Box>
+                                <Text as="div" className={styles.infoLabel}>Комментарий</Text>
+                                <Text as="div" className={styles.infoValue}>{formatTextValue(client.комментарий)}</Text>
+                            </Box>
+                            {normalizeClientContragentType(client.тип) === 'Физическое лицо' ? (
+                                <Box>
+                                    <Text as="div" className={styles.infoLabel}>Паспорт</Text>
+                                    <Text as="div" className={styles.infoValue}>
+                                        {[
+                                            client.паспортСерия && `серия ${client.паспортСерия}`,
+                                            client.паспортНомер && `номер ${client.паспортНомер}`,
+                                            client.паспортДатаВыдачи && `от ${formatDate(client.паспортДатаВыдачи)}`,
+                                        ].filter(Boolean).join(', ') || '-'}
+                                    </Text>
+                                </Box>
+                            ) : null}
                         </Flex>
                     </Card>
                 </Grid>
+
+                {client.bankAccounts?.length ? (
+                    <div className={styles.sectionBlock}>
+                        <div className={styles.sectionHeaderRow}>
+                            <Text as="div" size="3" weight="bold" className={styles.sectionTitle}>
+                                Расчетные счета
+                            </Text>
+                        </div>
+
+                        <Grid columns={{ initial: '1', md: '2' }} gap="4" px="4">
+                            {client.bankAccounts.map((account, index) => (
+                                <Card key={`${account.id || 'bank'}-${index}`} size="2" variant="surface">
+                                    <Flex direction="column" gap="3">
+                                        <Box>
+                                            <Text as="div" className={styles.infoLabel}>Название</Text>
+                                            <Text as="div" className={styles.infoValue}>{formatTextValue(account.name)}</Text>
+                                        </Box>
+                                        <Box>
+                                            <Text as="div" className={styles.infoLabel}>Банк</Text>
+                                            <Text as="div" className={styles.infoValue}>{formatTextValue(account.bankName)}</Text>
+                                        </Box>
+                                        <Box>
+                                            <Text as="div" className={styles.infoLabel}>БИК</Text>
+                                            <Text as="div" className={styles.infoValue}>{formatTextValue(account.bik)}</Text>
+                                        </Box>
+                                        <Box>
+                                            <Text as="div" className={styles.infoLabel}>Корреспондентский счет</Text>
+                                            <Text as="div" className={styles.infoValue}>{formatTextValue(account.correspondentAccount)}</Text>
+                                        </Box>
+                                        <Box>
+                                            <Text as="div" className={styles.infoLabel}>Расчетный счет</Text>
+                                            <Text as="div" className={styles.infoValue}>{formatTextValue(account.settlementAccount)}</Text>
+                                        </Box>
+                                        <Box>
+                                            <Text as="div" className={styles.infoLabel}>Статус</Text>
+                                            <Text as="div" className={styles.infoValue}>{account.isPrimary ? 'Основной' : 'Дополнительный'}</Text>
+                                        </Box>
+                                    </Flex>
+                                </Card>
+                            ))}
+                        </Grid>
+                    </div>
+                ) : null}
 
                 {canAttachmentsView ? (
                     <div className={styles.sectionBlock}>

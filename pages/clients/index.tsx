@@ -12,55 +12,29 @@ import { FiFilter } from 'react-icons/fi';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { getClientContragentTypeLabel, getClientContragentTypeTheme, isPersonContragentType, normalizeClientContragentType, type ClientContragent } from '../../lib/clientContragents';
 
 const MotionTableRow = motion(Table.Row);
 
-interface Client {
-    id: number;
-    название: string;
-    телефон?: string;
-    email?: string;
-    адрес?: string;
-    тип?: string;
-    created_at?: string;
-}
+type Client = ClientContragent;
 
-const formatClientTypes = (raw?: string) => {
-    if (!raw) return '-';
-
-    const parts = raw
-        .split(/[,/;|]+/)
-        .map((s) => s.trim())
-        .filter(Boolean);
-
-    const hasRetail = parts.some((p) => /розн/i.test(p));
-    const hasCorp = parts.some((p) => /корп/i.test(p) || /юр/i.test(p));
-
-    const normalized: string[] = [];
-    if (hasRetail) normalized.push('Розничный');
-    if (hasCorp) normalized.push('Корпоративный');
-
-    if (normalized.length > 0) return normalized.join(', ');
-
-    return parts.join(', ');
+const formatClientTypes = (raw?: string | null) => {
+    return raw ? normalizeClientContragentType(raw) : '-';
 };
 
-const getClientTypeList = (raw?: string) => {
-    if (!raw) return [] as string[];
+const getClientTypeList = (raw?: string | null) => {
+    return raw ? [normalizeClientContragentType(raw)] : [] as string[];
+};
 
-    const parts = raw
-        .split(/[,/;|]+/)
-        .map((s) => s.trim())
-        .filter(Boolean);
-
-    const hasRetail = parts.some((p) => /розн/i.test(p));
-    const hasCorp = parts.some((p) => /корп/i.test(p) || /юр/i.test(p));
-
-    const normalized: string[] = [];
-    if (hasRetail) normalized.push('Розничный');
-    if (hasCorp) normalized.push('Корпоративный');
-
-    return normalized.length > 0 ? normalized : parts;
+const getTypeBadgeClassName = (raw?: string | null) => {
+    const theme = getClientContragentTypeTheme(raw);
+    if (theme === 'organization') return styles.typeOrganization;
+    if (theme === 'entrepreneur') return styles.typeEntrepreneur;
+    if (theme === 'person') return styles.typePerson;
+    if (theme === 'advocate') return styles.typeAdvocate;
+    if (theme === 'notary') return styles.typeNotary;
+    if (theme === 'farm') return styles.typeFarm;
+    return styles.typeForeign;
 };
 
 function ClientsPage(): JSX.Element {
@@ -270,11 +244,7 @@ function ClientsPage(): JSX.Element {
             if (filters.type !== 'all') {
                 data = data.filter((client: Client) => {
                     const list = getClientTypeList(client.тип);
-                    if (filters.type === 'retail') return list.some((t) => /розн/i.test(t));
-                    if (filters.type === 'corporate') return list.some((t) => /корп/i.test(t) || /юр/i.test(t));
-                    if (filters.type === 'fiz') return (client.тип || '').trim() === 'Физ лицо';
-                    if (filters.type === 'yur') return (client.тип || '').trim() === 'Юр лицо';
-                    return true;
+                    return list.some((t) => t === filters.type);
                 });
             }
 
@@ -401,9 +371,9 @@ function ClientsPage(): JSX.Element {
     };
 
     const countByType = (items: Client[]) => {
-        const fiz = items.filter((c) => (c.тип || '').trim() === 'Физ лицо').length;
-        const yur = items.filter((c) => (c.тип || '').trim() === 'Юр лицо').length;
-        return { fiz, yur };
+        const organizations = items.filter((c) => normalizeClientContragentType(c.тип) === 'Организация').length;
+        const persons = items.filter((c) => isPersonContragentType(c.тип)).length;
+        return { organizations, persons };
     };
 
     const handleCreateClient = () => {
@@ -414,13 +384,25 @@ function ClientsPage(): JSX.Element {
         setIsCreateModalOpen(true);
     };
 
-    const openEditClient = (client: Client) => {
+    const openEditClient = async (client: Client) => {
         if (!canEdit) {
             setError('Нет доступа');
             return;
         }
-        setSelectedClient(client);
-        setIsEditModalOpen(true);
+        try {
+            setOperationLoading(true);
+            const response = await fetch(`/api/clients?id=${client.id}`);
+            if (!response.ok) {
+                throw new Error('Не удалось загрузить карточку контрагента');
+            }
+            const fullClient = await response.json();
+            setSelectedClient(fullClient);
+            setIsEditModalOpen(true);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Ошибка загрузки карточки контрагента');
+        } finally {
+            setOperationLoading(false);
+        }
     };
 
     const openClientHistory = (client: Client) => {
@@ -543,9 +525,9 @@ function ClientsPage(): JSX.Element {
             <Box className={styles.header}>
                 <Flex className={styles.header_clin} align="center" justify="between" gap="4" wrap="wrap">
                     <Box className={styles.headerLeft}>
-                        <Heading size="6" className={styles.title}>Клиенты</Heading>
+                        <Heading size="6" className={styles.title}>Контрагенты</Heading>
                         <Text size="2" color="gray" className={styles.subtitle}>
-                            База клиентов и управление взаимоотношениями
+                            Справочник контрагентов и их реквизитов
                         </Text>
                     </Box>
                     <Flex align="center" gap="2" className={styles.headerActions}>
@@ -581,7 +563,7 @@ function ClientsPage(): JSX.Element {
                                 onClick={handleCreateClient}
                             >
                                 <FiPlus className={styles.icon} />
-                                Добавить клиента
+                                Добавить контрагента
                             </Button>
                         ) : null}
                     </Flex>
@@ -590,15 +572,15 @@ function ClientsPage(): JSX.Element {
 
             <Card className={styles.statsCard}>
                 <Box className={styles.statsContainer}>
-                    <Text as="p" className={styles.statsTitle}>Статистика клиентов</Text>
+                    <Text as="p" className={styles.statsTitle}>Статистика контрагентов</Text>
                     <Box className={styles.statsGrid}>
                         <Box className={styles.statCard}>
                             <Text as="div" className={styles.statValue}>{clients.length}</Text>
-                            <Text as="div" className={styles.statLabel}>Всего клиентов</Text>
+                            <Text as="div" className={styles.statLabel}>Всего контрагентов</Text>
                         </Box>
                         <Box className={styles.statCard}>
-                            <Text as="div" className={styles.statValue}>{countByType(clients).fiz} / {countByType(clients).yur}</Text>
-                            <Text as="div" className={styles.statLabel}>Физ. лиц / Юр. лиц</Text>
+                            <Text as="div" className={styles.statValue}>{countByType(clients).organizations} / {countByType(clients).persons}</Text>
+                            <Text as="div" className={styles.statLabel}>Организаций / частных</Text>
                         </Box>
                         <Box className={styles.statCard}>
                             <Text as="div" className={styles.statValue}>{formatCurrency(turnoverTotal)}</Text>
@@ -679,10 +661,13 @@ function ClientsPage(): JSX.Element {
                                                                 data-clients-filters-select-content
                                                             >
                                                                 <Select.Item value="all">Все типы</Select.Item>
-                                                                <Select.Item value="retail">Розничный</Select.Item>
-                                                                <Select.Item value="corporate">Корпоративный</Select.Item>
-                                                                <Select.Item value="fiz">Физ лицо</Select.Item>
-                                                                <Select.Item value="yur">Юр лицо</Select.Item>
+                                                                <Select.Item value="Организация">Организация</Select.Item>
+                                                                <Select.Item value="Индивидуальный предприниматель">Индивидуальный предприниматель</Select.Item>
+                                                                <Select.Item value="Физическое лицо">Физическое лицо</Select.Item>
+                                                                <Select.Item value="Адвокат">Адвокат</Select.Item>
+                                                                <Select.Item value="Нотариус">Нотариус</Select.Item>
+                                                                <Select.Item value="Глава КФХ">Глава КФХ</Select.Item>
+                                                                <Select.Item value="Иностранный контрагент">Иностранный контрагент</Select.Item>
                                                             </Select.Content>
                                                         </Select.Root>
                                                     </Box>
@@ -808,12 +793,12 @@ function ClientsPage(): JSX.Element {
 
                 {loading ? (
                     <Box className={styles.loading}>
-                        <Text size="2" color="gray">Загрузка клиентов...</Text>
+                        <Text size="2" color="gray">Загрузка контрагентов...</Text>
                     </Box>
                 ) : clients.length === 0 ? (
                     <Box className={styles.noResults}>
                         <Text size="2" color="gray">
-                            {searchQuery ? 'Клиенты не найдены' : 'Клиенты не найдены. Добавьте клиентов в базу данных.'}
+                            {searchQuery ? 'Контрагенты не найдены' : 'Контрагенты не найдены. Добавьте первого контрагента в базу.'}
                         </Text>
                     </Box>
                 ) : (
@@ -867,14 +852,9 @@ function ClientsPage(): JSX.Element {
                                                             {getClientTypeList(client.тип).map((t) => (
                                                                 <span
                                                                     key={t}
-                                                                    className={`${styles.typeBadge} ${/розн/i.test(t)
-                                                                        ? styles.typeRetail
-                                                                        : /корп/i.test(t) || /юр/i.test(t)
-                                                                            ? styles.typeCorporate
-                                                                            : styles.typeOther
-                                                                        }`}
+                                                                    className={`${styles.typeBadge} ${getTypeBadgeClassName(t)}`}
                                                                 >
-                                                                    {t}
+                                                                    {getClientContragentTypeLabel(t)}
                                                                 </span>
                                                             ))}
                                                         </div>

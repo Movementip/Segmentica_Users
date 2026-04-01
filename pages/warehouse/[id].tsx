@@ -9,6 +9,41 @@ import { FiArrowLeft, FiDownload, FiEdit2, FiFile, FiPaperclip, FiSearch, FiTras
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
 
+const PRODUCT_TYPE_LABELS: Record<string, string> = {
+    товар: 'Товар',
+    материал: 'Материал',
+    продукция: 'Продукция',
+    входящая_услуга: 'Входящая услуга',
+    исходящая_услуга: 'Исходящая услуга',
+    внеоборотный_актив: 'Внеоборотный актив',
+};
+
+const PRODUCT_VAT_LABELS: Record<number, string> = {
+    1: 'Без НДС',
+    4: '10%',
+    5: '22%',
+};
+
+const ACCOUNT_LABELS: Record<string, string> = {
+    '10.мат': '10.мат Материалы и сырье',
+    '10.дет': '10.дет Детали, комплектующие и полуфабрикаты',
+    '10.см': '10.см Топливо',
+    '10.зап': '10.зап Запасные части',
+    '10.стр': '10.стр Строительные материалы',
+    '10.хоз': '10.хоз Хозяйственные принадлежности и инвентарь',
+    '10.спец': '10.спец Специальная одежда',
+    '10.тара': '10.тара Тара',
+    '10.пр': '10.пр Прочие материалы',
+    '20': '20 Основное производство',
+    '23': '23 Вспомогательные производства',
+    '25': '25 Общепроизводственные расходы',
+    '26': '26 Общехозяйственные (управленческие) расходы',
+    '29': '29 Обслуживающие производства и хозяйства',
+    '44': '44 Расходы на продажу (коммерческие расходы)',
+    '91.02': '91.02 Прочие расходы',
+    '97': '97 Расходы будущих периодов',
+};
+
 interface WarehouseItem {
     id: number;
     товар_id: number;
@@ -18,6 +53,11 @@ interface WarehouseItem {
     товар_название: string;
     товар_артикул: string;
     товар_категория: string;
+    товар_тип_номенклатуры?: string;
+    товар_счет_учета?: string;
+    товар_счет_затрат?: string;
+    товар_ндс_id?: number;
+    товар_комментарий?: string;
     товар_единица: string;
     товар_мин_остаток: number;
     товар_цена_закупки: number;
@@ -445,6 +485,10 @@ export default function WarehouseDetail() {
     const movementsCount = movements.length;
     const waitingCount = waitingOrders.length;
     const pendingCount = pendingPurchases.length;
+    const productTypeLabel = PRODUCT_TYPE_LABELS[item.товар_тип_номенклатуры || 'товар'] || item.товар_тип_номенклатуры || 'Товар';
+    const vatLabel = PRODUCT_VAT_LABELS[item.товар_ндс_id || 5] || '22%';
+    const accountingAccountLabel = item.товар_счет_учета ? ACCOUNT_LABELS[item.товар_счет_учета] || item.товар_счет_учета : null;
+    const expenseAccountLabel = item.товар_счет_затрат ? ACCOUNT_LABELS[item.товар_счет_затрат] || item.товар_счет_затрат : null;
 
     return (
         <Layout>
@@ -523,6 +567,26 @@ export default function WarehouseDetail() {
                             <div className={styles.infoVal}><span className={styles.categoryPill}>{item.товар_категория || '—'}</span></div>
                         </div>
                         <div className={styles.infoRow}>
+                            <div className={styles.infoKey}>Тип номенклатуры</div>
+                            <div className={styles.infoVal}>{productTypeLabel}</div>
+                        </div>
+                        <div className={styles.infoRow}>
+                            <div className={styles.infoKey}>Ставка НДС</div>
+                            <div className={styles.infoVal}>{vatLabel}</div>
+                        </div>
+                        {accountingAccountLabel ? (
+                            <div className={styles.infoRow}>
+                                <div className={styles.infoKey}>Счет учета</div>
+                                <div className={styles.infoVal}>{accountingAccountLabel}</div>
+                            </div>
+                        ) : null}
+                        {expenseAccountLabel ? (
+                            <div className={styles.infoRow}>
+                                <div className={styles.infoKey}>Счет затрат</div>
+                                <div className={styles.infoVal}>{expenseAccountLabel}</div>
+                            </div>
+                        ) : null}
+                        <div className={styles.infoRow}>
                             <div className={styles.infoKey}>Статус</div>
                             <div className={styles.infoVal}>
                                 <span className={`${styles.badge} ${getStatusBadgeClass(item.stock_status)}`}>{getStockStatusText(item.stock_status)}</span>
@@ -541,6 +605,10 @@ export default function WarehouseDetail() {
                             <div className={styles.infoVal}>
                                 {item.дата_последнего_поступления ? formatDate(item.дата_последнего_поступления) : 'Нет данных'}
                             </div>
+                        </div>
+                        <div className={styles.infoRow}>
+                            <div className={styles.infoKey}>Комментарий</div>
+                            <div className={styles.infoVal}>{item.товар_комментарий || '—'}</div>
                         </div>
                     </Card>
 
@@ -948,6 +1016,11 @@ export default function WarehouseDetail() {
                                     название: data.item.товар_название,
                                     артикул: data.item.товар_артикул,
                                     категория: data.item.товар_категория,
+                                    тип_номенклатуры: data.item.товар_тип_номенклатуры as any,
+                                    счет_учета: data.item.товар_счет_учета,
+                                    счет_затрат: data.item.товар_счет_затрат,
+                                    ндс_id: data.item.товар_ндс_id,
+                                    комментарий: data.item.товар_комментарий,
                                     единица_измерения: data.item.товар_единица,
                                     минимальный_остаток: data.item.товар_мин_остаток,
                                     цена_закупки: data.item.товар_цена_закупки,

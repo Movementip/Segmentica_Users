@@ -33,6 +33,17 @@
   justify-content: flex-end;
 }
 
+.periodNav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 16px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+}
+
 .monthTitle {
   min-width: 170px;
   text-align: center;
@@ -40,9 +51,10 @@
 }
 
 .iconButton:global(.rt-Button) {
-  min-width: 42px !important;
-  height: 42px !important;
-  border-radius: 14px !important;
+  min-width: 40px !important;
+  height: 36px !important;
+  padding: 0 10px !important;
+  border-radius: 12px !important;
 }
 
 .weekdaysRow {

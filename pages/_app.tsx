@@ -13,7 +13,7 @@ import { AuthProvider, useAuth } from '../context/AuthContext';
 
 function DocumentTitle(): JSX.Element {
     const { pageTitle } = usePageTitle();
-    const title = pageTitle ? `${pageTitle} | Segmentica` : 'Segmentica';
+    const title = pageTitle;
 
     return (
         <Head>

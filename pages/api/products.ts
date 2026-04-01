@@ -7,6 +7,11 @@ export interface Product {
     название: string;
     артикул: string;
     категория?: string;
+    тип_номенклатуры: string;
+    счет_учета?: string;
+    счет_затрат?: string;
+    ндс_id: number;
+    комментарий?: string;
     цена_закупки?: number;
     цена_продажи: number;
     единица_измерения: string;
@@ -30,12 +35,83 @@ interface CreateProductRequest {
     название: string;
     артикул: string;
     категория?: string;
+    тип_номенклатуры?: string;
+    счет_учета?: string;
+    счет_затрат?: string;
+    ндс_id?: number;
+    комментарий?: string;
     цена_закупки?: number;
     цена_продажи: number;
     единица_измерения?: string;
     минимальный_остаток?: number;
     категория_id?: number;
 }
+
+const PRODUCT_NOMENCLATURE_TYPES = new Set([
+    'товар',
+    'материал',
+    'продукция',
+    'входящая_услуга',
+    'исходящая_услуга',
+    'внеоборотный_актив'
+]);
+
+const DEFAULT_PRODUCT_NOMENCLATURE_TYPE = 'товар';
+const ALLOWED_PRODUCT_VAT_RATE_IDS = new Set([1, 4, 5]);
+const DEFAULT_PRODUCT_VAT_RATE_ID = 5;
+
+const normalizeNullableText = (value: unknown): string | null => {
+    if (typeof value !== 'string') return null;
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+};
+
+const normalizeNomenclatureType = (value: unknown): string => {
+    const normalized = normalizeNullableText(value);
+    if (!normalized) return DEFAULT_PRODUCT_NOMENCLATURE_TYPE;
+    return PRODUCT_NOMENCLATURE_TYPES.has(normalized) ? normalized : DEFAULT_PRODUCT_NOMENCLATURE_TYPE;
+};
+
+const normalizeProductVatRateId = (value: unknown): number => {
+    const id = Number(value);
+    return ALLOWED_PRODUCT_VAT_RATE_IDS.has(id) ? id : DEFAULT_PRODUCT_VAT_RATE_ID;
+};
+
+const normalizeCategoryId = (value: unknown): number | null => {
+    if (value === null || value === undefined || value === '') return null;
+    const parsed = Number(value);
+    return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+};
+
+const resolveCategoryName = async (categoryId: number | null, fallbackName?: unknown) => {
+    if (!categoryId) return normalizeNullableText(fallbackName);
+
+    const categoryResult = await query(
+        'SELECT "название" FROM "Категории_товаров" WHERE id = $1',
+        [categoryId]
+    );
+
+    return categoryResult.rows[0]?.название || normalizeNullableText(fallbackName);
+};
+
+const mapProductRow = (row: any): Product => ({
+    id: row.id,
+    название: row.название,
+    артикул: row.артикул,
+    категория: row.категория || row.категория_название || undefined,
+    тип_номенклатуры: row.тип_номенклатуры || DEFAULT_PRODUCT_NOMENCLATURE_TYPE,
+    счет_учета: row.счет_учета || undefined,
+    счет_затрат: row.счет_затрат || undefined,
+    ндс_id: Number(row.ндс_id) || DEFAULT_PRODUCT_VAT_RATE_ID,
+    комментарий: row.комментарий || undefined,
+    цена_закупки: row.цена_закупки !== null && row.цена_закупки !== undefined ? parseFloat(row.цена_закупки) : undefined,
+    цена_продажи: parseFloat(row.цена_продажи) || 0,
+    единица_измерения: row.единица_измерения,
+    минимальный_остаток: row.минимальный_остаток,
+    created_at: row.created_at,
+    категория_id: row.категория_id,
+    история_цен: row.история_цен,
+});
 
 const mapHistoryRow = (row: any): ProductPriceHistory => ({
     id: row.id,
@@ -74,6 +150,11 @@ interface UpdateProductRequest {
     название?: string;
     артикул?: string;
     категория?: string;
+    тип_номенклатуры?: string;
+    счет_учета?: string;
+    счет_затрат?: string;
+    ндс_id?: number;
+    комментарий?: string;
     цена_закупки?: number;
     цена_продажи?: number;
     единица_измерения?: string;
@@ -103,7 +184,12 @@ export default async function handler(
 
                 // Fetch single product by ID
                 const result = await query(
-                    'SELECT * FROM "Товары" WHERE id = $1',
+                    `
+                        SELECT t.*, кт."название" AS категория_название
+                        FROM "Товары" t
+                        LEFT JOIN "Категории_товаров" кт ON t."категория_id" = кт.id
+                        WHERE t.id = $1
+                    `,
                     [id]
                 );
 
@@ -123,40 +209,22 @@ export default async function handler(
                     )
                     : { rows: [] as any[] };
 
-                const product: Product = {
-                    id: result.rows[0].id,
-                    название: result.rows[0].название,
-                    артикул: result.rows[0].артикул,
-                    категория: result.rows[0].категория,
-                    цена_закупки: result.rows[0].цена_закупки ? parseFloat(result.rows[0].цена_закупки) : undefined,
-                    цена_продажи: parseFloat(result.rows[0].цена_продажи) || 0,
-                    единица_измерения: result.rows[0].единица_измерения,
-                    минимальный_остаток: result.rows[0].минимальный_остаток,
-                    created_at: result.rows[0].created_at,
-                    категория_id: result.rows[0].категория_id,
+                const product: Product = mapProductRow({
+                    ...result.rows[0],
                     история_цен: historyResult.rows.map(mapHistoryRow)
-                };
+                });
 
                 res.status(200).json(product);
             } else {
                 // Fetch all products
                 const result = await query(`
-          SELECT * FROM "Товары"
+          SELECT t.*, кт."название" AS категория_название
+          FROM "Товары" t
+          LEFT JOIN "Категории_товаров" кт ON t."категория_id" = кт.id
           ORDER BY "название"
         `);
 
-                const products: Product[] = result.rows.map((row: any) => ({
-                    id: row.id,
-                    название: row.название,
-                    артикул: row.артикул,
-                    категория: row.категория,
-                    цена_закупки: row.цена_закупки ? parseFloat(row.цена_закупки) : undefined,
-                    цена_продажи: parseFloat(row.цена_продажи) || 0,
-                    единица_измерения: row.единица_измерения,
-                    минимальный_остаток: row.минимальный_остаток,
-                    created_at: row.created_at,
-                    категория_id: row.категория_id
-                }));
+                const products: Product[] = result.rows.map((row: any) => mapProductRow(row));
 
                 res.status(200).json(products);
             }
@@ -170,11 +238,33 @@ export default async function handler(
         const actor = await requirePermission(req, res, 'products.create');
         if (!actor) return;
         try {
-            const { название, артикул, категория, цена_закупки, цена_продажи, единица_измерения, минимальный_остаток, категория_id } = req.body as CreateProductRequest;
+            const {
+                название,
+                артикул,
+                категория,
+                тип_номенклатуры,
+                счет_учета,
+                счет_затрат,
+                ндс_id,
+                комментарий,
+                цена_закупки,
+                цена_продажи,
+                единица_измерения,
+                минимальный_остаток,
+                категория_id
+            } = req.body as CreateProductRequest;
+
+            const normalizedCategoryId = normalizeCategoryId(категория_id);
+            const normalizedCategoryName = await resolveCategoryName(normalizedCategoryId, категория);
+            const normalizedType = normalizeNomenclatureType(тип_номенклатуры);
+            const normalizedAccountingAccount = normalizedType === 'материал' ? normalizeNullableText(счет_учета) : null;
+            const normalizedExpenseAccount = normalizedType === 'входящая_услуга' ? normalizeNullableText(счет_затрат) : null;
+            const normalizedVatRateId = normalizeProductVatRateId(ндс_id);
+            const normalizedComment = normalizeNullableText(комментарий);
 
             // Validate required fields
-            if (!название || !артикул || !цена_продажи) {
-                return res.status(400).json({ error: 'Название, артикул и цена продажи обязательны' });
+            if (!название || !артикул) {
+                return res.status(400).json({ error: 'Название и артикул обязательны' });
             }
 
             // Check if product with this article already exists
@@ -189,23 +279,40 @@ export default async function handler(
 
             // Create new product
             const result = await query(`
-        INSERT INTO "Товары" ("название", "артикул", "категория", "цена_закупки", "цена_продажи", "единица_измерения", "минимальный_остаток", "категория_id")
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        INSERT INTO "Товары" (
+            "название",
+            "артикул",
+            "категория",
+            "тип_номенклатуры",
+            "счет_учета",
+            "счет_затрат",
+            "ндс_id",
+            "комментарий",
+            "цена_закупки",
+            "цена_продажи",
+            "единица_измерения",
+            "минимальный_остаток",
+            "категория_id"
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         RETURNING *
-      `, [название, артикул, категория || null, цена_закупки || null, цена_продажи, единица_измерения || 'шт', минимальный_остаток || 0, категория_id || null]);
+      `, [
+                normalizeNullableText(название),
+                normalizeNullableText(артикул),
+                normalizedCategoryName,
+                normalizedType,
+                normalizedAccountingAccount,
+                normalizedExpenseAccount,
+                normalizedVatRateId,
+                normalizedComment,
+                цена_закупки ?? null,
+                цена_продажи ?? 0,
+                normalizeNullableText(единица_измерения) || 'шт',
+                минимальный_остаток || 0,
+                normalizedCategoryId
+            ]);
 
-            const newProduct: Product = {
-                id: result.rows[0].id,
-                название: result.rows[0].название,
-                артикул: result.rows[0].артикул,
-                категория: result.rows[0].категория,
-                цена_закупки: result.rows[0].цена_закупки ? parseFloat(result.rows[0].цена_закупки) : undefined,
-                цена_продажи: parseFloat(result.rows[0].цена_продажи) || 0,
-                единица_измерения: result.rows[0].единица_измерения,
-                минимальный_остаток: result.rows[0].минимальный_остаток,
-                created_at: result.rows[0].created_at,
-                категория_id: result.rows[0].категория_id
-            };
+            const newProduct: Product = mapProductRow(result.rows[0]);
 
             await createPriceHistoryRecord(
                 result.rows[0].id,
@@ -226,7 +333,22 @@ export default async function handler(
         const actor = await requirePermission(req, res, 'products.edit');
         if (!actor) return;
         try {
-            const { id, название, артикул, категория, цена_закупки, цена_продажи, единица_измерения, минимальный_остаток, категория_id } = req.body as UpdateProductRequest;
+            const {
+                id,
+                название,
+                артикул,
+                категория,
+                тип_номенклатуры,
+                счет_учета,
+                счет_затрат,
+                ндс_id,
+                комментарий,
+                цена_закупки,
+                цена_продажи,
+                единица_измерения,
+                минимальный_остаток,
+                категория_id
+            } = req.body as UpdateProductRequest;
 
             // Validate required fields
             if (!id) {
@@ -260,21 +382,68 @@ export default async function handler(
             const values: any[] = [];
             let paramCount = 1;
 
+            if (категория !== undefined || категория_id !== undefined) {
+                const normalizedCategoryId = normalizeCategoryId(категория_id);
+                const normalizedCategoryName = await resolveCategoryName(normalizedCategoryId, категория);
+
+                updateFields.push(`"категория" = $${paramCount}`);
+                values.push(normalizedCategoryName);
+                paramCount++;
+
+                updateFields.push(`"категория_id" = $${paramCount}`);
+                values.push(normalizedCategoryId);
+                paramCount++;
+            }
+
             if (название !== undefined) {
                 updateFields.push(`"название" = $${paramCount}`);
-                values.push(название);
+                values.push(normalizeNullableText(название));
                 paramCount++;
             }
 
             if (артикул !== undefined) {
                 updateFields.push(`"артикул" = $${paramCount}`);
-                values.push(артикул);
+                values.push(normalizeNullableText(артикул));
                 paramCount++;
             }
 
-            if (категория !== undefined) {
-                updateFields.push(`"категория" = $${paramCount}`);
-                values.push(категория);
+            if (тип_номенклатуры !== undefined) {
+                const normalizedType = normalizeNomenclatureType(тип_номенклатуры);
+
+                updateFields.push(`"тип_номенклатуры" = $${paramCount}`);
+                values.push(normalizedType);
+                paramCount++;
+
+                updateFields.push(`"счет_учета" = $${paramCount}`);
+                values.push(normalizedType === 'материал' ? normalizeNullableText(счет_учета) : null);
+                paramCount++;
+
+                updateFields.push(`"счет_затрат" = $${paramCount}`);
+                values.push(normalizedType === 'входящая_услуга' ? normalizeNullableText(счет_затрат) : null);
+                paramCount++;
+            }
+
+            if (тип_номенклатуры === undefined && счет_учета !== undefined) {
+                updateFields.push(`"счет_учета" = $${paramCount}`);
+                values.push(normalizeNullableText(счет_учета));
+                paramCount++;
+            }
+
+            if (тип_номенклатуры === undefined && счет_затрат !== undefined) {
+                updateFields.push(`"счет_затрат" = $${paramCount}`);
+                values.push(normalizeNullableText(счет_затрат));
+                paramCount++;
+            }
+
+            if (ндс_id !== undefined) {
+                updateFields.push(`"ндс_id" = $${paramCount}`);
+                values.push(normalizeProductVatRateId(ндс_id));
+                paramCount++;
+            }
+
+            if (комментарий !== undefined) {
+                updateFields.push(`"комментарий" = $${paramCount}`);
+                values.push(normalizeNullableText(комментарий));
                 paramCount++;
             }
 
@@ -292,19 +461,13 @@ export default async function handler(
 
             if (единица_измерения !== undefined) {
                 updateFields.push(`"единица_измерения" = $${paramCount}`);
-                values.push(единица_измерения);
+                values.push(normalizeNullableText(единица_измерения) || 'шт');
                 paramCount++;
             }
 
             if (минимальный_остаток !== undefined) {
                 updateFields.push(`"минимальный_остаток" = $${paramCount}`);
                 values.push(минимальный_остаток);
-                paramCount++;
-            }
-
-            if (категория_id !== undefined) {
-                updateFields.push(`"категория_id" = $${paramCount}`);
-                values.push(категория_id);
                 paramCount++;
             }
 
@@ -350,18 +513,7 @@ export default async function handler(
                 );
             }
 
-            const updatedProduct: Product = {
-                id: result.rows[0].id,
-                название: result.rows[0].название,
-                артикул: result.rows[0].артикул,
-                категория: result.rows[0].категория,
-                цена_закупки: result.rows[0].цена_закупки ? parseFloat(result.rows[0].цена_закупки) : undefined,
-                цена_продажи: parseFloat(result.rows[0].цена_продажи) || 0,
-                единица_измерения: result.rows[0].единица_измерения,
-                минимальный_остаток: result.rows[0].минимальный_остаток,
-                created_at: result.rows[0].created_at,
-                категория_id: result.rows[0].категория_id
-            };
+            const updatedProduct: Product = mapProductRow(result.rows[0]);
 
             res.status(200).json(updatedProduct);
         } catch (error) {

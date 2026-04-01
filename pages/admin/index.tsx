@@ -9,6 +9,7 @@ import { NoAccessPage } from '../../components/NoAccessPage';
 
 function AdminHome(): JSX.Element {
     const { user, loading } = useAuth();
+    const canViewDocuments = Boolean(user?.permissions?.includes('documents.view'));
 
     if (loading) {
         return (
@@ -31,6 +32,11 @@ function AdminHome(): JSX.Element {
                         <div className={styles.subtitle}>RBAC (доступ: director)</div>
                     </div>
                     <Flex gap="3" wrap="wrap">
+                        {canViewDocuments ? (
+                            <Button asChild variant="surface" color="gray" highContrast>
+                                <Link href="/documents">Документы</Link>
+                            </Button>
+                        ) : null}
                         <Button asChild variant="surface" color="gray" highContrast>
                             <Link href="/admin/schedule-board">График сотрудников</Link>
                         </Button>
