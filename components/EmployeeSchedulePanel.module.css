@@ -342,6 +342,30 @@
   box-shadow: none !important;
 }
 
+.input:global(.rt-TextFieldRoot) {
+  width: 100%;
+}
+
+.input :global(.rt-TextFieldInput) {
+  min-width: 0;
+  width: 100%;
+}
+
+.input :global(.rt-TextFieldInput[type='date']),
+.input :global(.rt-TextFieldInput[type='time']) {
+  position: relative;
+  padding-right: 44px;
+}
+
+.input :global(.rt-TextFieldInput[type='date']::-webkit-calendar-picker-indicator),
+.input :global(.rt-TextFieldInput[type='time']::-webkit-calendar-picker-indicator) {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  margin: 0;
+}
+
 .input:global(.rt-TextFieldRoot):focus-within,
 .selectTrigger:global(.rt-SelectTrigger):focus-visible,
 .selectTrigger:global(.rt-SelectTrigger)[data-state='open'] {

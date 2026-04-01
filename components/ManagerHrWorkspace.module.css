@@ -78,28 +78,40 @@
 }
 
 .header {
+  margin-bottom: 16px;
+  padding: 16px 20px;
+}
+
+.headerContent {
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
   gap: 16px;
-  align-items: flex-start;
-  padding-bottom: 16px;
-  border-bottom: 1px solid #ececec;
+}
+
+.headerLeft {
+  display: flex;
+  flex-direction: column;
 }
 
 .title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #212121;
   margin: 0;
-  font-size: clamp(28px, 3.4vw, 42px);
-  line-height: 0.98;
-  font-weight: 800;
-  letter-spacing: -0.035em;
-  text-transform: uppercase;
-  color: #111111;
-  max-width: 720px;
-  overflow-wrap: anywhere;
+  line-height: 1.2;
+}
+
+.subtitle {
+  color: #757575;
+  margin: 2px 0 0;
+  font-size: 13px;
+  font-weight: 400;
 }
 
 .saveState {
-  margin-top: 8px;
+  margin-top: 4px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -116,11 +128,10 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  justify-content: flex-end;
 }
 
 .statusBadge {
-  min-height: 42px;
+  min-height: 32px;
   padding: 0 14px !important;
   border-radius: 9999px !important;
   display: inline-flex;
@@ -131,27 +142,47 @@
 .surfaceButton:global(.rt-Button),
 .primaryButton:global(.rt-Button),
 .deleteButton:global(.rt-Button) {
-  min-height: 42px !important;
-  border-radius: 16px !important;
-  padding: 0 16px !important;
-  font-size: 14px !important;
+  min-height: 32px !important;
+  border-radius: 6px !important;
+  padding: 4px 16px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  gap: 6px !important;
 }
 
 .surfaceButton:global(.rt-Button) {
   background: #ffffff !important;
-  border: 1px solid #d8dbe2 !important;
-  box-shadow: none !important;
+  color: #424242 !important;
+  border: 1px solid #e0e0e0 !important;
+  box-shadow: inset 0 0 0 1px var(--accent-a7) !important;
+}
+
+.surfaceButton:global(.rt-Button:hover) {
+  background: #f5f5f5 !important;
+  border-color: #d0d0d0 !important;
 }
 
 .primaryButton:global(.rt-Button) {
   background: #111111 !important;
   color: #ffffff !important;
+  border: 1px solid #111111 !important;
+}
+
+.primaryButton:global(.rt-Button:hover) {
+  background: #333333 !important;
+  border-color: #333333 !important;
 }
 
 .deleteButton:global(.rt-Button) {
   background: #ffffff !important;
-  border: 1px solid #ead7d7 !important;
-  color: #b42318 !important;
+  border: 1px solid #f1d4d4 !important;
+  color: #dc2626 !important;
+}
+
+.deleteButton:global(.rt-Button:hover) {
+  background: #dc2626 !important;
+  border-color: #dc2626 !important;
+  color: #ffffff !important;
 }
 
 .summaryGrid {
@@ -203,6 +234,30 @@
   background: #ffffff !important;
   box-shadow: none !important;
   font-size: 14px !important;
+}
+
+.input:global(.rt-TextFieldRoot) {
+  width: 100%;
+}
+
+.input :global(.rt-TextFieldInput) {
+  min-width: 0;
+  width: 100%;
+}
+
+.input :global(.rt-TextFieldInput[type='date']),
+.input :global(.rt-TextFieldInput[type='time']) {
+  position: relative;
+  padding-right: 44px;
+}
+
+.input :global(.rt-TextFieldInput[type='date']::-webkit-calendar-picker-indicator),
+.input :global(.rt-TextFieldInput[type='time']::-webkit-calendar-picker-indicator) {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  margin: 0;
 }
 
 .input:global(.rt-TextFieldRoot):focus-within,
@@ -350,8 +405,8 @@
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  min-height: 42px;
-  border-radius: 16px;
+  min-height: 32px;
+  border-radius: 4px;
   border: 1px solid #d8dbe2;
   padding: 0 16px;
   background: #ffffff;

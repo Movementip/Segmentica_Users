@@ -433,59 +433,64 @@ export function ManagerHrWorkspace({
 
             <div className={styles.content}>
                 <div className={styles.header}>
-                    <div>
-                        <h1 className={styles.title}>{data.manager.fio || manager.фио}</h1>
-                        {renderSaveBadge()}
-                    </div>
+                    <div className={styles.headerContent}>
+                        <div className={styles.headerLeft}>
+                            <h1 className={styles.title}>{data.manager.fio || manager.фио}</h1>
+                            <p className={styles.subtitle}>
+                                {data.manager.position || manager.должность || 'Карточка сотрудника и кадровые данные'}
+                            </p>
+                            {renderSaveBadge()}
+                        </div>
 
-                    <div className={styles.headerActions}>
-                        <Badge variant="soft" color={data.manager.isActive ? 'green' : 'red'} highContrast className={styles.statusBadge}>
-                            {data.manager.isActive ? 'Работает' : 'Неактивен'}
-                        </Badge>
+                        <div className={styles.headerActions}>
+                            <Badge variant="soft" color={data.manager.isActive ? 'green' : 'red'} highContrast className={styles.statusBadge}>
+                                {data.manager.isActive ? 'Работает' : 'Неактивен'}
+                            </Badge>
 
-                        <Button
-                            type="button"
-                            variant="surface"
-                            color="gray"
-                            highContrast
-                            className={styles.surfaceButton}
-                            onClick={() => {
-                                void onRefreshBase();
-                                void fetchProfile();
-                            }}
-                        >
-                            <FiRefreshCw size={16} />
-                            Обновить
-                        </Button>
-
-                        {!readOnly ? (
-                            <Button
-                                type="button"
-                                variant="solid"
-                                color="gray"
-                                highContrast
-                                className={styles.primaryButton}
-                                onClick={() => void handleSave()}
-                                disabled={saving || !isDirty || !schemaAvailable}
-                            >
-                                <FiSave size={16} />
-                                {saving ? 'Сохранение…' : 'Сохранить'}
-                            </Button>
-                        ) : null}
-
-                        {canDelete ? (
                             <Button
                                 type="button"
                                 variant="surface"
                                 color="gray"
                                 highContrast
-                                className={styles.deleteButton}
-                                onClick={onRequestDelete}
+                                className={styles.surfaceButton}
+                                onClick={() => {
+                                    void onRefreshBase();
+                                    void fetchProfile();
+                                }}
                             >
-                                <FiTrash2 size={16} />
-                                Удалить
+                                <FiRefreshCw size={16} />
+                                Обновить
                             </Button>
-                        ) : null}
+
+                            {!readOnly ? (
+                                <Button
+                                    type="button"
+                                    variant="solid"
+                                    color="gray"
+                                    highContrast
+                                    className={styles.primaryButton}
+                                    onClick={() => void handleSave()}
+                                    disabled={saving || !isDirty || !schemaAvailable}
+                                >
+                                    <FiSave size={16} />
+                                    {saving ? 'Сохранение…' : 'Сохранить'}
+                                </Button>
+                            ) : null}
+
+                            {canDelete ? (
+                                <Button
+                                    type="button"
+                                    variant="surface"
+                                    color="gray"
+                                    highContrast
+                                    className={styles.deleteButton}
+                                    onClick={onRequestDelete}
+                                >
+                                    <FiTrash2 size={16} />
+                                    Удалить
+                                </Button>
+                            ) : null}
+                        </div>
                     </div>
                 </div>
 
