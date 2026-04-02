@@ -1,9 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Box, Button, Select, Text } from '@radix-ui/themes';
 import { withLayout } from '../../layout';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
-import { VAT_RATE_OPTIONS, getVatRateOption } from '../../lib/vat';
+import { VAT_RATE_OPTIONS } from '../../lib/vat';
 import { getOrderExecutionModeLabel, type OrderExecutionMode } from '../../lib/orderModes';
 import styles from './AdminSettings.module.css';
 
@@ -11,6 +11,8 @@ type SettingsPayload = {
     defaultVatRateId: number;
     defaultOrderExecutionMode: OrderExecutionMode;
     autoCalculateShipmentDeliveryCost: boolean;
+    useSupplierAssortment: boolean;
+    useSupplierLeadTime: boolean;
 };
 
 const INITIAL_VAT_RATE_ID = VAT_RATE_OPTIONS.find((item) => item.isDefault)?.id || 5;
@@ -26,6 +28,8 @@ function AdminSettingsPage(): JSX.Element {
         defaultVatRateId: INITIAL_VAT_RATE_ID,
         defaultOrderExecutionMode: 'warehouse',
         autoCalculateShipmentDeliveryCost: false,
+        useSupplierAssortment: false,
+        useSupplierLeadTime: false,
     });
 
     const canManageSettings = Boolean(user?.permissions?.includes('admin.settings'));
@@ -45,6 +49,8 @@ function AdminSettingsPage(): JSX.Element {
                 defaultVatRateId: Number((data as any)?.defaultVatRateId) || INITIAL_VAT_RATE_ID,
                 defaultOrderExecutionMode: ((data as any)?.defaultOrderExecutionMode === 'direct' ? 'direct' : 'warehouse'),
                 autoCalculateShipmentDeliveryCost: Boolean((data as any)?.autoCalculateShipmentDeliveryCost),
+                useSupplierAssortment: Boolean((data as any)?.useSupplierAssortment),
+                useSupplierLeadTime: Boolean((data as any)?.useSupplierLeadTime),
             });
         } catch (loadError) {
             setError(loadError instanceof Error ? loadError.message : 'Не удалось загрузить системные настройки');
@@ -57,11 +63,6 @@ function AdminSettingsPage(): JSX.Element {
         if (authLoading || !canManageSettings) return;
         void loadSettings();
     }, [authLoading, canManageSettings, loadSettings]);
-
-    const currentVat = useMemo(
-        () => getVatRateOption(settings.defaultVatRateId),
-        [settings.defaultVatRateId]
-    );
 
     const handleSave = async () => {
         try {
@@ -133,7 +134,7 @@ function AdminSettingsPage(): JSX.Element {
             <div className={styles.header}>
                 <div>
                     <h1 className={styles.title}>Настройки системы</h1>
-                    <div className={styles.subtitle}>Глобальные параметры для новых заявок, НДС и поведения отгрузок.</div>
+                    <div className={styles.subtitle}>Глобальные параметры для новых заявок, закупок, НДС и поведения отгрузок.</div>
                 </div>
             </div>
 
@@ -141,7 +142,7 @@ function AdminSettingsPage(): JSX.Element {
                 <section className={styles.card}>
                     <h2 className={styles.sectionTitle}>Новые заявки</h2>
                     <p className={styles.sectionText}>
-                        Эти значения подставляются в формы создания. Существующие документы не переписываются.
+                        Эти значения подставляются в формы создания и рекомендации. Существующие документы не переписываются автоматически.
                     </p>
 
                     <div className={styles.formGrid}>
@@ -201,6 +202,46 @@ function AdminSettingsPage(): JSX.Element {
                             </label>
                             <div className={styles.fieldHint}>
                                 Если флаг выключен, стоимость доставки вводится вручную. Если включён, сайт сам пересчитывает её по тарифу ТК после сохранения позиций отгрузки.
+                            </div>
+                        </div>
+
+                        <div className={`${styles.field} ${styles.fieldWide}`}>
+                            <label className={styles.fieldLabel}>Закупки по поставщикам</label>
+                            <label className={styles.checkboxRow}>
+                                <input
+                                    type="checkbox"
+                                    className={styles.checkboxInput}
+                                    checked={settings.useSupplierAssortment}
+                                    onChange={(event) => setSettings((prev) => ({
+                                        ...prev,
+                                        useSupplierAssortment: event.target.checked,
+                                        useSupplierLeadTime: event.target.checked ? prev.useSupplierLeadTime : false,
+                                    }))}
+                                />
+                                <span className={styles.checkboxText}>Учитывать ассортимент поставщиков</span>
+                            </label>
+                            <div className={styles.fieldHint}>
+                                Если флаг включён, создание закупки начнёт опираться на ассортимент поставщика: система будет подсказывать подходящих поставщиков, подставлять цены из их ассортимента и не даст сохранить закупку по товарам, которых у выбранного поставщика нет.
+                            </div>
+                        </div>
+
+                        <div className={`${styles.field} ${styles.fieldWide}`}>
+                            <label className={styles.fieldLabel}>Сроки поставки</label>
+                            <label className={styles.checkboxRow}>
+                                <input
+                                    type="checkbox"
+                                    className={styles.checkboxInput}
+                                    checked={settings.useSupplierLeadTime}
+                                    disabled={!settings.useSupplierAssortment}
+                                    onChange={(event) => setSettings((prev) => ({
+                                        ...prev,
+                                        useSupplierLeadTime: event.target.checked && prev.useSupplierAssortment,
+                                    }))}
+                                />
+                                <span className={styles.checkboxText}>Учитывать время поставки</span>
+                            </label>
+                            <div className={styles.fieldHint}>
+                                Работает вместе с ассортиментом поставщиков: рекомендации сортируются с учётом срока поставки, а в закупке дата поступления может подставляться по самому долгому сроку среди выбранных позиций.
                             </div>
                         </div>
                     </div>

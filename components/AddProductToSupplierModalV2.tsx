@@ -11,12 +11,19 @@ interface Product {
     категория?: string;
 }
 
+interface InitialSupplierProduct {
+    товар_id: number;
+    цена: number;
+    срок_поставки: number;
+}
+
 interface AddProductToSupplierModalV2Props {
     isOpen: boolean;
     onClose: () => void;
     onProductAdded: () => void;
     поставщик_id: number;
     поставщик_название: string;
+    initialProduct?: InitialSupplierProduct | null;
 }
 
 export function AddProductToSupplierModalV2({
@@ -25,10 +32,12 @@ export function AddProductToSupplierModalV2({
     onProductAdded,
     поставщик_id,
     поставщик_название,
+    initialProduct = null,
 }: AddProductToSupplierModalV2Props): JSX.Element {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [products, setProducts] = useState<Product[]>([]);
+    const isEditMode = Boolean(initialProduct?.товар_id);
 
     const [formData, setFormData] = useState({
         товар_id: '',
@@ -41,6 +50,15 @@ export function AddProductToSupplierModalV2({
         setError(null);
         void fetchProducts();
     }, [isOpen]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        setFormData({
+            товар_id: initialProduct?.товар_id ? String(initialProduct.товар_id) : '',
+            цена: initialProduct?.цена != null ? String(initialProduct.цена) : '',
+            срок_поставки: initialProduct?.срок_поставки != null ? String(initialProduct.срок_поставки) : '',
+        });
+    }, [initialProduct, isOpen]);
 
     const fetchProducts = async () => {
         try {
@@ -61,7 +79,10 @@ export function AddProductToSupplierModalV2({
     }, [products, formData.товар_id]);
 
     const canSubmit = useMemo(() => {
-        return Boolean(formData.товар_id) && Boolean(formData.цена) && Boolean(formData.срок_поставки) && !loading;
+        const productId = Number(formData.товар_id) || 0;
+        const price = Number(formData.цена);
+        const leadTime = Number(formData.срок_поставки);
+        return productId > 0 && Number.isFinite(price) && price > 0 && Number.isFinite(leadTime) && leadTime >= 0 && !loading;
     }, [formData.товар_id, formData.цена, formData.срок_поставки, loading]);
 
     const productSelectOptions = useMemo(
@@ -88,7 +109,7 @@ export function AddProductToSupplierModalV2({
 
         try {
             const response = await fetch(`/api/suppliers/${поставщик_id}/actions`, {
-                method: 'POST',
+                method: isEditMode ? 'PATCH' : 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
@@ -119,7 +140,7 @@ export function AddProductToSupplierModalV2({
     return (
         <Dialog.Root open={isOpen} onOpenChange={(open) => (!open ? handleClose() : undefined)}>
             <Dialog.Content className={styles.modalContent}>
-                <Dialog.Title>Добавить товар</Dialog.Title>
+                <Dialog.Title>{isEditMode ? 'Изменить позицию ассортимента' : 'Добавить товар'}</Dialog.Title>
                 <Dialog.Description className={styles.description}>
                     Поставщик: <Text as="span" weight="bold">{поставщик_название}</Text>
                 </Dialog.Description>
@@ -133,8 +154,9 @@ export function AddProductToSupplierModalV2({
                                     value={formData.товар_id}
                                     onValueChange={(value) => setFormData((prev) => ({ ...prev, товар_id: value }))}
                                     options={productSelectOptions}
-                                    placeholder="Выберите товар"
+                                    placeholder={isEditMode ? 'Товар выбран' : 'Выберите товар'}
                                     emptyText="Нет товаров"
+                                    disabled={isEditMode}
                                 />
                             </Box>
 
@@ -185,7 +207,7 @@ export function AddProductToSupplierModalV2({
                                 Отмена
                             </Button>
                             <Button type="submit" variant="solid" color="gray" highContrast className={styles.primaryButton} disabled={!canSubmit}>
-                                {loading ? 'Добавление...' : 'Добавить'}
+                                {loading ? (isEditMode ? 'Сохранение...' : 'Добавление...') : (isEditMode ? 'Сохранить' : 'Добавить')}
                             </Button>
                         </Flex>
                     </Flex>

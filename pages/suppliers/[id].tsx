@@ -62,11 +62,13 @@ function SupplierDetailPage(): JSX.Element {
     const [isCreatePurchaseModalOpen, setIsCreatePurchaseModalOpen] = useState(false);
     const [createPurchaseModalKey, setCreatePurchaseModalKey] = useState(0);
     const [isAddProductModalOpen, setIsAddProductModalOpen] = useState(false);
+    const [editingAssortmentProduct, setEditingAssortmentProduct] = useState<SupplierProduct | null>(null);
     const [isChangeRatingModalOpen, setIsChangeRatingModalOpen] = useState(false);
     const [isEditSupplierOpen, setIsEditSupplierOpen] = useState(false);
 
     const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
     const [operationLoading, setOperationLoading] = useState(false);
+    const [assortmentBusyProductId, setAssortmentBusyProductId] = useState<number | null>(null);
 
     const [attachments, setAttachments] = useState<AttachmentItem[]>([]);
     const [attachmentsLoading, setAttachmentsLoading] = useState(false);
@@ -84,6 +86,7 @@ function SupplierDetailPage(): JSX.Element {
     const canCreatePurchaseFromSupplier = Boolean(user?.permissions?.includes('suppliers.purchases.create'));
     const canShowCreatePurchase = canCreatePurchase && canCreatePurchaseFromSupplier;
     const canAssortmentView = Boolean(user?.permissions?.includes('suppliers.assortment.view'));
+    const canManageAssortment = canEdit;
     const canPurchasesHistoryView = Boolean(user?.permissions?.includes('suppliers.purchases_history.view'));
     const canOrdersView = Boolean(user?.permissions?.includes('orders.view'));
     const canPurchasesView = Boolean(user?.permissions?.includes('purchases.view'));
@@ -324,7 +327,42 @@ function SupplierDetailPage(): JSX.Element {
 
     const handleAddProduct = () => {
         if (!canAddProduct) return;
+        setEditingAssortmentProduct(null);
         setIsAddProductModalOpen(true);
+    };
+
+    const handleEditAssortmentProduct = (product: SupplierProduct) => {
+        if (!canManageAssortment) return;
+        setEditingAssortmentProduct(product);
+        setIsAddProductModalOpen(true);
+    };
+
+    const handleDeleteAssortmentProduct = async (product: SupplierProduct) => {
+        if (!canManageAssortment) return;
+        if (!supplier) return;
+
+        const confirmed = window.confirm(`Удалить «${product.товар_название}» из ассортимента поставщика?`);
+        if (!confirmed) return;
+
+        try {
+            setAssortmentBusyProductId(product.товар_id);
+            setError(null);
+
+            const response = await fetch(`/api/suppliers/${supplier.id}/actions?товар_id=${encodeURIComponent(String(product.товар_id))}`, {
+                method: 'DELETE',
+            });
+            const data = await response.json().catch(() => ({}));
+
+            if (!response.ok) {
+                throw new Error((data as any)?.error || 'Ошибка удаления товара из ассортимента');
+            }
+
+            await fetchSupplierDetail();
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Ошибка удаления товара из ассортимента');
+        } finally {
+            setAssortmentBusyProductId(null);
+        }
     };
 
     const handleChangeRating = () => {
@@ -339,6 +377,7 @@ function SupplierDetailPage(): JSX.Element {
     const handleProductAdded = () => {
         fetchSupplierDetail(); // Refresh data
         setIsAddProductModalOpen(false);
+        setEditingAssortmentProduct(null);
     };
 
     const handleRatingChanged = () => {
@@ -893,11 +932,14 @@ function SupplierDetailPage(): JSX.Element {
                                                 <Table.ColumnHeaderCell>Категория</Table.ColumnHeaderCell>
                                                 <Table.ColumnHeaderCell className={styles.textRight}>Цена</Table.ColumnHeaderCell>
                                                 <Table.ColumnHeaderCell>Срок поставки</Table.ColumnHeaderCell>
+                                                {canManageAssortment ? (
+                                                    <Table.ColumnHeaderCell className={styles.textRight}>Действия</Table.ColumnHeaderCell>
+                                                ) : null}
                                             </Table.Row>
                                         </Table.Header>
                                         <Table.Body>
                                             {productsFiltered.length ? productsFiltered.map((product) => (
-                                                <Table.Row key={product.id} className={styles.tableRow}>
+                                                <Table.Row key={product.id} className={styles.tableRowStatic}>
                                                     <Table.Cell>
                                                         <span className={styles.itemTitle}>{product.товар_артикул}</span>
                                                     </Table.Cell>
@@ -913,10 +955,40 @@ function SupplierDetailPage(): JSX.Element {
                                                     <Table.Cell>
                                                         <span className={`${styles.statusPill} ${product.срок_поставки <= 3 ? styles.badgeSuccess : styles.badgeWarn}`}>{product.срок_поставки} дн.</span>
                                                     </Table.Cell>
+                                                    {canManageAssortment ? (
+                                                        <Table.Cell className={styles.textRight}>
+                                                            <Flex justify="end" gap="2" wrap="wrap">
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="surface"
+                                                                    color="gray"
+                                                                    highContrast
+                                                                    className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton} ${styles.tableActionButton}`}
+                                                                    onClick={() => handleEditAssortmentProduct(product)}
+                                                                    disabled={assortmentBusyProductId === product.товар_id}
+                                                                >
+                                                                    <FiEdit2 className={styles.icon} />
+                                                                    Изменить
+                                                                </Button>
+                                                                <Button
+                                                                    type="button"
+                                                                    variant="surface"
+                                                                    color="red"
+                                                                    highContrast
+                                                                    className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton} ${styles.orderDeleteButton} ${styles.tableActionButton}`}
+                                                                    onClick={() => void handleDeleteAssortmentProduct(product)}
+                                                                    disabled={assortmentBusyProductId === product.товар_id}
+                                                                >
+                                                                    <FiTrash2 className={styles.icon} />
+                                                                    {assortmentBusyProductId === product.товар_id ? 'Удаление...' : 'Удалить'}
+                                                                </Button>
+                                                            </Flex>
+                                                        </Table.Cell>
+                                                    ) : null}
                                                 </Table.Row>
                                             )) : (
                                                 <Table.Row>
-                                                    <Table.Cell colSpan={5}>
+                                                    <Table.Cell colSpan={canManageAssortment ? 6 : 5}>
                                                         <Text size="2" color="gray">Нет товаров в ассортименте</Text>
                                                     </Table.Cell>
                                                 </Table.Row>
@@ -1033,13 +1105,17 @@ function SupplierDetailPage(): JSX.Element {
                         />
                     ) : null}
 
-                    {canAddProduct ? (
+                    {canAddProduct || canManageAssortment ? (
                         <AddProductToSupplierModalV2
                             isOpen={isAddProductModalOpen}
-                            onClose={() => setIsAddProductModalOpen(false)}
+                            onClose={() => {
+                                setIsAddProductModalOpen(false);
+                                setEditingAssortmentProduct(null);
+                            }}
                             onProductAdded={handleProductAdded}
                             поставщик_id={supplier.id}
                             поставщик_название={supplier.название}
+                            initialProduct={editingAssortmentProduct}
                         />
                     ) : null}
 

@@ -17,6 +17,8 @@ export const APP_SETTINGS_TABLE_SQL = `
 export const DEFAULT_VAT_SETTINGS_KEY = 'default_vat';
 export const DEFAULT_ORDER_EXECUTION_MODE_SETTINGS_KEY = 'default_order_execution_mode';
 export const AUTO_CALCULATE_SHIPMENT_DELIVERY_COST_SETTINGS_KEY = 'auto_calculate_shipment_delivery_cost';
+export const USE_SUPPLIER_ASSORTMENT_SETTINGS_KEY = 'use_supplier_assortment';
+export const USE_SUPPLIER_LEAD_TIME_SETTINGS_KEY = 'use_supplier_lead_time';
 
 export const ensureAppSettingsTable = async () => {
     await query(APP_SETTINGS_TABLE_SQL);
@@ -89,25 +91,49 @@ export const saveDefaultOrderExecutionMode = async (executionMode: OrderExecutio
 };
 
 export const getAutoCalculateShipmentDeliveryCost = async (): Promise<boolean> => {
+    return getBooleanAppSetting(AUTO_CALCULATE_SHIPMENT_DELIVERY_COST_SETTINGS_KEY, false);
+};
+
+export const saveAutoCalculateShipmentDeliveryCost = async (enabled: boolean) => {
+    await saveBooleanAppSetting(AUTO_CALCULATE_SHIPMENT_DELIVERY_COST_SETTINGS_KEY, enabled);
+};
+
+export const getUseSupplierAssortment = async (): Promise<boolean> => {
+    return getBooleanAppSetting(USE_SUPPLIER_ASSORTMENT_SETTINGS_KEY, false);
+};
+
+export const saveUseSupplierAssortment = async (enabled: boolean) => {
+    await saveBooleanAppSetting(USE_SUPPLIER_ASSORTMENT_SETTINGS_KEY, enabled);
+};
+
+export const getUseSupplierLeadTime = async (): Promise<boolean> => {
+    return getBooleanAppSetting(USE_SUPPLIER_LEAD_TIME_SETTINGS_KEY, false);
+};
+
+export const saveUseSupplierLeadTime = async (enabled: boolean) => {
+    await saveBooleanAppSetting(USE_SUPPLIER_LEAD_TIME_SETTINGS_KEY, enabled);
+};
+
+const getBooleanAppSetting = async (key: string, fallback: boolean): Promise<boolean> => {
     await ensureAppSettingsTable();
     const res = await query(
         `SELECT value
          FROM public.app_settings
          WHERE key = $1
          LIMIT 1`,
-        [AUTO_CALCULATE_SHIPMENT_DELIVERY_COST_SETTINGS_KEY]
+        [key]
     );
 
     const raw = res.rows?.[0]?.value;
     if (!raw || typeof raw !== 'object') {
-        return false;
+        return fallback;
     }
 
-    const candidate = (raw as any).enabled ?? (raw as any).value ?? false;
+    const candidate = (raw as any).enabled ?? (raw as any).value ?? fallback;
     return candidate === true || String(candidate).trim().toLowerCase() === 'true';
 };
 
-export const saveAutoCalculateShipmentDeliveryCost = async (enabled: boolean) => {
+const saveBooleanAppSetting = async (key: string, enabled: boolean) => {
     await ensureAppSettingsTable();
     await query(
         `
@@ -117,6 +143,6 @@ export const saveAutoCalculateShipmentDeliveryCost = async (enabled: boolean) =>
         SET value = EXCLUDED.value,
             updated_at = CURRENT_TIMESTAMP
         `,
-        [AUTO_CALCULATE_SHIPMENT_DELIVERY_COST_SETTINGS_KEY, JSON.stringify({ enabled: Boolean(enabled) })]
+        [key, JSON.stringify({ enabled: Boolean(enabled) })]
     );
 };

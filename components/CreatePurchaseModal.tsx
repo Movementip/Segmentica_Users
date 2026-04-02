@@ -18,6 +18,31 @@ interface Supplier {
     название: string;
 }
 
+interface SupplierRecommendationLine {
+    товар_id: number;
+    цена: number;
+    срок_поставки: number;
+}
+
+interface SupplierRecommendation {
+    supplierId: number;
+    supplierName: string;
+    matchedCount: number;
+    totalRequested: number;
+    fullyMatches: boolean;
+    missingProductIds: number[];
+    totalPrice: number | null;
+    maxLeadTimeDays: number | null;
+    positions: SupplierRecommendationLine[];
+}
+
+interface SupplierCatalogItem extends SupplierRecommendationLine {
+    название: string;
+    артикул: string;
+    единица_измерения: string;
+    категория?: string;
+}
+
 interface TransportOption {
     id: number;
     название: string;
@@ -91,7 +116,6 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
     const [orders, setOrders] = useState<OrderOption[]>([]);
     const [createToken, setCreateToken] = useState('');
     const [selectedSupplierId, setSelectedSupplierId] = useState<number>(поставщик_id);
-    const [selectedSupplierName, setSelectedSupplierName] = useState<string>(поставщик_название);
     const [selectedOrderId, setSelectedOrderId] = useState<number>(заявка_id || 0);
     const [формаДанные, setФормаДанные] = useState({
         статус: 'заказано',
@@ -104,7 +128,21 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
         { товар_id: 0, количество: 1, цена: 0, ндс_id: DEFAULT_VAT_RATE_ID, включена: true }
     ]);
     const [defaultVatRateId, setDefaultVatRateId] = useState(DEFAULT_VAT_RATE_ID);
+    const [useSupplierAssortment, setUseSupplierAssortment] = useState(false);
+    const [useSupplierLeadTime, setUseSupplierLeadTime] = useState(false);
+    const [supplierConstraintsLoaded, setSupplierConstraintsLoaded] = useState(false);
+    const [supplierRecommendations, setSupplierRecommendations] = useState<SupplierRecommendation[]>([]);
+    const [selectedSupplierAssortment, setSelectedSupplierAssortment] = useState<Record<number, SupplierRecommendationLine>>({});
+    const [selectedSupplierCatalog, setSelectedSupplierCatalog] = useState<SupplierCatalogItem[]>([]);
+    const [supplierRecommendationError, setSupplierRecommendationError] = useState<string | null>(null);
     const getProductSalePrice = (product?: Product | null) => Number(product?.цена_продажи ?? product?.цена ?? 0);
+
+    const buildSuggestedArrivalDateValue = (leadDays: number) => {
+        const date = new Date();
+        date.setDate(date.getDate() + Math.max(0, Number(leadDays) || 0));
+        const pad = (n: number) => String(n).padStart(2, '0');
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+    };
 
     const buildInitialPositions = (vatRateId: number): PurchasePosition[] => {
         if (!initialOrderPositions || initialOrderPositions.length === 0) {
@@ -121,9 +159,15 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
         const value = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
 
         setError(null);
+        setSupplierRecommendationError(null);
         setCreateToken('');
         setSelectedSupplierId(Number(поставщик_id) || 0);
-        setSelectedSupplierName(поставщик_название || '');
+        setUseSupplierAssortment(false);
+        setUseSupplierLeadTime(false);
+        setSupplierConstraintsLoaded(false);
+        setSupplierRecommendations([]);
+        setSelectedSupplierAssortment({});
+        setSelectedSupplierCatalog([]);
         setSelectedOrderId(Number(заявка_id) || 0);
         setФормаДанные({
             статус: 'заказано',
@@ -142,18 +186,67 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
         if (формаДанные.использовать_доставку && !формаДанные.транспорт_id) return false;
 
         const validPositions = позиции.filter((pos) => pos.включена && pos.товар_id > 0 && pos.количество > 0 && pos.цена > 0);
-        return validPositions.length > 0;
-    }, [createToken, loading, selectedSupplierId, формаДанные.использовать_доставку, формаДанные.транспорт_id, позиции]);
+        if (validPositions.length === 0) return false;
+
+        if (useSupplierAssortment) {
+            const hasMissingAssortmentPositions = validPositions.some((position) => !selectedSupplierAssortment[position.товар_id]);
+            if (hasMissingAssortmentPositions) return false;
+        }
+
+        return true;
+    }, [createToken, loading, selectedSupplierId, формаДанные.использовать_доставку, формаДанные.транспорт_id, позиции, useSupplierAssortment, selectedSupplierAssortment]);
 
     const productsById = useMemo(() => {
         const map = new Map<number, Product>();
         for (const p of products) map.set(p.id, p);
         return map;
     }, [products]);
-    const supplierOptions = useMemo(
-        () => suppliers.map((supplier) => ({ value: String(supplier.id), label: supplier.название })),
-        [suppliers]
+    const assortmentRelevantPositions = useMemo(
+        () => позиции.filter((position) => position.включена && position.товар_id > 0 && position.количество > 0),
+        [позиции]
     );
+    const selectedSupplierRecommendation = useMemo(
+        () => supplierRecommendations.find((item) => item.supplierId === selectedSupplierId) || null,
+        [selectedSupplierId, supplierRecommendations]
+    );
+    const recommendedSupplier = useMemo(
+        () => supplierRecommendations.find((item) => item.fullyMatches) || supplierRecommendations[0] || null,
+        [supplierRecommendations]
+    );
+    const missingAssortmentProductIds = useMemo(
+        () => assortmentRelevantPositions
+            .map((item) => item.товар_id)
+            .filter((productId) => useSupplierAssortment && !selectedSupplierAssortment[productId]),
+        [assortmentRelevantPositions, selectedSupplierAssortment, useSupplierAssortment]
+    );
+    const supplierOptions = useMemo(() => {
+        const recommendationById = new Map<number, SupplierRecommendation>(
+            supplierRecommendations.map((item) => [item.supplierId, item])
+        );
+
+        return [...suppliers]
+            .sort((left, right) => {
+                const leftIndex = supplierRecommendations.findIndex((item) => item.supplierId === left.id);
+                const rightIndex = supplierRecommendations.findIndex((item) => item.supplierId === right.id);
+                if (leftIndex === -1 && rightIndex === -1) {
+                    return left.название.localeCompare(right.название, 'ru-RU');
+                }
+                if (leftIndex === -1) return 1;
+                if (rightIndex === -1) return -1;
+                return leftIndex - rightIndex;
+            })
+            .map((supplier) => {
+                const recommendation = recommendationById.get(supplier.id);
+                if (!recommendation || !useSupplierAssortment || assortmentRelevantPositions.length === 0) {
+                    return { value: String(supplier.id), label: supplier.название };
+                }
+
+                return {
+                    value: String(supplier.id),
+                    label: supplier.название,
+                };
+            });
+    }, [assortmentRelevantPositions.length, supplierRecommendations, suppliers, useSupplierAssortment]);
     const orderOptions = useMemo(
         () => orders.map((order) => ({
             value: String(order.id),
@@ -169,13 +262,50 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
         () => transports.map((transport) => ({ value: String(transport.id), label: transport.название })),
         [transports]
     );
-    const productOptions = useMemo(
-        () => products.map((product) => ({
-            value: String(product.id),
+    const productOptions = useMemo(() => {
+        if (!supplierConstraintsLoaded) {
+            return selectedSupplierId > 0 ? [] : products.map((product) => ({
+                value: String(product.id),
+                label: `${product.артикул ? `${product.артикул} - ` : ''}${product.название}`,
+            }));
+        }
+
+        if (!useSupplierAssortment) {
+            return products.map((product) => ({
+                value: String(product.id),
+                label: `${product.артикул ? `${product.артикул} - ` : ''}${product.название}`,
+            }));
+        }
+
+        if (selectedSupplierId <= 0) {
+            return [];
+        }
+
+        const catalogById = new Map<number, SupplierCatalogItem>(
+            selectedSupplierCatalog.map((item) => [item.товар_id, item])
+        );
+        const selectedProductIds = Array.from(new Set(позиции.map((position) => Number(position.товар_id) || 0).filter((id) => id > 0)));
+
+        for (const productId of selectedProductIds) {
+            if (catalogById.has(productId)) continue;
+            const product = productsById.get(productId);
+            if (!product) continue;
+            catalogById.set(productId, {
+                товар_id: productId,
+                название: product.название,
+                артикул: product.артикул,
+                единица_измерения: product.единица_измерения || 'шт',
+                категория: undefined,
+                цена: Number(product.цена ?? product.цена_продажи ?? 0) || 0,
+                срок_поставки: 0,
+            });
+        }
+
+        return Array.from(catalogById.values()).map((product) => ({
+            value: String(product.товар_id),
             label: `${product.артикул ? `${product.артикул} - ` : ''}${product.название}`,
-        })),
-        [products]
-    );
+        }));
+    }, [products, productsById, позиции, selectedSupplierCatalog, selectedSupplierId, supplierConstraintsLoaded, useSupplierAssortment]);
 
     const datePart = формаДанные.дата_поступления ? формаДанные.дата_поступления.slice(0, 10) : '';
     const timePart = формаДанные.дата_поступления ? формаДанные.дата_поступления.slice(11, 16) : '';
@@ -218,6 +348,100 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
         }));
     }, [isOpen, products, productsById]);
 
+    useEffect(() => {
+        if (!isOpen) return;
+
+        const timeoutId = window.setTimeout(async () => {
+            try {
+                setSupplierRecommendationError(null);
+                const response = await fetch('/api/purchases/supplier-recommendations', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        supplierId: selectedSupplierId,
+                        positions: assortmentRelevantPositions,
+                    }),
+                });
+                const data = await response.json().catch(() => ({}));
+
+                if (!response.ok) {
+                    throw new Error((data as any)?.error || 'Не удалось загрузить рекомендации по поставщикам');
+                }
+
+                const nextUseSupplierAssortment = Boolean((data as any)?.settings?.useSupplierAssortment);
+                const nextUseSupplierLeadTime = Boolean((data as any)?.settings?.useSupplierLeadTime);
+                const nextRecommendations = Array.isArray((data as any)?.recommendations)
+                    ? (data as any).recommendations as SupplierRecommendation[]
+                    : [];
+                const nextSelectedAssortment = Object.fromEntries(
+                    Object.entries((data as any)?.selectedSupplierAssortment || {}).map(([key, value]) => [Number(key), value])
+                ) as Record<number, SupplierRecommendationLine>;
+                const nextSelectedSupplierCatalog = Array.isArray((data as any)?.selectedSupplierCatalog)
+                    ? (data as any).selectedSupplierCatalog as SupplierCatalogItem[]
+                    : [];
+
+                setUseSupplierAssortment(nextUseSupplierAssortment);
+                setUseSupplierLeadTime(nextUseSupplierLeadTime);
+                setSupplierConstraintsLoaded(true);
+                setSupplierRecommendations(nextRecommendations);
+                setSelectedSupplierAssortment(nextSelectedAssortment);
+                setSelectedSupplierCatalog(nextSelectedSupplierCatalog);
+
+                if (nextUseSupplierAssortment && !selectedSupplierId && nextRecommendations.length > 0) {
+                    const bestMatch = nextRecommendations.find((item) => item.fullyMatches) || nextRecommendations[0];
+                    if (bestMatch) {
+                        setSelectedSupplierId(bestMatch.supplierId);
+                    }
+                }
+            } catch (recommendationError) {
+                console.error('Error fetching supplier recommendations:', recommendationError);
+                setSupplierRecommendationError(recommendationError instanceof Error ? recommendationError.message : 'Не удалось загрузить рекомендации по поставщикам');
+                setSupplierConstraintsLoaded(true);
+                setSupplierRecommendations([]);
+                setSelectedSupplierAssortment({});
+                setSelectedSupplierCatalog([]);
+            }
+        }, 180);
+
+        return () => window.clearTimeout(timeoutId);
+    }, [assortmentRelevantPositions, isOpen, selectedSupplierId]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        if (!useSupplierAssortment) return;
+        if (selectedSupplierId <= 0) return;
+        if (Object.keys(selectedSupplierAssortment).length === 0) return;
+
+        setПозиции((prev) => prev.map((item) => {
+            const assortmentItem = selectedSupplierAssortment[item.товар_id];
+            if (!assortmentItem) return item;
+            if (Number(item.цена) === assortmentItem.цена) return item;
+            return {
+                ...item,
+                цена: assortmentItem.цена,
+            };
+        }));
+    }, [isOpen, selectedSupplierAssortment, selectedSupplierId, useSupplierAssortment]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        if (!useSupplierLeadTime) return;
+        if (!selectedSupplierRecommendation?.maxLeadTimeDays) return;
+
+        const suggestedDate = buildSuggestedArrivalDateValue(selectedSupplierRecommendation.maxLeadTimeDays);
+        setФормаДанные((prev) => {
+            if (prev.дата_поступления === suggestedDate) {
+                return prev;
+            }
+            return {
+                ...prev,
+                дата_поступления: suggestedDate,
+            };
+        });
+    }, [isOpen, selectedSupplierRecommendation, useSupplierLeadTime]);
+
     const fetchProducts = async () => {
         try {
             const response = await fetch('/api/products');
@@ -239,11 +463,6 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
                 setSelectedSupplierId((prev) => (
                     prev && data.some((supplier: Supplier) => supplier.id === prev) ? prev : 0
                 ));
-                setSelectedSupplierName((prevName) => {
-                    if (!prevName) return '';
-                    const matchByName = data.find((supplier: Supplier) => supplier.название === prevName);
-                    return matchByName?.название || '';
-                });
             }
         } catch (error) {
             console.error('Error fetching suppliers:', error);
@@ -306,14 +525,6 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
         }
     };
 
-    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-        const { name, value } = e.target;
-        setФормаДанные(prev => ({
-            ...prev,
-            [name]: value
-        }));
-    };
-
     const handlePositionChange = (index: number, field: keyof PurchasePosition, value: string | number | boolean) => {
         const newPositions = [...позиции];
         const parsedValue = typeof value === 'string' ? parseFloat(value) || 0 : value;
@@ -322,9 +533,14 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
             [field]: parsedValue
         };
         if (field === 'товар_id') {
-            const product = products.find((item) => item.id === Number(parsedValue));
-            if (product) {
-                newPositions[index].цена = getProductSalePrice(product);
+            const assortmentItem = selectedSupplierCatalog.find((item) => item.товар_id === Number(parsedValue));
+            if (useSupplierAssortment && assortmentItem) {
+                newPositions[index].цена = assortmentItem.цена;
+            } else {
+                const product = products.find((item) => item.id === Number(parsedValue));
+                if (product) {
+                    newPositions[index].цена = getProductSalePrice(product);
+                }
             }
         }
         setПозиции(newPositions);
@@ -430,12 +646,26 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
                                     onValueChange={(value) => {
                                         const id = value ? Number(value) : 0;
                                         setSelectedSupplierId(id);
-                                        const found = suppliers.find((s) => s.id === id);
-                                        setSelectedSupplierName(found?.название || '');
                                     }}
                                     options={supplierOptions}
-                                    placeholder="Поиск поставщика"
+                                    placeholder={поставщик_название ? `Поиск поставщика (${поставщик_название})` : 'Поиск поставщика'}
                                 />
+                                {useSupplierAssortment && assortmentRelevantPositions.length > 0 ? (
+                                    <Text as="span" size="1" color={missingAssortmentProductIds.length > 0 ? 'red' : 'gray'}>
+                                        {selectedSupplierRecommendation
+                                            ? selectedSupplierRecommendation.fullyMatches
+                                                ? `Поставщик покрывает ${selectedSupplierRecommendation.matchedCount}/${selectedSupplierRecommendation.totalRequested} позиций${selectedSupplierRecommendation.totalPrice != null ? `, сумма по ассортименту ${selectedSupplierRecommendation.totalPrice.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' })}` : ''}${useSupplierLeadTime && selectedSupplierRecommendation.maxLeadTimeDays != null ? `, срок до ${selectedSupplierRecommendation.maxLeadTimeDays} дн.` : ''}.`
+                                                : `У выбранного поставщика в ассортименте только ${selectedSupplierRecommendation.matchedCount}/${selectedSupplierRecommendation.totalRequested} позиций. Остальные позиции нужно оставить на потом или оформить другой закупкой.`
+                                            : recommendedSupplier
+                                                ? `Лучший вариант сейчас: ${recommendedSupplier.supplierName}${recommendedSupplier.totalPrice != null ? `, ${recommendedSupplier.totalPrice.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' })}` : ''}${useSupplierLeadTime && recommendedSupplier.maxLeadTimeDays != null ? `, до ${recommendedSupplier.maxLeadTimeDays} дн.` : ''}.`
+                                                : 'По выбранным позициям пока нет подходящих записей в ассортименте поставщиков.'}
+                                    </Text>
+                                ) : null}
+                                {supplierRecommendationError ? (
+                                    <Text as="span" size="1" color="red">
+                                        {supplierRecommendationError}
+                                    </Text>
+                                ) : null}
                             </Box>
 
                             <Box className={styles.formGroup}>
@@ -495,6 +725,11 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
                                     />
 
                                 </Flex>
+                                {useSupplierLeadTime && selectedSupplierRecommendation?.maxLeadTimeDays != null ? (
+                                    <Text as="span" size="1" color="gray">
+                                        Дата поступления рассчитывается по самому долгому сроку среди включённых позиций: {selectedSupplierRecommendation.maxLeadTimeDays} дн.
+                                    </Text>
+                                ) : null}
                             </Box>
 
                             <Box className={styles.formGroup}>

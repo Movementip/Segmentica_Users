@@ -9,6 +9,12 @@ import { normalizeOrderExecutionMode } from '../../lib/orderModes';
 import { ensureLogisticsDeliverySchema, normalizeDeliveryCost, toBoolean } from '../../lib/logisticsDelivery';
 import { syncPurchaseWarehouseState } from '../../lib/purchaseWarehouse';
 import { syncPurchaseFinanceRecord } from '../../lib/companyFinance';
+import {
+    getProductNamesByIds,
+    getSupplierAssortmentMapForSupplier,
+    getSupplierAssortmentSettings,
+    normalizeSupplierAssortmentPositions,
+} from '../../lib/supplierAssortment';
 
 const calculatePurchasePositionsTotal = (positions: Array<{ количество: number; цена: number; ндс_id?: number }>) => (
     positions.reduce((sum, item) => {
@@ -92,6 +98,57 @@ const arePositionFingerprintsEqual = (
         && item.ндс_id === right[index].ндс_id
     ))
 );
+
+const buildLeadTimeDateTime = (leadDays: number) => {
+    const target = new Date();
+    target.setDate(target.getDate() + Math.max(0, Number(leadDays) || 0));
+    const pad = (value: number) => String(value).padStart(2, '0');
+    return `${target.getFullYear()}-${pad(target.getMonth() + 1)}-${pad(target.getDate())}T${pad(target.getHours())}:${pad(target.getMinutes())}`;
+};
+
+const ensureSupplierAssortmentCoverage = async (
+    supplierId: number,
+    positions: Array<{ товар_id: number; количество?: number; цена?: number }>,
+    queryFn: (text: string, params?: any[]) => Promise<{ rows: any[]; rowCount?: number | null }>
+) => {
+    const settings = await getSupplierAssortmentSettings();
+    if (!settings.useSupplierAssortment) {
+        return {
+            settings,
+            assortmentMap: new Map<number, { товар_id: number; цена: number; срок_поставки: number }>(),
+            suggestedArrivalDate: null as string | null,
+        };
+    }
+
+    const normalizedPositions = normalizeSupplierAssortmentPositions(positions);
+    const assortmentMap = await getSupplierAssortmentMapForSupplier(supplierId, normalizedPositions, queryFn);
+    const missingProductIds = normalizedPositions
+        .map((item) => Number(item.товар_id) || 0)
+        .filter((productId) => productId > 0 && !assortmentMap.has(productId));
+
+    if (missingProductIds.length > 0) {
+        const productNames = await getProductNamesByIds(missingProductIds, queryFn);
+        const missingItemsLabel = missingProductIds
+            .map((productId) => productNames.get(productId) || `Товар #${productId}`)
+            .join(', ');
+        throw new Error(`У выбранного поставщика нет в ассортименте следующих позиций: ${missingItemsLabel}`);
+    }
+
+    const maxLeadTimeDays = settings.useSupplierLeadTime
+        ? normalizedPositions.reduce((maxValue, item) => {
+            const leadTime = assortmentMap.get(Number(item.товар_id) || 0)?.срок_поставки || 0;
+            return Math.max(maxValue, leadTime);
+        }, 0)
+        : 0;
+
+    return {
+        settings,
+        assortmentMap,
+        suggestedArrivalDate: settings.useSupplierLeadTime && maxLeadTimeDays > 0
+            ? buildLeadTimeDateTime(maxLeadTimeDays)
+            : null,
+    };
+};
 
 export default async function handler(
     req: NextApiRequest,
@@ -359,6 +416,9 @@ export default async function handler(
                 }
             }
 
+            const assortmentCoverage = await ensureSupplierAssortmentCoverage(поставщик_id, позиции, query);
+            const normalizedArrivalDate = дата_поступления || assortmentCoverage.suggestedArrivalDate || null;
+
             // Calculate total amount
             const общая_сумма = calculatePurchaseTotal(позиции, normalizedDeliveryCost);
             const incomingFingerprint = normalizePositionFingerprint(позиции);
@@ -418,10 +478,10 @@ export default async function handler(
             "статус", "общая_сумма", "использовать_доставку", "транспорт_id", "стоимость_доставки"
           ) VALUES ($1, $2, CURRENT_TIMESTAMP, $3, $4, $5, $6, $7, $8)
           RETURNING id
-        `, [
+                `, [
                     поставщик_id,
                     заявка_id,
-                    дата_поступления,
+                    normalizedArrivalDate,
                     статус,
                     общая_сумма,
                     useDelivery,
@@ -465,8 +525,10 @@ export default async function handler(
             }
         } catch (error) {
             console.error('Error creating purchase:', error);
-            res.status(500).json({
-                error: 'Ошибка создания закупки: ' + (error instanceof Error ? error.message : 'Неизвестная ошибка')
+            const message = error instanceof Error ? error.message : 'Неизвестная ошибка';
+            const statusCode = message.startsWith('У выбранного поставщика нет в ассортименте') ? 400 : 500;
+            res.status(statusCode).json({
+                error: `Ошибка создания закупки: ${message}`
             });
         }
     } else if (req.method === 'PUT') {
@@ -484,7 +546,7 @@ export default async function handler(
                 позиции
             }: UpdatePurchaseRequest = req.body;
             const existingPurchaseResult = await query(
-                'SELECT id, "заявка_id", "использовать_доставку", "транспорт_id", "стоимость_доставки" FROM "Закупки" WHERE id = $1',
+                'SELECT id, "заявка_id", "поставщик_id", "дата_поступления", "использовать_доставку", "транспорт_id", "стоимость_доставки" FROM "Закупки" WHERE id = $1',
                 [id]
             );
 
@@ -596,6 +658,22 @@ export default async function handler(
                     }
                 }
 
+                const effectiveSupplierId = typeof поставщик_id === 'undefined'
+                    ? Number(existingPurchaseResult.rows[0]?.поставщик_id) || 0
+                    : Number(поставщик_id) || 0;
+                const positionsForCoverage = typeof позиции !== 'undefined'
+                    ? позиции
+                    : (await txQuery(
+                        'SELECT "товар_id", "количество", "цена" FROM "Позиции_закупки" WHERE "закупка_id" = $1 ORDER BY id',
+                        [id]
+                    )).rows as Array<{ товар_id: number; количество: number; цена: number }>;
+                const assortmentCoverage = await ensureSupplierAssortmentCoverage(effectiveSupplierId, positionsForCoverage, txQuery);
+                const normalizedIncomingArrivalDate = дата_поступления || null;
+                const nextArrivalDate = normalizedIncomingArrivalDate
+                    || existingPurchaseResult.rows[0]?.дата_поступления
+                    || assortmentCoverage.suggestedArrivalDate
+                    || null;
+
                 const shouldRecalculateTotal = (
                     typeof позиции !== 'undefined'
                     || typeof useDelivery !== 'undefined'
@@ -625,9 +703,14 @@ export default async function handler(
                     paramCount++;
                 }
 
-                if (дата_поступления) {
+                const shouldUpdateArrivalDate = Boolean(
+                    normalizedIncomingArrivalDate
+                    || (!existingPurchaseResult.rows[0]?.дата_поступления && assortmentCoverage.suggestedArrivalDate)
+                );
+
+                if (shouldUpdateArrivalDate) {
                     updateFields.push(`"дата_поступления" = $${paramCount}`);
-                    values.push(дата_поступления);
+                    values.push(nextArrivalDate);
                     paramCount++;
                 }
 
@@ -734,8 +817,10 @@ export default async function handler(
             }
         } catch (error) {
             console.error('Error updating purchase:', error);
-            res.status(500).json({
-                error: 'Ошибка обновления закупки: ' + (error instanceof Error ? error.message : 'Неизвестная ошибка')
+            const message = error instanceof Error ? error.message : 'Неизвестная ошибка';
+            const statusCode = message.startsWith('У выбранного поставщика нет в ассортименте') ? 400 : 500;
+            res.status(statusCode).json({
+                error: `Ошибка обновления закупки: ${message}`
             });
         }
     } else if (req.method === 'DELETE') {

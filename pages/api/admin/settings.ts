@@ -4,9 +4,13 @@ import {
     getAutoCalculateShipmentDeliveryCost,
     getDefaultOrderExecutionMode,
     getDefaultVatRateId,
+    getUseSupplierAssortment,
+    getUseSupplierLeadTime,
     saveAutoCalculateShipmentDeliveryCost,
     saveDefaultOrderExecutionMode,
     saveDefaultVatRateId,
+    saveUseSupplierAssortment,
+    saveUseSupplierLeadTime,
 } from '../../../lib/appSettings';
 import { normalizeOrderExecutionMode } from '../../../lib/orderModes';
 import { isValidVatRateId, normalizeVatRateId } from '../../../lib/vat';
@@ -16,6 +20,8 @@ type SettingsPayload =
         defaultVatRateId: number;
         defaultOrderExecutionMode: 'warehouse' | 'direct';
         autoCalculateShipmentDeliveryCost: boolean;
+        useSupplierAssortment: boolean;
+        useSupplierLeadTime: boolean;
       }
     | { error: string };
 
@@ -25,16 +31,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
 
     if (req.method === 'GET') {
         try {
-            const [defaultVatRateId, defaultOrderExecutionMode, autoCalculateShipmentDeliveryCost] = await Promise.all([
+            const [
+                defaultVatRateId,
+                defaultOrderExecutionMode,
+                autoCalculateShipmentDeliveryCost,
+                useSupplierAssortment,
+                useSupplierLeadTime,
+            ] = await Promise.all([
                 getDefaultVatRateId(),
                 getDefaultOrderExecutionMode(),
                 getAutoCalculateShipmentDeliveryCost(),
+                getUseSupplierAssortment(),
+                getUseSupplierLeadTime(),
             ]);
 
             res.status(200).json({
                 defaultVatRateId,
                 defaultOrderExecutionMode,
                 autoCalculateShipmentDeliveryCost,
+                useSupplierAssortment,
+                useSupplierLeadTime,
             });
         } catch (error) {
             res.status(500).json({
@@ -49,6 +65,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             const defaultVatRateId = normalizeVatRateId(req.body?.defaultVatRateId);
             const defaultOrderExecutionMode = normalizeOrderExecutionMode(req.body?.defaultOrderExecutionMode);
             const autoCalculateShipmentDeliveryCost = Boolean(req.body?.autoCalculateShipmentDeliveryCost);
+            const useSupplierAssortment = Boolean(req.body?.useSupplierAssortment);
+            const useSupplierLeadTime = Boolean(req.body?.useSupplierLeadTime) && useSupplierAssortment;
 
             if (!isValidVatRateId(defaultVatRateId)) {
                 res.status(400).json({ error: 'Некорректная ставка НДС по умолчанию' });
@@ -59,12 +77,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
                 saveDefaultVatRateId(defaultVatRateId),
                 saveDefaultOrderExecutionMode(defaultOrderExecutionMode),
                 saveAutoCalculateShipmentDeliveryCost(autoCalculateShipmentDeliveryCost),
+                saveUseSupplierAssortment(useSupplierAssortment),
+                saveUseSupplierLeadTime(useSupplierLeadTime),
             ]);
 
             res.status(200).json({
                 defaultVatRateId,
                 defaultOrderExecutionMode,
                 autoCalculateShipmentDeliveryCost,
+                useSupplierAssortment,
+                useSupplierLeadTime,
             });
         } catch (error) {
             res.status(500).json({
