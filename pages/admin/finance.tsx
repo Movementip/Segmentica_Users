@@ -162,7 +162,6 @@ function AdminFinancePage(): JSX.Element {
         comment: '',
     });
     const [paymentError, setPaymentError] = useState<string | null>(null);
-    const [totals, setTotals] = useState<FinancePayload['totals']>({ activeEmployees: 0, totalPaid: 0, paymentCount: 0 });
     const previewFrameRef = useRef<HTMLIFrameElement | null>(null);
 
     const canViewFinance = Boolean(user?.permissions?.includes('admin.finance'));
@@ -182,7 +181,6 @@ function AdminFinancePage(): JSX.Element {
             setRecentPayments(payload.recentPayments || []);
             setPaymentTableAvailable(Boolean(payload.paymentTableAvailable));
             setSettings(payload.settings);
-            setTotals(payload.totals);
             setRateDrafts(
                 Object.fromEntries((payload.employees || []).map((employee) => [employee.id, employee.rate == null ? '' : String(employee.rate)]))
             );
@@ -463,21 +461,6 @@ function AdminFinancePage(): JSX.Element {
                     </Button>
                 </div>
             </div>
-
-            <Grid columns={{ initial: '1', sm: '2', lg: '3' }} gap="4" className={styles.metricsGrid}>
-                <Card className={styles.metricCard}>
-                    <Text size="2" color="gray">Активных сотрудников</Text>
-                    <Text as="div" size="7" weight="bold">{totals.activeEmployees}</Text>
-                </Card>
-                <Card className={styles.metricCard}>
-                    <Text size="2" color="gray">Выплачено за период</Text>
-                    <Text as="div" size="7" weight="bold">{formatCurrency(totals.totalPaid)}</Text>
-                </Card>
-                <Card className={styles.metricCard}>
-                    <Text size="2" color="gray">Всего выплат за период</Text>
-                    <Text as="div" size="7" weight="bold">{totals.paymentCount}</Text>
-                </Card>
-            </Grid>
 
             <Card className={styles.scheduleCard}>
                 <div className={styles.sectionTitleRow}>

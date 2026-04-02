@@ -81,12 +81,13 @@ function SupplierDetailPage(): JSX.Element {
     const canView = Boolean(user?.permissions?.includes('suppliers.view'));
     const canEdit = Boolean(user?.permissions?.includes('suppliers.edit'));
     const canDelete = Boolean(user?.permissions?.includes('suppliers.delete'));
-    const canAddProduct = Boolean(user?.permissions?.includes('suppliers.assortment.add_product'));
+    const canAssortmentManage = canEdit || Boolean(user?.permissions?.includes('suppliers.assortment.manage'));
+    const canAddProduct = canAssortmentManage || Boolean(user?.permissions?.includes('suppliers.assortment.add_product'));
     const canCreatePurchase = Boolean(user?.permissions?.includes('purchases.create'));
     const canCreatePurchaseFromSupplier = Boolean(user?.permissions?.includes('suppliers.purchases.create'));
     const canShowCreatePurchase = canCreatePurchase && canCreatePurchaseFromSupplier;
     const canAssortmentView = Boolean(user?.permissions?.includes('suppliers.assortment.view'));
-    const canManageAssortment = canEdit;
+    const canManageAssortment = canAssortmentManage;
     const canPurchasesHistoryView = Boolean(user?.permissions?.includes('suppliers.purchases_history.view'));
     const canOrdersView = Boolean(user?.permissions?.includes('orders.view'));
     const canPurchasesView = Boolean(user?.permissions?.includes('purchases.view'));

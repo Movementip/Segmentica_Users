@@ -33,6 +33,39 @@ export async function syncOrderPositionsFromLinkedPurchases(db: DbLike, orderId:
         [orderId]
     );
     const executionMode = normalizeOrderExecutionMode(orderModeResult.rows[0]?.режим_исполнения);
+
+    if (executionMode !== 'direct') {
+        const finalPositionsResult = await runQuery(
+            db,
+            `
+                SELECT
+                    COALESCE("количество", 0)::numeric AS quantity,
+                    COALESCE("цена", 0)::numeric AS price,
+                    COALESCE("ндс_id", $2)::integer AS vat_id
+                FROM "Позиции_заявки"
+                WHERE "заявка_id" = $1
+            `,
+            [orderId, DEFAULT_VAT_RATE_ID]
+        );
+
+        const finalPositions = finalPositionsResult.rows.map((row) => ({
+            количество: Number(row.quantity) || 0,
+            цена: Number(row.price) || 0,
+            ндс_id: Number(row.vat_id) || DEFAULT_VAT_RATE_ID,
+        }));
+
+        await runQuery(
+            db,
+            `
+                UPDATE "Заявки"
+                SET "общая_сумма" = $1
+                WHERE id = $2
+            `,
+            [calculateOrderTotal(finalPositions), orderId]
+        );
+        return;
+    }
+
     const linkedPurchaseSupplyMode = 'purchase';
 
     const aggregatedPurchasePositions = await runQuery(
@@ -111,6 +144,8 @@ export async function syncOrderPositionsFromLinkedPurchases(db: DbLike, orderId:
     for (const existing of existingPositionsResult.rows) {
         const productId = Number(existing.товар_id);
         const supplyMode = String(existing.supply_mode || '').trim().toLowerCase() || 'purchase';
+        const isDirectPurchaseDriven = executionMode === 'direct'
+            && (supplyMode === '' || supplyMode === 'auto' || supplyMode === 'purchase');
         const canPromoteLegacyAutoPosition = executionMode === 'warehouse'
             && (supplyMode === '' || supplyMode === 'auto')
             && aggregatedProductIds.has(productId)
@@ -118,6 +153,13 @@ export async function syncOrderPositionsFromLinkedPurchases(db: DbLike, orderId:
         const isPurchaseDriven = executionMode === 'direct'
             ? (supplyMode === 'purchase' || supplyMode === 'auto')
             : (supplyMode === 'purchase' || canPromoteLegacyAutoPosition);
+
+        // For direct orders, the order position quantity is the customer's requested demand.
+        // Linked purchases only cover that demand and must not erase or shrink it, otherwise
+        // the workflow loses the ability to recreate purchases and build follow-up purchases.
+        if (isDirectPurchaseDriven) {
+            continue;
+        }
 
         if (isPurchaseDriven && !aggregatedProductIds.has(productId)) {
             await runQuery(
@@ -154,12 +196,32 @@ export async function syncOrderPositionsFromLinkedPurchases(db: DbLike, orderId:
         const existingPrice = Number(existing.price) || 0;
         const existingVatId = existing.vat_id == null ? null : Number(existing.vat_id);
         const existingSupplyMode = String(existing.supply_mode || '').trim().toLowerCase();
+        const isDirectPurchaseDriven = executionMode === 'direct'
+            && (existingSupplyMode === '' || existingSupplyMode === 'auto' || existingSupplyMode === 'purchase');
         const canPromoteLegacyAutoPosition = executionMode === 'warehouse'
             && (existingSupplyMode === '' || existingSupplyMode === 'auto')
             && !protectedLegacyAutoProductIds.has(productId);
         const shouldTreatAsPurchaseDriven = executionMode === 'direct'
             ? (existingSupplyMode === '' || existingSupplyMode === 'auto' || existingSupplyMode === 'purchase')
             : (existingSupplyMode === 'purchase' || canPromoteLegacyAutoPosition);
+
+        if (isDirectPurchaseDriven) {
+            await runQuery(
+                db,
+                `
+                    UPDATE "Позиции_заявки"
+                    SET "цена" = CASE WHEN COALESCE("цена", 0) <= 0 THEN $1 ELSE "цена" END,
+                        "ндс_id" = COALESCE("ндс_id", $2),
+                        "способ_обеспечения" = CASE
+                            WHEN COALESCE("способ_обеспечения", '') IN ('', 'auto') THEN 'purchase'
+                            ELSE "способ_обеспечения"
+                        END
+                    WHERE id = $3
+                `,
+                [salePrice, vatId, existing.id]
+            );
+            continue;
+        }
 
         if (existingPrice <= 0 || existingVatId == null) {
             await runQuery(

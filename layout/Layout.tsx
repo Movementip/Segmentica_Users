@@ -32,6 +32,7 @@ const pageTitles: Record<string, string> = {
     '/settings': 'Настройки',
     '/admin': 'Администрирование',
     '/admin/audit': 'Аудит-лог',
+    '/admin/data-exchange': 'Обмен данными',
     '/admin/finance': 'Финансы',
     '/admin/users': 'Пользователи',
     '/admin/roles': 'Роли',

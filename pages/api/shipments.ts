@@ -159,7 +159,7 @@ export default async function handler(
                     transports."название" as транспорт_название
                 FROM "Отгрузки" shipments
                 LEFT JOIN "Транспортные_компании" transports ON shipments."транспорт_id" = transports.id
-                ORDER BY COALESCE(shipments.branch_no, 1) DESC, shipments."дата_отгрузки" DESC
+                ORDER BY shipments.id DESC
             `);
 
             res.status(200).json(result.rows);

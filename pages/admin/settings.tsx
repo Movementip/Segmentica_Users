@@ -32,7 +32,10 @@ function AdminSettingsPage(): JSX.Element {
         useSupplierLeadTime: false,
     });
 
-    const canManageSettings = Boolean(user?.permissions?.includes('admin.settings'));
+    const canManageCoreSettings = Boolean(user?.permissions?.includes('admin.settings'));
+    const canManageSupplierAssortmentSetting = canManageCoreSettings || Boolean(user?.permissions?.includes('admin.settings.supplier_assortment.manage'));
+    const canManageSupplierLeadTimeSetting = canManageCoreSettings || Boolean(user?.permissions?.includes('admin.settings.supplier_lead_time.manage'));
+    const canManageSettings = canManageCoreSettings || canManageSupplierAssortmentSetting || canManageSupplierLeadTimeSetting;
 
     const loadSettings = useCallback(async () => {
         try {
@@ -151,6 +154,7 @@ function AdminSettingsPage(): JSX.Element {
                             <Select.Root
                                 value={String(settings.defaultVatRateId)}
                                 onValueChange={(value) => setSettings((prev) => ({ ...prev, defaultVatRateId: Number(value) || prev.defaultVatRateId }))}
+                                disabled={!canManageCoreSettings}
                             >
                                 <Select.Trigger className={styles.selectTrigger} />
                                 <Select.Content position="popper" variant="solid" color="gray" highContrast>
@@ -174,6 +178,7 @@ function AdminSettingsPage(): JSX.Element {
                                     ...prev,
                                     defaultOrderExecutionMode: value === 'direct' ? 'direct' : 'warehouse',
                                 }))}
+                                disabled={!canManageCoreSettings}
                             >
                                 <Select.Trigger className={styles.selectTrigger} />
                                 <Select.Content position="popper" variant="solid" color="gray" highContrast>
@@ -193,6 +198,7 @@ function AdminSettingsPage(): JSX.Element {
                                     type="checkbox"
                                     className={styles.checkboxInput}
                                     checked={settings.autoCalculateShipmentDeliveryCost}
+                                    disabled={!canManageCoreSettings}
                                     onChange={(event) => setSettings((prev) => ({
                                         ...prev,
                                         autoCalculateShipmentDeliveryCost: event.target.checked,
@@ -212,6 +218,7 @@ function AdminSettingsPage(): JSX.Element {
                                     type="checkbox"
                                     className={styles.checkboxInput}
                                     checked={settings.useSupplierAssortment}
+                                    disabled={!canManageSupplierAssortmentSetting}
                                     onChange={(event) => setSettings((prev) => ({
                                         ...prev,
                                         useSupplierAssortment: event.target.checked,
@@ -232,7 +239,7 @@ function AdminSettingsPage(): JSX.Element {
                                     type="checkbox"
                                     className={styles.checkboxInput}
                                     checked={settings.useSupplierLeadTime}
-                                    disabled={!settings.useSupplierAssortment}
+                                    disabled={!settings.useSupplierAssortment || !canManageSupplierLeadTimeSetting}
                                     onChange={(event) => setSettings((prev) => ({
                                         ...prev,
                                         useSupplierLeadTime: event.target.checked && prev.useSupplierAssortment,
@@ -256,6 +263,7 @@ function AdminSettingsPage(): JSX.Element {
                             highContrast
                             className={styles.surfaceButton}
                             onClick={handleRebuildDerivedState}
+                            disabled={!canManageCoreSettings}
                             loading={rebuildingDerivedState}
                         >
                             Пересобрать данные
@@ -263,7 +271,15 @@ function AdminSettingsPage(): JSX.Element {
                         <Button variant="surface" color="gray" highContrast className={styles.surfaceButton} onClick={() => void loadSettings()}>
                             Обновить
                         </Button>
-                        <Button variant="solid" color="gray" highContrast className={styles.solidButton} onClick={handleSave} loading={saving}>
+                        <Button
+                            variant="solid"
+                            color="gray"
+                            highContrast
+                            className={styles.solidButton}
+                            onClick={handleSave}
+                            loading={saving}
+                            disabled={!canManageSettings}
+                        >
                             Сохранить
                         </Button>
                     </div>

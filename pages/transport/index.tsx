@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { Layout } from '../../layout/Layout';
 import { CreateTransportModalNew } from '../../components/CreateTransportModalNew';
 import { EditTransportModalNew } from '../../components/EditTransportModalNew';
+import { ReferenceDataActions } from '../../components/ReferenceDataActions';
 import { NoAccessPage } from '../../components/NoAccessPage';
 import styles from './Transport.module.css';
 import deleteConfirmStyles from '../../components/DeleteConfirmation.module.css';
@@ -833,6 +834,11 @@ export default function Transport() {
                             />
                             Обновить
                         </Button>
+                        <ReferenceDataActions
+                            catalogKey="transport"
+                            permissions={user?.permissions}
+                            onImported={fetchData}
+                        />
 
                         {canCreate ? (
                             <Button

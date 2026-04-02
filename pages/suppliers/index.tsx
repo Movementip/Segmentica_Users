@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { withLayout } from '../../layout/Layout';
 import { CreateSupplierModalV2 } from '../../components/CreateSupplierModalV2';
 import { EditSupplierModal, type EditSupplierModalSupplier } from '../../components/EditSupplierModal';
+import { ReferenceDataActions } from '../../components/ReferenceDataActions';
 import styles from './Suppliers.module.css';
 import deleteConfirmStyles from '../../components/DeleteConfirmation.module.css';
 import { Badge, Box, Button, Dialog, DropdownMenu, Flex, Select, Table, Tabs, Text, TextArea, TextField } from '@radix-ui/themes';
@@ -535,6 +536,11 @@ function SuppliersPage(): JSX.Element {
                                 />
                                 Обновить
                             </Button>
+                            <ReferenceDataActions
+                                catalogKey="suppliers"
+                                permissions={user?.permissions}
+                                onImported={fetchSuppliers}
+                            />
 
                             {canCreate ? (
                                 <Button

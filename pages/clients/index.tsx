@@ -4,6 +4,7 @@ import { withLayout } from '../../layout';
 import { CreateClientModal } from '../../components/CreateClientModal';
 import EditClientModal from '../../components/EditClientModal';
 import ClientOrdersHistoryModal from '../../components/ClientOrdersHistoryModal';
+import { ReferenceDataActions } from '../../components/ReferenceDataActions';
 import styles from './Clients.module.css';
 import deleteConfirmStyles from '../../components/DeleteConfirmation.module.css';
 import { Badge, Box, Button, Card, Dialog, DropdownMenu, Flex, Heading, Select, Table, Tabs, Text, TextArea, TextField } from '@radix-ui/themes';
@@ -552,6 +553,11 @@ function ClientsPage(): JSX.Element {
                             />
                             Обновить
                         </Button>
+                        <ReferenceDataActions
+                            catalogKey="clients"
+                            permissions={user?.permissions}
+                            onImported={fetchClients}
+                        />
 
                         {canCreate ? (
                             <Button

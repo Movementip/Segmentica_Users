@@ -423,7 +423,8 @@ function OrdersPage(): JSX.Element {
             }
 
             let directRemainingByProductId = new Map<number, number>();
-            if (shouldUseDirectPositions) {
+            let warehouseRemainingByProductId = new Map<number, number>();
+            {
                 const workflowResponse = await fetch(`/api/orders/${order.id}/workflow`);
                 const workflowData = await workflowResponse.json().catch(() => ({}));
 
@@ -435,6 +436,15 @@ function OrdersPage(): JSX.Element {
                     ((workflowData as any)?.positions || []).map((item: any) => [
                         Number(item?.товар_id) || 0,
                         Number(item?.осталось_закупить) || 0,
+                    ])
+                );
+                warehouseRemainingByProductId = new Map<number, number>(
+                    ((workflowData as any)?.positions || []).map((item: any) => [
+                        Number(item?.товар_id) || 0,
+                        Math.max(
+                            0,
+                            (Number(item?.активная_недостача) || 0) - (Number(item?.закуплено_количество) || 0)
+                        ),
                     ])
                 );
             }
@@ -455,7 +465,7 @@ function OrdersPage(): JSX.Element {
                         const position = (orderData as any)?.позиции?.find((row: any) => Number(row.товар_id) === Number(item.товар_id));
                         return {
                             товар_id: Number(item.товар_id),
-                            количество: Number(item.недостающее_количество),
+                            количество: warehouseRemainingByProductId.get(Number(item.товар_id) || 0) || 0,
                             ндс_id: position?.ндс_id ?? undefined,
                             цена: Number(position?.цена) || 0,
                         };

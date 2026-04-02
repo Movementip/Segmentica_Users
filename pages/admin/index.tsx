@@ -43,6 +43,9 @@ function AdminHome(): JSX.Element {
                         <Button asChild variant="surface" color="gray" highContrast>
                             <Link href="/admin/settings">Настройки системы</Link>
                         </Button>
+                        <Button asChild variant="surface" color="gray" highContrast>
+                            <Link href="/admin/data-exchange">Обмен данными</Link>
+                        </Button>
                     </Flex>
                 </div>
             </div>

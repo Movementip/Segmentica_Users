@@ -631,6 +631,14 @@ export default async function handler(
                     closeMissingProducts: true,
                 });
 
+                await client.query('DELETE FROM public.shipment_positions WHERE shipment_id IN (SELECT id FROM "Отгрузки" WHERE "заявка_id" = $1)', [id]);
+                await client.query('DELETE FROM "Отгрузки" WHERE "заявка_id" = $1', [id]);
+                await client.query('DELETE FROM public.order_assembly_batch_positions WHERE batch_id IN (SELECT id FROM public.order_assembly_batches WHERE order_id = $1)', [id]);
+                await client.query('DELETE FROM public.order_assembly_batches WHERE order_id = $1', [id]);
+                await client.query('DELETE FROM "Недостающие_товары" WHERE "заявка_id" = $1', [id]);
+                await client.query('UPDATE "Движения_склада" SET "заявка_id" = NULL WHERE "заявка_id" = $1', [id]);
+                await client.query('UPDATE "Финансы_компании" SET "заявка_id" = NULL WHERE "заявка_id" = $1', [id]);
+                await client.query('UPDATE "Выплаты" SET "заявка_id" = NULL WHERE "заявка_id" = $1', [id]);
                 await client.query('DELETE FROM "Позиции_заявки" WHERE "заявка_id" = $1', [id]);
 
                 const result = await client.query('DELETE FROM "Заявки" WHERE id = $1 RETURNING *', [id]);
@@ -653,7 +661,9 @@ export default async function handler(
             console.error('Error deleting order:', error);
 
             if (error instanceof Error && (error.message.includes('violates foreign key constraint') || error.message.includes('constraint'))) {
-                return res.status(400).json({ error: 'Невозможно удалить заявку: существуют связанные закупки или другие данные. Сначала удалите связанные записи.' });
+                return res.status(400).json({
+                    error: `Невозможно удалить заявку: существуют связанные записи. Детали: ${error.message}`
+                });
             }
             res.status(500).json({ error: 'Failed to delete order' });
         }

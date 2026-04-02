@@ -296,6 +296,15 @@ function OrderDetailPage(): JSX.Element {
                 Number(position.осталось_закупить) || 0,
             ])
         );
+        const remainingWarehousePurchaseByProductId = new Map<number, number>(
+            (workflow?.positions || []).map((position) => [
+                Number(position.товар_id) || 0,
+                Math.max(
+                    0,
+                    (Number(position.активная_недостача) || 0) - (Number(position.закуплено_количество) || 0)
+                ),
+            ])
+        );
         const positions = isDirectOrder
             ? (order.позиции || [])
                 .filter((position) => position.способ_обеспечения === 'purchase')
@@ -310,7 +319,7 @@ function OrderDetailPage(): JSX.Element {
                 const orderPosition = order.позиции?.find((position) => position.товар_id === missing.товар_id);
                 return {
                     товар_id: Number(missing.товар_id) || 0,
-                    количество: Number(missing.недостающее_количество) || 0,
+                    количество: remainingWarehousePurchaseByProductId.get(Number(missing.товар_id) || 0) || 0,
                     ндс_id: orderPosition?.ндс_id == null ? undefined : Number(orderPosition.ндс_id),
                     цена: Number(orderPosition?.цена) || 0,
                 };

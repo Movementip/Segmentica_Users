@@ -5,6 +5,7 @@ import { withLayout } from '../../layout/Layout';
 import { CreateProductModal } from '../../components/CreateProductModal';
 import { EditProductModal } from '../../components/EditProductModal';
 import { ProductPriceHistoryModal } from '../../components/ProductPriceHistoryModal';
+import { ReferenceDataActions } from '../../components/ReferenceDataActions';
 import deleteConfirmationStyles from '../../components/DeleteConfirmation.module.css';
 import styles from './Products.module.css';
 import * as XLSX from 'xlsx';
@@ -523,6 +524,11 @@ function ProductsPage(): JSX.Element {
                             />{' '}
                             Обновить
                         </Button>
+                        <ReferenceDataActions
+                            catalogKey="products"
+                            permissions={user?.permissions}
+                            onImported={fetchProducts}
+                        />
 
                         {canCreate ? (
                             <Button

@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { requirePermission } from '../../../lib/auth';
+import { hasPermission, requireAuth } from '../../../lib/auth';
 import {
     getAutoCalculateShipmentDeliveryCost,
     getDefaultOrderExecutionMode,
@@ -26,8 +26,18 @@ type SettingsPayload =
     | { error: string };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse<SettingsPayload>) {
-    const actor = await requirePermission(req, res, 'admin.settings');
+    const actor = await requireAuth(req, res);
     if (!actor) return;
+
+    const canManageCoreSettings = hasPermission(actor, 'admin.settings');
+    const canManageSupplierAssortmentSetting = canManageCoreSettings || hasPermission(actor, 'admin.settings.supplier_assortment.manage');
+    const canManageSupplierLeadTimeSetting = canManageCoreSettings || hasPermission(actor, 'admin.settings.supplier_lead_time.manage');
+    const canViewSettings = canManageCoreSettings || canManageSupplierAssortmentSetting || canManageSupplierLeadTimeSetting;
+
+    if (!canViewSettings) {
+        res.status(403).json({ error: 'Forbidden' });
+        return;
+    }
 
     if (req.method === 'GET') {
         try {
@@ -62,11 +72,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
 
     if (req.method === 'PUT') {
         try {
-            const defaultVatRateId = normalizeVatRateId(req.body?.defaultVatRateId);
-            const defaultOrderExecutionMode = normalizeOrderExecutionMode(req.body?.defaultOrderExecutionMode);
-            const autoCalculateShipmentDeliveryCost = Boolean(req.body?.autoCalculateShipmentDeliveryCost);
-            const useSupplierAssortment = Boolean(req.body?.useSupplierAssortment);
-            const useSupplierLeadTime = Boolean(req.body?.useSupplierLeadTime) && useSupplierAssortment;
+            const [
+                currentDefaultVatRateId,
+                currentDefaultOrderExecutionMode,
+                currentAutoCalculateShipmentDeliveryCost,
+                currentUseSupplierAssortment,
+                currentUseSupplierLeadTime,
+            ] = await Promise.all([
+                getDefaultVatRateId(),
+                getDefaultOrderExecutionMode(),
+                getAutoCalculateShipmentDeliveryCost(),
+                getUseSupplierAssortment(),
+                getUseSupplierLeadTime(),
+            ]);
+
+            const defaultVatRateId = canManageCoreSettings
+                ? normalizeVatRateId(req.body?.defaultVatRateId)
+                : currentDefaultVatRateId;
+            const defaultOrderExecutionMode = canManageCoreSettings
+                ? normalizeOrderExecutionMode(req.body?.defaultOrderExecutionMode)
+                : currentDefaultOrderExecutionMode;
+            const autoCalculateShipmentDeliveryCost = canManageCoreSettings
+                ? Boolean(req.body?.autoCalculateShipmentDeliveryCost)
+                : currentAutoCalculateShipmentDeliveryCost;
+            const requestedUseSupplierAssortment = Boolean(req.body?.useSupplierAssortment);
+            const useSupplierAssortment = canManageSupplierAssortmentSetting
+                ? requestedUseSupplierAssortment
+                : currentUseSupplierAssortment;
+            const requestedUseSupplierLeadTime = Boolean(req.body?.useSupplierLeadTime);
+            const useSupplierLeadTime = canManageSupplierLeadTimeSetting
+                ? (requestedUseSupplierLeadTime && useSupplierAssortment)
+                : (useSupplierAssortment ? currentUseSupplierLeadTime : false);
 
             if (!isValidVatRateId(defaultVatRateId)) {
                 res.status(400).json({ error: 'Некорректная ставка НДС по умолчанию' });

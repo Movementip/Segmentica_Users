@@ -539,6 +539,13 @@ export async function getOrderWorkflowSummary(orderId: number): Promise<OrderWor
     const directUncoveredPurchasePositions = directPurchasePositions.filter(
         (position) => Number(position.осталось_закупить || 0) > 0
     );
+    const warehouseUncoveredPurchasePositions = executionMode === 'warehouse'
+        ? positions.filter((position) => {
+            const missingQty = Number(position.активная_недостача || 0);
+            const purchasedQty = Number(position.закуплено_количество || 0);
+            return Math.max(0, missingQty - purchasedQty) > 0;
+        })
+        : [];
 
     const isAssembled = positions.length > 0
         && positions.every((position) => position.осталось_собрать <= 0);
@@ -551,25 +558,12 @@ export async function getOrderWorkflowSummary(orderId: number): Promise<OrderWor
             executionMode === 'direct'
             || positions.every((position) => Number(position.склад_количество) >= Number(position.осталось_собрать))
         );
-    const canAssemble = readyForAssembly
-        && !['отменена', 'выполнена'].includes(normalizeStatus(orderResult.rows[0].статус));
 
     const remainingShipmentUnits = positions.reduce((sum, position) => sum + Number(position.осталось_отгрузить || 0), 0);
     const remainingAssemblyUnits = positions.reduce((sum, position) => sum + Number(position.осталось_собрать || 0), 0);
     const assembledUnits = positions.reduce((sum, position) => sum + Number(position.собранное_количество || 0), 0);
     const shippedUnits = positions.reduce((sum, position) => sum + Number(position.отгруженное_количество || 0), 0);
     const deliveredUnits = positions.reduce((sum, position) => sum + Number(position.доставленное_количество || 0), 0);
-
-    const readyForShipment = remainingShipmentUnits > 0;
-    const canCreateShipment = readyForShipment
-        && isAssembled
-        && !['отменена', 'выполнена'].includes(normalizeStatus(orderResult.rows[0].статус));
-    const canCreatePurchase = executionMode === 'direct'
-        ? directUncoveredPurchasePositions.length > 0
-            && activePurchases.length === 0
-            && !['отменена', 'выполнена'].includes(normalizeStatus(orderResult.rows[0].статус))
-        : activeMissingProducts.length > 0
-            && !['отменена', 'выполнена'].includes(normalizeStatus(orderResult.rows[0].статус));
     const directCanComplete = positions.length > 0
         && remainingShipmentUnits <= 0
         && activePurchases.length === 0
@@ -600,6 +594,21 @@ export async function getOrderWorkflowSummary(orderId: number): Promise<OrderWor
     };
 
     const derivedStatus = deriveOrderWorkflowStatus(summaryBase);
+    const currentStored = normalizeStatus(summaryBase.currentStatus);
+    const currentActionStatus = normalizeStatus(
+        currentStored === 'отменена'
+            ? summaryBase.currentStatus
+            : mapWorkflowStatusToOrderStatus(derivedStatus) || summaryBase.currentStatus
+    );
+    const isWorkflowLocked = ['отменена', 'выполнена'].includes(currentActionStatus);
+    const canAssemble = readyForAssembly && !isWorkflowLocked;
+    const readyForShipment = remainingShipmentUnits > 0;
+    const canCreateShipment = readyForShipment && isAssembled && !isWorkflowLocked;
+    const canCreatePurchase = executionMode === 'direct'
+        ? directUncoveredPurchasePositions.length > 0
+            && !isWorkflowLocked
+        : warehouseUncoveredPurchasePositions.length > 0
+            && !isWorkflowLocked;
 
     return {
         orderId,
@@ -651,7 +660,6 @@ export async function syncOrderWorkflowStatus(orderId: number): Promise<OrderWor
     const nextStored = normalizeStatus(displayStatus);
     const shouldSyncStoredStatus = (
         currentStored !== 'отменена'
-        && currentStored !== 'выполнена'
         && nextStored
         && nextStored !== currentStored
     );
@@ -680,7 +688,7 @@ export function getWorkflowDisplayStatus(
     const currentStored = normalizeStatus(summary.currentStatus);
     const nextStored = mapWorkflowStatusToOrderStatus(summary.derivedStatus);
 
-    if (currentStored === 'отменена' || currentStored === 'выполнена') {
+    if (currentStored === 'отменена') {
         return summary.currentStatus;
     }
 

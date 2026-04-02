@@ -53,6 +53,19 @@ export default async function handler(
 
         const hasConstraint = constraintCheck.rows.length > 0;
         const hasDefault = defaultCheck.rows[0]?.column_default === "'в обработке'::character varying";
+        const statusConstraintCheck = await query(`
+      SELECT pg_get_constraintdef(c.oid) AS definition
+      FROM pg_constraint c
+      INNER JOIN pg_class t ON t.oid = c.conrelid
+      INNER JOIN pg_namespace n ON n.oid = t.relnamespace
+      WHERE n.nspname = 'public'
+        AND t.relname = 'Недостающие_товары'
+        AND c.conname = 'Недостающие_товары_статус_check'
+      LIMIT 1
+    `);
+
+        const statusConstraintDefinition = String(statusConstraintCheck.rows[0]?.definition || '');
+        const hasCanceledStatus = statusConstraintDefinition.includes('отменено');
 
         // Add unique constraint if it doesn't exist
         if (!hasConstraint) {
@@ -78,6 +91,35 @@ export default async function handler(
             }
         }
 
+        if (!hasCanceledStatus) {
+            try {
+                await query(`
+          ALTER TABLE "Недостающие_товары"
+          DROP CONSTRAINT IF EXISTS "Недостающие_товары_статус_check"
+        `);
+
+                await query(`
+          ALTER TABLE "Недостающие_товары"
+          ADD CONSTRAINT "Недостающие_товары_статус_check"
+          CHECK (
+            "статус" IS NULL
+            OR "статус"::text = ANY (
+              ARRAY[
+                'в обработке'::character varying,
+                'заказано'::character varying,
+                'в пути'::character varying,
+                'получено'::character varying,
+                'не требуется'::character varying,
+                'отменено'::character varying
+              ]::text[]
+            )
+          )
+        `);
+            } catch (error) {
+                console.log('Status constraint may already exist or another error occurred:', error);
+            }
+        }
+
         // Get table structure
         const columns = await query(`
       SELECT column_name, data_type, is_nullable, column_default
@@ -89,7 +131,8 @@ export default async function handler(
             message: 'Таблица Недостающие_товары найдена и обновлена при необходимости',
             columns: columns.rows,
             constraintAdded: !hasConstraint,
-            defaultAdded: !hasDefault
+            defaultAdded: !hasDefault,
+            statusConstraintUpdated: !hasCanceledStatus
         });
     } catch (error) {
         console.error('Database error:', error);

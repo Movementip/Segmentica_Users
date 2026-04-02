@@ -10,6 +10,7 @@ import {
 } from 'react-icons/fi';
 import { Box, Card, DropdownMenu, Flex, ScrollArea, Separator, Text, TextField } from '@radix-ui/themes';
 import { useAuth } from '../../context/AuthContext';
+import { canUseAdminDataExchangePage } from '../../lib/dataExchangeConfig';
 
 interface SearchResult {
     id: string;
@@ -56,6 +57,7 @@ export function Header(): JSX.Element {
     const canViewAdminSettings = can('admin.settings');
     const canViewAdminAudit = can('admin.audit');
     const canViewAdminRbac = can('admin.users') || can('admin.roles');
+    const canViewAdminDataExchange = canUseAdminDataExchangePage(user?.permissions);
     const canViewDocuments = can('documents.view');
 
     const fetchDbStatus = async () => {
@@ -670,7 +672,7 @@ export function Header(): JSX.Element {
                             </DropdownMenu.SubContent>
                         </DropdownMenu.Sub>
 
-                        {canViewDocuments || canViewAdminFinance || canViewScheduleBoard || canViewAdminSettings || canViewAdminRbac || canViewAdminAudit ? (
+                        {canViewDocuments || canViewAdminFinance || canViewScheduleBoard || canViewAdminSettings || canViewAdminRbac || canViewAdminAudit || canViewAdminDataExchange ? (
                             <>
                                 <DropdownMenu.Separator />
                                 {canViewDocuments ? (
@@ -711,6 +713,16 @@ export function Header(): JSX.Element {
                                         }}
                                     >
                                         Настройки системы
+                                    </DropdownMenu.Item>
+                                ) : null}
+                                {canViewAdminDataExchange ? (
+                                    <DropdownMenu.Item
+                                        onSelect={async (e) => {
+                                            e?.preventDefault?.();
+                                            await safePush('/admin/data-exchange');
+                                        }}
+                                    >
+                                        Обмен данными
                                     </DropdownMenu.Item>
                                 ) : null}
                                 {canViewAdminRbac ? (

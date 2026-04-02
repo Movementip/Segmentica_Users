@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { withLayout } from '../../layout/Layout';
 import { CreateManagerModalV2 } from '../../components/CreateManagerModalV2';
 import { EditManagerModalV2 } from '../../components/EditManagerModalV2';
+import { ReferenceDataActions } from '../../components/ReferenceDataActions';
 import styles from './Managers.module.css';
 import deleteConfirmationStyles from '../../components/DeleteConfirmation.module.css';
 import { Badge, Button, Card, Dialog, DropdownMenu, Flex, Select, Table, Text, TextField } from '@radix-ui/themes';
@@ -349,6 +350,11 @@ function ManagersPage(): JSX.Element {
                             />{' '}
                             Обновить
                         </Button>
+                        <ReferenceDataActions
+                            catalogKey="managers"
+                            permissions={user?.permissions}
+                            onImported={() => fetchManagers({ showPageLoader: false })}
+                        />
 
                         {canCreate ? (
                             <Button

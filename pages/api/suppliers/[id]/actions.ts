@@ -1,17 +1,23 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { query } from '../../../../lib/db';
-import { requirePermission } from '../../../../lib/auth';
+import { hasPermission, requireAuth } from '../../../../lib/auth';
 
 export default async function handler(
     req: NextApiRequest,
     res: NextApiResponse
 ) {
     const { id } = req.query; // supplier id
+    const actor = await requireAuth(req, res);
+    if (!actor) return;
+    const canManageSupplier = hasPermission(actor, 'suppliers.edit');
+    const canManageAssortment = canManageSupplier || hasPermission(actor, 'suppliers.assortment.manage');
+    const canAddAssortmentProduct = canManageAssortment || hasPermission(actor, 'suppliers.assortment.add_product');
 
     if (req.method === 'POST') {
         // Add product to supplier's assortment
-        const actor = await requirePermission(req, res, 'suppliers.edit');
-        if (!actor) return;
+        if (!canAddAssortmentProduct) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
         try {
             const { товар_id, цена, срок_поставки } = req.body;
             const normalizedProductId = Number(товар_id) || 0;
@@ -74,8 +80,9 @@ export default async function handler(
             });
         }
     } else if (req.method === 'PATCH') {
-        const actor = await requirePermission(req, res, 'suppliers.edit');
-        if (!actor) return;
+        if (!canManageAssortment) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
         try {
             const { товар_id, цена, срок_поставки } = req.body;
             const normalizedProductId = Number(товар_id) || 0;
@@ -112,8 +119,9 @@ export default async function handler(
         }
     } else if (req.method === 'DELETE') {
         // Remove product from supplier's assortment
-        const actor = await requirePermission(req, res, 'suppliers.edit');
-        if (!actor) return;
+        if (!canManageAssortment) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
         try {
             const { товар_id } = req.query;
 
@@ -144,8 +152,9 @@ export default async function handler(
         }
     } else if (req.method === 'PUT') {
         // Update supplier rating
-        const actor = await requirePermission(req, res, 'suppliers.edit');
-        if (!actor) return;
+        if (!canManageSupplier) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
         try {
             const { рейтинг } = req.body;
 

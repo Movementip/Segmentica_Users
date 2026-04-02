@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { withLayout } from '../../layout/Layout';
 import { CreateCategoryModal } from '../../components/CreateCategoryModal';
 import { EditCategoryModal } from '../../components/EditCategoryModal';
+import { ReferenceDataActions } from '../../components/ReferenceDataActions';
 import styles from './Categories.module.css';
 import deleteConfirmStyles from '../../components/DeleteConfirmation.module.css';
 import { Badge, Box, Button, Card, Dialog, Flex, Grid, IconButton, Separator, Text, TextField } from '@radix-ui/themes';
@@ -471,6 +472,11 @@ function CategoriesPage(): JSX.Element {
                         />
                         Обновить
                     </Button>
+                    <ReferenceDataActions
+                        catalogKey="categories"
+                        permissions={user?.permissions}
+                        onImported={fetchCategories}
+                    />
                     {canCreate ? (
                         <Button type="button" className={`${styles.button} ${styles.primaryButton}`} onClick={handleCreateCategory}>
                             <FiFolderPlus /> Добавить категорию
