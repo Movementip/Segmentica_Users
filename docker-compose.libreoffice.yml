@@ -1,0 +1,13 @@
+services:
+  libreoffice:
+    build:
+      context: .
+      dockerfile: services/document-renderer/Dockerfile
+    container_name: segmentica-libreoffice
+    ports:
+      - "3001:3000"
+    environment:
+      PORT: 3000
+      LIBREOFFICE_BIN: /usr/bin/soffice
+      TEMPLATES_DIR: /app/templates/forms
+    restart: unless-stopped

@@ -122,17 +122,24 @@ function formatPeriod(dateFrom: string | null | undefined, dateTo: string | null
 
 function buildStatementUrl(params: {
     employeeId: number;
-    sourceType: 'current' | 'history';
-    format: 'html' | 'excel';
+    employeeIds?: number[];
+    sourceType: 'current' | 'history' | 'current_batch';
+    format: 'html' | 'excel' | 'pdf';
     sourceKey?: string | null;
     paymentId?: string | null;
     disposition?: 'inline' | 'attachment';
 }): string {
     const search = new URLSearchParams();
-    search.set('employeeId', String(params.employeeId));
     search.set('sourceType', params.sourceType);
     search.set('format', params.format);
     search.set('disposition', params.disposition || 'attachment');
+    if (params.sourceType === 'current_batch') {
+        if (params.employeeIds?.length) {
+            search.set('employeeIds', params.employeeIds.join(','));
+        }
+    } else {
+        search.set('employeeId', String(params.employeeId));
+    }
     if (params.sourceKey) search.set('sourceKey', params.sourceKey);
     if (params.paymentId) search.set('paymentId', params.paymentId);
     return `/api/admin/finance/statement?${search.toString()}`;
@@ -154,6 +161,8 @@ function AdminFinancePage(): JSX.Element {
     const [paymentDialogEmployee, setPaymentDialogEmployee] = useState<FinanceEmployee | null>(null);
     const [statementEmployee, setStatementEmployee] = useState<FinanceEmployee | null>(null);
     const [statementPreview, setStatementPreview] = useState<StatementPreviewState | null>(null);
+    const [batchStatementOpen, setBatchStatementOpen] = useState(false);
+    const [batchStatementSelection, setBatchStatementSelection] = useState<number[]>([]);
     const [paymentForm, setPaymentForm] = useState({
         suggestionKey: 'manual',
         paymentType: 'зарплата',
@@ -206,6 +215,11 @@ function AdminFinancePage(): JSX.Element {
             String(employee.position || '').toLowerCase().includes(q)
         );
     }, [employees, search]);
+
+    const batchStatementCandidates = useMemo(
+        () => filteredEmployees.filter((employee) => employee.active && employee.suggestedPayments.length > 0),
+        [filteredEmployees]
+    );
 
     const getSuggestionByKey = (employee: FinanceEmployee | null, key: string): FinanceSuggestedPayment | null => {
         if (!employee) return null;
@@ -373,7 +387,7 @@ function AdminFinancePage(): JSX.Element {
                 employeeId: employee.id,
                 sourceType: 'current',
                 sourceKey: suggestion.key,
-                format: 'html',
+                format: 'pdf',
                 disposition: 'inline',
             }),
         });
@@ -386,13 +400,13 @@ function AdminFinancePage(): JSX.Element {
                 employeeId: employee.id,
                 sourceType: 'history',
                 paymentId: payment.id,
-                format: 'html',
+                format: 'pdf',
                 disposition: 'inline',
             }),
         });
     };
 
-    const downloadStatementForSuggestion = (employee: FinanceEmployee, suggestion: FinanceSuggestedPayment, format: 'excel') => {
+    const downloadStatementForSuggestion = (employee: FinanceEmployee, suggestion: FinanceSuggestedPayment, format: 'excel' | 'pdf') => {
         window.open(
             buildStatementUrl({
                 employeeId: employee.id,
@@ -406,7 +420,7 @@ function AdminFinancePage(): JSX.Element {
         );
     };
 
-    const downloadStatementForPayment = (employee: FinanceEmployee, payment: FinancePayment, format: 'excel') => {
+    const downloadStatementForPayment = (employee: FinanceEmployee, payment: FinancePayment, format: 'excel' | 'pdf') => {
         window.open(
             buildStatementUrl({
                 employeeId: employee.id,
@@ -423,6 +437,48 @@ function AdminFinancePage(): JSX.Element {
     const handlePrintStatementPreview = () => {
         previewFrameRef.current?.contentWindow?.focus();
         previewFrameRef.current?.contentWindow?.print();
+    };
+
+    const openBatchStatementDialog = () => {
+        setBatchStatementSelection(batchStatementCandidates.map((employee) => employee.id));
+        setBatchStatementOpen(true);
+    };
+
+    const toggleBatchStatementEmployee = (employeeId: number) => {
+        setBatchStatementSelection((prev) => (
+            prev.includes(employeeId)
+                ? prev.filter((id) => id !== employeeId)
+                : [...prev, employeeId]
+        ));
+    };
+
+    const openBatchStatementPreview = () => {
+        if (!batchStatementSelection.length) return;
+        setStatementPreview({
+            title: `Расчетно-платежная ведомость · ${batchStatementSelection.length} сотрудников`,
+            url: buildStatementUrl({
+                employeeId: 0,
+                employeeIds: batchStatementSelection,
+                sourceType: 'current_batch',
+                format: 'pdf',
+                disposition: 'inline',
+            }),
+        });
+    };
+
+    const downloadBatchStatement = (format: 'excel' | 'pdf') => {
+        if (!batchStatementSelection.length) return;
+        window.open(
+            buildStatementUrl({
+                employeeId: 0,
+                employeeIds: batchStatementSelection,
+                sourceType: 'current_batch',
+                format,
+                disposition: 'attachment',
+            }),
+            '_blank',
+            'noopener,noreferrer'
+        );
     };
 
     if (authLoading || loading) {
@@ -547,6 +603,17 @@ function AdminFinancePage(): JSX.Element {
                             disabled={!paymentTableAvailable || saving}
                         >
                             Провести выплаты сегодня
+                        </Button>
+                        <Button
+                            variant="surface"
+                            color="gray"
+                            highContrast
+                            className={`${styles.actionButton} ${styles.surfaceButton}`}
+                            onClick={openBatchStatementDialog}
+                            disabled={!batchStatementCandidates.length}
+                        >
+                            <FiFileText className={styles.icon} />
+                            Общая расчетка
                         </Button>
                     </div>
                 </div>
@@ -854,6 +921,15 @@ function AdminFinancePage(): JSX.Element {
                                                             >
                                                                 Excel
                                                             </Button>
+                                                            <Button
+                                                                variant="surface"
+                                                                color="gray"
+                                                                highContrast
+                                                                className={`${styles.inlineButton} ${styles.surfaceButton}`}
+                                                                onClick={() => downloadStatementForSuggestion(statementEmployee, item, 'pdf')}
+                                                            >
+                                                                PDF
+                                                            </Button>
                                                         </Flex>
                                                     </Table.Cell>
                                                 </Table.Row>
@@ -915,6 +991,15 @@ function AdminFinancePage(): JSX.Element {
                                                             >
                                                                 Excel
                                                             </Button>
+                                                            <Button
+                                                                variant="surface"
+                                                                color="gray"
+                                                                highContrast
+                                                                className={`${styles.inlineButton} ${styles.surfaceButton}`}
+                                                                onClick={() => downloadStatementForPayment(statementEmployee, payment, 'pdf')}
+                                                            >
+                                                                PDF
+                                                            </Button>
                                                         </Flex>
                                                     </Table.Cell>
                                                 </Table.Row>
@@ -940,10 +1025,111 @@ function AdminFinancePage(): JSX.Element {
                 </Dialog.Content>
             </Dialog.Root>
 
+            <Dialog.Root open={batchStatementOpen} onOpenChange={setBatchStatementOpen}>
+                <Dialog.Content className={styles.paymentDialog}>
+                    <Dialog.Title>Общая расчетка</Dialog.Title>
+                    <Dialog.Description>
+                        Выбери сотрудников с текущими начислениями, которых нужно включить в ведомость.
+                    </Dialog.Description>
+
+                    <div className={styles.dialogForm}>
+                        <Flex gap="2" wrap="wrap">
+                            <Button
+                                variant="surface"
+                                color="gray"
+                                highContrast
+                                className={`${styles.inlineButton} ${styles.surfaceButton}`}
+                                onClick={() => setBatchStatementSelection(batchStatementCandidates.map((employee) => employee.id))}
+                            >
+                                Выбрать всех
+                            </Button>
+                            <Button
+                                variant="surface"
+                                color="gray"
+                                highContrast
+                                className={`${styles.inlineButton} ${styles.surfaceButton}`}
+                                onClick={() => setBatchStatementSelection([])}
+                            >
+                                Очистить
+                            </Button>
+                        </Flex>
+
+                        <div className={styles.batchStatementList}>
+                            {batchStatementCandidates.length ? batchStatementCandidates.map((employee) => {
+                                const checked = batchStatementSelection.includes(employee.id);
+                                const suggestion = getPrimarySuggestion(employee.suggestedPayments);
+                                return (
+                                    <label key={employee.id} className={styles.batchStatementItem}>
+                                        <input
+                                            type="checkbox"
+                                            checked={checked}
+                                            onChange={() => toggleBatchStatementEmployee(employee.id)}
+                                        />
+                                        <div className={styles.batchStatementMeta}>
+                                            <div className={styles.employeeName}>{employee.fio}</div>
+                                            <div className={styles.employeeMeta}>
+                                                {employee.position || '—'} · {suggestion ? formatSuggestedPaymentLabel(suggestion) : 'Без основания'} · {formatCurrency(suggestion?.payableAmount || 0)}
+                                            </div>
+                                        </div>
+                                    </label>
+                                );
+                            }) : (
+                                <Text color="gray">Нет сотрудников с текущими начислениями.</Text>
+                            )}
+                        </div>
+                    </div>
+
+                    <Flex justify="between" align="center" gap="3" mt="4" wrap="wrap">
+                        <Text size="2" color="gray">Выбрано: {batchStatementSelection.length}</Text>
+                        <Flex gap="3" wrap="wrap" justify="end">
+                            <Button
+                                variant="surface"
+                                color="gray"
+                                highContrast
+                                className={`${styles.actionButton} ${styles.surfaceButton}`}
+                                onClick={openBatchStatementPreview}
+                                disabled={!batchStatementSelection.length}
+                            >
+                                Просмотр
+                            </Button>
+                            <Button
+                                variant="surface"
+                                color="gray"
+                                highContrast
+                                className={`${styles.actionButton} ${styles.surfaceButton}`}
+                                onClick={() => downloadBatchStatement('excel')}
+                                disabled={!batchStatementSelection.length}
+                            >
+                                Excel
+                            </Button>
+                            <Button
+                                variant="surface"
+                                color="gray"
+                                highContrast
+                                className={`${styles.actionButton} ${styles.surfaceButton}`}
+                                onClick={() => downloadBatchStatement('pdf')}
+                                disabled={!batchStatementSelection.length}
+                            >
+                                PDF
+                            </Button>
+                            <Button
+                                variant="surface"
+                                color="gray"
+                                highContrast
+                                className={`${styles.actionButton} ${styles.surfaceButton}`}
+                                onClick={() => setBatchStatementOpen(false)}
+                            >
+                                Закрыть
+                            </Button>
+                        </Flex>
+                    </Flex>
+                </Dialog.Content>
+            </Dialog.Root>
+
             <Dialog.Root open={Boolean(statementPreview)} onOpenChange={(open) => (!open ? setStatementPreview(null) : undefined)}>
                 <Dialog.Content className={styles.previewDialog}>
                     <Dialog.Title>{statementPreview?.title || 'Предпросмотр расчетки'}</Dialog.Title>
-                    <Dialog.Description>Документ сформирован из xlsx-шаблона и показан в браузере.</Dialog.Description>
+                    <Dialog.Description>Документ сформирован из xlsx-шаблона, сконвертирован в PDF и показан в браузере.</Dialog.Description>
 
                     <Box mt="3">
                         {statementPreview ? (

@@ -1,0 +1,19 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: segmentica-app
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.local
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      NEXTAUTH_URL: http://localhost:3000
+      LIBREOFFICE_BIN: /usr/bin/soffice
+      LIBREOFFICE_TIMEOUT_MS: 30000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

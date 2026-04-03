@@ -358,6 +358,40 @@
   min-height: 120px;
 }
 
+.batchStatementList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 360px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.batchStatementItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #ececec;
+  border-radius: 16px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.batchStatementItem input {
+  margin-top: 4px;
+  width: 18px;
+  height: 18px;
+  accent-color: #111111;
+}
+
+.batchStatementMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
 @media (max-width: 900px) {
   .container {
     padding-inline: 1rem;

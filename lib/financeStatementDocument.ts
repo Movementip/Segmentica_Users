@@ -3,6 +3,11 @@ import path from 'path';
 import { promises as fs } from 'fs';
 import * as XLSX from 'xlsx';
 import { getPool, query } from './db';
+import {
+    getDocumentTemplateDefinition,
+    type DocumentTemplateKey,
+    type DocumentTemplatePostprocess,
+} from './documentTemplates';
 
 type StatementActor = {
     fio: string;
@@ -54,11 +59,82 @@ type StatementFiles = {
     fileBaseName: string;
 };
 
-const TEMPLATE_PATH = '/Users/ivandolgih/Downloads/Форма Т-49 Расчетно-платежная ведомость.xlsx';
+export type StatementTemplateCell = {
+    sheetName?: string;
+    address: string;
+    value: string | number;
+    style?: StatementTemplateCellStyle;
+};
+
+export type StatementTemplateRowVisibility = {
+    sheetName: string;
+    row: number;
+    hidden: boolean;
+};
+
+export type StatementTemplateCellStyle = {
+    fontName?: string;
+    fontSize?: number;
+    bold?: boolean;
+    horizontal?: 'left' | 'center' | 'right';
+    vertical?: 'top' | 'center' | 'bottom';
+    wrapText?: boolean;
+    shrinkToFit?: boolean;
+};
+
+export type StatementTemplateRowHeight = {
+    sheetName: string;
+    row: number;
+    height: number;
+};
+
+export type StatementTemplatePrintArea = {
+    sheetName: string;
+    range: string;
+};
+
+export type StatementTemplateRangeCopy = {
+    sourceSheetName: string;
+    sourceRange: string;
+    targetSheetName: string;
+    targetStartAddress: string;
+};
+
+export type StatementTemplateSheetPageSetup = {
+    sheetName: string;
+    fitToWidth?: number;
+    fitToHeight?: number;
+};
+
+export type FinanceStatementTemplatePayload = {
+    templateKey: DocumentTemplateKey;
+    templateName: string;
+    fileBaseName: string;
+    previewTitle: string;
+    pdfPostprocess: DocumentTemplatePostprocess;
+    cells: StatementTemplateCell[];
+    rowVisibility: StatementTemplateRowVisibility[];
+    rowHeights: StatementTemplateRowHeight[];
+    printAreas: StatementTemplatePrintArea[];
+    rangeCopies: StatementTemplateRangeCopy[];
+    hiddenSheets: string[];
+    sheetPageSetup: StatementTemplateSheetPageSetup[];
+};
+
+type StatementEntryPayload = {
+    employee: StatementEmployeePayload;
+    source: StatementSourcePayload;
+};
+
+type StatementPreparedEntry = StatementEntryPayload & {
+    workedSummary: WorkedSummary;
+};
+
+const TEMPLATE_KEY: DocumentTemplateKey = 'finance_statement_t49';
 const NUMBERING_SETTINGS_KEY = 'finance_statement_numbers';
 
-const ORGANIZATION_NAME = 'ИП Юдин Роман Игоревич';
-const STRUCTURAL_DIVISION = 'главный офис';
+const ORGANIZATION_NAME = 'Общество с ограниченной ответственностью "Сегментика"';
+const STRUCTURAL_DIVISION = 'Главный офис';
 const OKPO_CODE = '95164141';
 const OKUD_CODE = '0301009';
 
@@ -68,12 +144,16 @@ const WORKED_STATUSES = new Set([
     'удаленно',
     'удалённо',
     'командировка',
-    'больничный',
 ]);
 
 const numberFormatter = new Intl.NumberFormat('ru-RU', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
+});
+
+const integerFormatter = new Intl.NumberFormat('ru-RU', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
 });
 
 const parseDateOnly = (value: string | null | undefined): Date | null => {
@@ -96,7 +176,53 @@ const formatIsoDate = (value: Date | null): string => {
     return value.toISOString().slice(0, 10);
 };
 
+const startOfMonthUtc = (value: Date): Date =>
+    new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), 1));
+
+const endOfMonthUtc = (value: Date): Date =>
+    new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth() + 1, 0));
+
+const formatMonthNameRu = (value: Date | null): string => {
+    if (!value) return '';
+    return value.toLocaleDateString('ru-RU', {
+        month: 'long',
+        timeZone: 'UTC',
+    });
+};
+
+const formatMonthNameRuGenitive = (value: Date | null): string => {
+    if (!value) return '';
+    const monthNames = [
+        'января',
+        'февраля',
+        'марта',
+        'апреля',
+        'мая',
+        'июня',
+        'июля',
+        'августа',
+        'сентября',
+        'октября',
+        'ноября',
+        'декабря',
+    ];
+    return monthNames[value.getUTCMonth()] || formatMonthNameRu(value);
+};
+
 const formatMoney = (value: number): string => numberFormatter.format(Number(value) || 0);
+const roundMoney = (value: number): number => Math.round((Number(value) || 0) * 100) / 100;
+
+const splitMoney = (value: number): { rubles: string; kopecks: string; formatted: string } => {
+    const normalized = roundMoney(Number(value) || 0);
+    const absolute = Math.abs(normalized);
+    const rubles = Math.floor(absolute);
+    const kopecks = Math.round((absolute - rubles) * 100);
+    return {
+        rubles: integerFormatter.format(rubles),
+        kopecks: String(kopecks).padStart(2, '0'),
+        formatted: formatMoney(normalized),
+    };
+};
 
 const addDays = (value: Date, days: number): Date => {
     const next = new Date(value);
@@ -121,12 +247,47 @@ const slugify = (value: string): string =>
         .replace(/-+/g, '-')
         .toLowerCase();
 
+const toSurnameInitials = (value: string | null | undefined): string => {
+    const parts = String(value || '')
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+
+    if (!parts.length) return '';
+    const [surname, name, middleName] = parts;
+    const nameInitial = name ? `${name.charAt(0).toUpperCase()}.` : '';
+    const middleInitial = middleName ? ` ${middleName.charAt(0).toUpperCase()}.` : '';
+    return `${surname}${nameInitial ? ` ${nameInitial}` : ''}${middleInitial}`;
+};
+
 const formatHours = (value: number): string => {
     const rounded = Math.round(value * 100) / 100;
     return Number.isInteger(rounded) ? String(rounded) : String(rounded).replace('.', ',');
 };
 
 const formatWorkedCell = (days: number, hours: number): string => `${days} (${formatHours(hours)})`;
+
+const calculateShiftHours = (start: string | null | undefined, end: string | null | undefined): number | null => {
+    const startValue = String(start || '').trim();
+    const endValue = String(end || '').trim();
+    if (!startValue || !endValue) return null;
+
+    const [startHours, startMinutes] = startValue.split(':').map((part) => Number(part) || 0);
+    const [endHours, endMinutes] = endValue.split(':').map((part) => Number(part) || 0);
+
+    let totalMinutes = (endHours * 60 + endMinutes) - (startHours * 60 + startMinutes);
+    if (totalMinutes <= 0) {
+        totalMinutes += 24 * 60;
+    }
+
+    // Для смен в графике считаем стандартный час обеда.
+    if (totalMinutes > 60) {
+        totalMinutes -= 60;
+    }
+
+    if (totalMinutes <= 0) return null;
+    return Math.round((totalMinutes / 60) * 100) / 100;
+};
 
 const getRussianPlural = (value: number, one: string, few: string, many: string): string => {
     const mod10 = value % 10;
@@ -187,6 +348,9 @@ const numberToWordsRu = (value: number): string => {
     const phrase = words.join(' ').replace(/\s+/g, ' ').trim();
     return phrase.charAt(0).toUpperCase() + phrase.slice(1);
 };
+
+const numberToWordsWithoutCurrency = (value: number): string =>
+    numberToWordsRu(value).replace(/\s+руб(ль|ля|лей)$/iu, '');
 
 const buildDocumentKey = (employee: StatementEmployeePayload, source: StatementSourcePayload) => {
     const sourcePart = source.paymentId
@@ -264,11 +428,7 @@ const getDefaultShiftHours = async (employeeId: number, dateFrom: string, dateTo
     const end = String(row?.shift_end || '').trim();
     if (!start || !end) return 8;
 
-    const [startHours, startMinutes] = start.split(':').map((part) => Number(part) || 0);
-    const [endHours, endMinutes] = end.split(':').map((part) => Number(part) || 0);
-    const totalMinutes = (endHours * 60 + endMinutes) - (startHours * 60 + startMinutes);
-    if (totalMinutes <= 0) return 8;
-    return Math.round((totalMinutes / 60) * 100) / 100;
+    return calculateShiftHours(start, end) ?? 8;
 };
 
 const getWorkedSummary = async (employeeId: number, periodFrom: string | null, periodTo: string | null): Promise<WorkedSummary> => {
@@ -343,16 +503,10 @@ const getWorkedSummary = async (employeeId: number, periodFrom: string | null, p
         const rawStatus = String(schedule?.status || '').trim().toLowerCase();
         if (!WORKED_STATUSES.has(rawStatus)) continue;
 
-        const timeStart = String(schedule?.time_start || '').trim();
-        const timeEnd = String(schedule?.time_end || '').trim();
         let hours = defaultShiftHours;
-        if (timeStart && timeEnd) {
-            const [startHours, startMinutes] = timeStart.split(':').map((part: string) => Number(part) || 0);
-            const [endHours, endMinutes] = timeEnd.split(':').map((part: string) => Number(part) || 0);
-            const totalMinutes = (endHours * 60 + endMinutes) - (startHours * 60 + startMinutes);
-            if (totalMinutes > 0) {
-                hours = Math.round((totalMinutes / 60) * 100) / 100;
-            }
+        const calculatedHours = calculateShiftHours(schedule?.time_start, schedule?.time_end);
+        if (calculatedHours != null) {
+            hours = calculatedHours;
         }
 
         const calendar = calendarByDay.get(key);
@@ -442,118 +596,549 @@ const buildPreviewHtml = (sheet: XLSX.WorkSheet, title: string) => {
     ].join('');
 };
 
+const FIRST_SHEET_NAME = 'Лист1';
+const SECOND_SHEET_NAME = 'Лист2';
+const FIRST_SHEET_ROW_START = 25;
+const FIRST_SHEET_ROW_END = 34;
+const FIRST_SHEET_TOTAL_ROW = 35;
+const SECOND_SHEET_ROW_START = 7;
+const SECOND_SHEET_ROW_END = 27;
+const SECOND_SHEET_TOTAL_ROW = 28;
+const MAX_STATEMENT_EMPLOYEES = (FIRST_SHEET_ROW_END - FIRST_SHEET_ROW_START + 1) + (SECOND_SHEET_ROW_END - SECOND_SHEET_ROW_START + 1);
+
+const getStatementSourceLabel = (source: StatementSourcePayload): string =>
+    source.paymentKind === 'advance'
+        ? 'Аванс'
+        : source.paymentKind === 'vacation'
+            ? 'Отпускные'
+            : source.paymentKind === 'bonus'
+                ? 'Премия'
+                : 'Зарплата';
+
+const pushCell = (
+    target: StatementTemplateCell[],
+    sheetName: string,
+    address: string,
+    value: string | number,
+    style?: StatementTemplateCellStyle
+) => {
+    target.push({ sheetName, address, value, style });
+};
+
+const pushHiddenRows = (
+    target: StatementTemplateRowVisibility[],
+    sheetName: string,
+    startRow: number,
+    endRow: number
+) => {
+    if (endRow < startRow) return;
+    for (let row = startRow; row <= endRow; row += 1) {
+        target.push({ sheetName, row, hidden: true });
+    }
+};
+
+const pushRowHeight = (
+    target: StatementTemplateRowHeight[],
+    sheetName: string,
+    row: number,
+    height: number
+) => {
+    target.push({ sheetName, row, height });
+};
+
+const pushPrintArea = (
+    target: StatementTemplatePrintArea[],
+    sheetName: string,
+    range: string
+) => {
+    target.push({ sheetName, range });
+};
+
+const pushRangeCopy = (
+    target: StatementTemplateRangeCopy[],
+    sourceSheetName: string,
+    sourceRange: string,
+    targetSheetName: string,
+    targetStartAddress: string
+) => {
+    target.push({ sourceSheetName, sourceRange, targetSheetName, targetStartAddress });
+};
+
+const pushSheetPageSetup = (
+    target: StatementTemplateSheetPageSetup[],
+    sheetName: string,
+    fitToWidth: number,
+    fitToHeight: number
+) => {
+    target.push({ sheetName, fitToWidth, fitToHeight });
+};
+
+const offsetCellAddress = (address: string, rowOffset: number): string =>
+    address.replace(/(\d+)$/, (_, row) => String(Number(row) + rowOffset));
+
+const getEntryRowHeight = (entry: StatementPreparedEntry): number => {
+    const position = String(entry.employee.position || '').trim();
+    if (position.length > 22) return 28;
+    if (position.length > 14) return 22;
+    return 18;
+};
+
+const writableFieldStyle = (
+    overrides: Partial<StatementTemplateCellStyle> = {}
+): StatementTemplateCellStyle => ({
+    fontName: 'Arial Cyr',
+    fontSize: 10,
+    horizontal: 'center',
+    vertical: 'center',
+    wrapText: false,
+    shrinkToFit: false,
+    ...overrides,
+});
+
+const lineFieldStyle = (
+    overrides: Partial<StatementTemplateCellStyle> = {}
+): StatementTemplateCellStyle => writableFieldStyle({
+    vertical: 'bottom',
+    wrapText: false,
+    shrinkToFit: true,
+    ...overrides,
+});
+
+const compactTableFieldStyle = (
+    overrides: Partial<StatementTemplateCellStyle> = {}
+): StatementTemplateCellStyle => writableFieldStyle({
+    fontSize: 9,
+    vertical: 'center',
+    wrapText: false,
+    shrinkToFit: true,
+    ...overrides,
+});
+
+const buildDocumentKeyForEntries = (entries: StatementEntryPayload[]) =>
+    entries
+        .map((entry) => buildDocumentKey(entry.employee, entry.source))
+        .sort()
+        .join('|');
+
+const getSourceAccrualColumns = (source: StatementSourcePayload) => {
+    const accruedAmount = Number(source.accruedAmount || 0);
+    const withheldAmount = Number(source.withheldAmount || 0);
+    const payableAmount = Number(source.payableAmount || 0);
+
+    return {
+        salary: source.paymentKind === 'salary' || source.paymentKind === 'advance' ? accruedAmount : 0,
+        bonus: source.paymentKind === 'bonus' ? accruedAmount : 0,
+        sickLeave: 0,
+        vacation: source.paymentKind === 'vacation' ? accruedAmount : 0,
+        otherIncome: 0,
+        totalAccrued: accruedAmount,
+        incomeTax: withheldAmount,
+        hospitalOffset: 0,
+        advanceOffset: 0,
+        orgDebt: 0,
+        employeeDebt: 0,
+        payable: payableAmount,
+    };
+};
+
+const prepareStatementEntries = async (entries: StatementEntryPayload[]): Promise<StatementPreparedEntry[]> =>
+    Promise.all(
+        entries.map(async (entry) => ({
+            ...entry,
+            workedSummary: await getWorkedSummary(entry.employee.id, entry.source.periodFrom, entry.source.periodTo),
+        }))
+    );
+
+const fillStatementEmployeeRow = (
+    cells: StatementTemplateCell[],
+    rowHeights: StatementTemplateRowHeight[],
+    sheetName: string,
+    row: number,
+    ordinal: number,
+    entry: StatementPreparedEntry
+) => {
+    const sourceLabel = getStatementSourceLabel(entry.source);
+    const columns = getSourceAccrualColumns(entry.source);
+
+    pushCell(cells, sheetName, `A${row}`, ordinal);
+    pushCell(cells, sheetName, `C${row}`, entry.employee.id);
+    pushCell(
+        cells,
+        sheetName,
+        `G${row}`,
+        entry.employee.position || sourceLabel,
+        compactTableFieldStyle()
+    );
+    pushCell(cells, sheetName, `M${row}`, entry.employee.rate == null ? '' : Number(entry.employee.rate));
+    pushCell(cells, sheetName, `Q${row}`, formatWorkedCell(entry.workedSummary.workdayDays, entry.workedSummary.workdayHours));
+    pushCell(cells, sheetName, `S${row}`, formatWorkedCell(entry.workedSummary.weekendDays, entry.workedSummary.weekendHours));
+    pushCell(cells, sheetName, `U${row}`, formatWorkedCell(entry.workedSummary.holidayDays, entry.workedSummary.holidayHours));
+    pushCell(cells, sheetName, `W${row}`, formatMoney(columns.salary));
+    pushCell(cells, sheetName, `AA${row}`, formatMoney(columns.bonus));
+    pushCell(cells, sheetName, `AE${row}`, formatMoney(columns.sickLeave));
+    pushCell(cells, sheetName, `AI${row}`, formatMoney(columns.vacation));
+    pushCell(cells, sheetName, `AM${row}`, '0,00');
+    pushCell(cells, sheetName, `AQ${row}`, formatMoney(columns.otherIncome));
+    pushCell(cells, sheetName, `AU${row}`, formatMoney(columns.totalAccrued));
+    pushCell(cells, sheetName, `AY${row}`, formatMoney(columns.incomeTax));
+    pushCell(cells, sheetName, `BD${row}`, formatMoney(columns.hospitalOffset));
+    pushCell(cells, sheetName, `BI${row}`, formatMoney(columns.advanceOffset));
+    pushCell(cells, sheetName, `BN${row}`, '0,00');
+    pushCell(cells, sheetName, `BS${row}`, formatMoney(columns.orgDebt));
+    pushCell(cells, sheetName, `BY${row}`, formatMoney(columns.employeeDebt));
+    pushCell(cells, sheetName, `CE${row}`, formatMoney(columns.payable));
+    pushCell(
+        cells,
+        sheetName,
+        `CK${row}`,
+        toSurnameInitials(entry.employee.fio),
+        compactTableFieldStyle()
+    );
+    pushRowHeight(rowHeights, sheetName, row, getEntryRowHeight(entry));
+};
+
+const fillStatementTotalRow = (
+    cells: StatementTemplateCell[],
+    sheetName: string,
+    row: number,
+    entries: StatementPreparedEntry[]
+) => {
+    const totals = entries.reduce(
+        (acc, entry) => {
+            const columns = getSourceAccrualColumns(entry.source);
+            acc.salary += columns.salary;
+            acc.bonus += columns.bonus;
+            acc.sickLeave += columns.sickLeave;
+            acc.vacation += columns.vacation;
+            acc.otherIncome += columns.otherIncome;
+            acc.totalAccrued += columns.totalAccrued;
+            acc.incomeTax += columns.incomeTax;
+            acc.hospitalOffset += columns.hospitalOffset;
+            acc.advanceOffset += columns.advanceOffset;
+            acc.orgDebt += columns.orgDebt;
+            acc.employeeDebt += columns.employeeDebt;
+            acc.payable += columns.payable;
+            return acc;
+        },
+        {
+            salary: 0,
+            bonus: 0,
+            sickLeave: 0,
+            vacation: 0,
+            otherIncome: 0,
+            totalAccrued: 0,
+            incomeTax: 0,
+            hospitalOffset: 0,
+            advanceOffset: 0,
+            orgDebt: 0,
+            employeeDebt: 0,
+            payable: 0,
+        }
+    );
+
+    pushCell(cells, sheetName, `A${row}`, 'Итого');
+    pushCell(cells, sheetName, `W${row}`, formatMoney(totals.salary));
+    pushCell(cells, sheetName, `AA${row}`, formatMoney(totals.bonus));
+    pushCell(cells, sheetName, `AE${row}`, formatMoney(totals.sickLeave));
+    pushCell(cells, sheetName, `AI${row}`, formatMoney(totals.vacation));
+    pushCell(cells, sheetName, `AQ${row}`, formatMoney(totals.otherIncome));
+    pushCell(cells, sheetName, `AU${row}`, formatMoney(totals.totalAccrued));
+    pushCell(cells, sheetName, `AY${row}`, formatMoney(totals.incomeTax));
+    pushCell(cells, sheetName, `BD${row}`, formatMoney(totals.hospitalOffset));
+    pushCell(cells, sheetName, `BI${row}`, formatMoney(totals.advanceOffset));
+    pushCell(cells, sheetName, `BN${row}`, '0,00');
+    pushCell(cells, sheetName, `BS${row}`, formatMoney(totals.orgDebt));
+    pushCell(cells, sheetName, `BY${row}`, formatMoney(totals.employeeDebt));
+    pushCell(cells, sheetName, `CE${row}`, formatMoney(totals.payable));
+};
+
+const prepareFinanceStatementTemplatePayload = async (params: {
+    actor: StatementActor;
+    entries: StatementEntryPayload[];
+}): Promise<FinanceStatementTemplatePayload> => {
+    const { actor, entries } = params;
+    if (!entries.length) {
+        throw new Error('Для расчетно-платежной ведомости не выбраны сотрудники');
+    }
+    if (entries.length > MAX_STATEMENT_EMPLOYEES) {
+        throw new Error(`В одной ведомости поддерживается не более ${MAX_STATEMENT_EMPLOYEES} сотрудников`);
+    }
+
+    const preparedEntries = await prepareStatementEntries(entries);
+    const firstEntry = preparedEntries[0];
+    const paymentDate = parseDateOnly(firstEntry.source.paymentDate) || new Date();
+    const statementMonthBase = parseDateOnly(firstEntry.source.periodFrom)
+        || parseDateOnly(firstEntry.source.periodTo)
+        || paymentDate;
+    const reportPeriodFrom = startOfMonthUtc(statementMonthBase);
+    const reportPeriodTo = endOfMonthUtc(statementMonthBase);
+    const cashPeriodFrom = paymentDate;
+    const cashPeriodTo = addDays(paymentDate, 4);
+    const documentKey = buildDocumentKeyForEntries(preparedEntries);
+    const statementNumber = await getStatementNumber(documentKey);
+    const accountant = await getChiefAccountant();
+    const template = await getDocumentTemplateDefinition(TEMPLATE_KEY);
+
+    const payableAmount = preparedEntries.reduce((sum, entry) => sum + Number(entry.source.payableAmount || 0), 0);
+    const depositedAmount = 0;
+    const amountWords = numberToWordsWithoutCurrency(payableAmount);
+    const payableParts = splitMoney(payableAmount);
+    const depositedParts = splitMoney(depositedAmount);
+    const paymentYearFull = String(paymentDate.getUTCFullYear());
+    const paymentYearCentury = paymentYearFull.slice(0, 2);
+    const paymentYearSuffix = paymentYearFull.slice(-2);
+    const cashFromYearFull = String(cashPeriodFrom.getUTCFullYear());
+    const cashFromYearCentury = cashFromYearFull.slice(0, 2);
+    const cashFromYearSuffix = cashFromYearFull.slice(-2);
+    const cashToYearFull = String(cashPeriodTo.getUTCFullYear());
+    const cashToYearCentury = cashToYearFull.slice(0, 2);
+    const cashToYearSuffix = cashToYearFull.slice(-2);
+    const actorShort = toSurnameInitials(actor.fio);
+    const accountantShort = toSurnameInitials(accountant?.fio || actor.fio);
+    const baseName = preparedEntries.length === 1
+        ? `raschetno-platezhnaya-vedomost-${String(statementNumber).padStart(4, '0')}-${slugify(firstEntry.employee.fio || `employee-${firstEntry.employee.id}`) || `employee-${firstEntry.employee.id}`}`
+        : `raschetno-platezhnaya-vedomost-${String(statementNumber).padStart(4, '0')}-batch-${preparedEntries.length}`;
+
+    const cells: StatementTemplateCell[] = [];
+    const rowVisibility: StatementTemplateRowVisibility[] = [];
+    const rowHeights: StatementTemplateRowHeight[] = [];
+    const printAreas: StatementTemplatePrintArea[] = [];
+    const rangeCopies: StatementTemplateRangeCopy[] = [];
+    const hiddenSheets: string[] = [];
+    const sheetPageSetup: StatementTemplateSheetPageSetup[] = [];
+
+    pushCell(cells, FIRST_SHEET_NAME, 'A6', ORGANIZATION_NAME, lineFieldStyle());
+    pushCell(cells, FIRST_SHEET_NAME, 'A7', STRUCTURAL_DIVISION, lineFieldStyle({
+        fontSize: 9,
+    }));
+    // В шаблоне под ОКПО есть еще одна пустая строка с рамкой. Затираем ее
+    // строкой без границ, чтобы справа остался только нужный блок кодов.
+    pushRangeCopy(rangeCopies, FIRST_SHEET_NAME, 'CO8:CV8', FIRST_SHEET_NAME, 'CO7');
+    pushCell(cells, FIRST_SHEET_NAME, 'CO6', OKPO_CODE);
+    pushCell(cells, FIRST_SHEET_NAME, 'CO5', OKUD_CODE);
+    pushCell(cells, FIRST_SHEET_NAME, 'L10', cashPeriodFrom.getUTCDate(), lineFieldStyle());
+    pushCell(cells, FIRST_SHEET_NAME, 'N10', formatMonthNameRuGenitive(cashPeriodFrom), lineFieldStyle());
+    pushCell(cells, FIRST_SHEET_NAME, 'T10', cashFromYearCentury, lineFieldStyle());
+    pushCell(cells, FIRST_SHEET_NAME, 'U10', cashFromYearSuffix, lineFieldStyle());
+    pushCell(cells, FIRST_SHEET_NAME, 'Z10', cashPeriodTo.getUTCDate(), lineFieldStyle());
+    pushCell(cells, FIRST_SHEET_NAME, 'AB10', formatMonthNameRuGenitive(cashPeriodTo), lineFieldStyle());
+    pushCell(cells, FIRST_SHEET_NAME, 'AH10', cashToYearCentury, lineFieldStyle());
+    pushCell(cells, FIRST_SHEET_NAME, 'AI10', cashToYearSuffix, lineFieldStyle());
+    pushCell(cells, FIRST_SHEET_NAME, 'D11', amountWords, lineFieldStyle());
+    pushCell(cells, FIRST_SHEET_NAME, 'AL11', payableParts.kopecks, lineFieldStyle());
+    pushCell(cells, FIRST_SHEET_NAME, 'AP11', payableParts.rubles, lineFieldStyle());
+    pushCell(cells, FIRST_SHEET_NAME, 'AV11', payableParts.kopecks, lineFieldStyle());
+    pushCell(cells, FIRST_SHEET_NAME, 'L14', actor.position || 'Директор', lineFieldStyle());
+    pushCell(cells, FIRST_SHEET_NAME, 'AF14', actorShort, lineFieldStyle());
+    pushCell(cells, FIRST_SHEET_NAME, 'U16', accountantShort, lineFieldStyle());
+    pushCell(cells, FIRST_SHEET_NAME, 'B18', paymentDate.getUTCDate(), lineFieldStyle());
+    pushCell(cells, FIRST_SHEET_NAME, 'D18', formatMonthNameRuGenitive(paymentDate), lineFieldStyle());
+    pushCell(cells, FIRST_SHEET_NAME, 'J18', paymentYearCentury, lineFieldStyle());
+    pushCell(cells, FIRST_SHEET_NAME, 'K18', paymentYearSuffix, lineFieldStyle());
+    pushCell(cells, FIRST_SHEET_NAME, 'BI17', statementNumber);
+    pushCell(cells, FIRST_SHEET_NAME, 'BQ17', formatDateOnly(paymentDate));
+    pushCell(cells, FIRST_SHEET_NAME, 'CB18', formatDateOnly(reportPeriodFrom));
+    pushCell(cells, FIRST_SHEET_NAME, 'CH18', formatDateOnly(reportPeriodTo));
+    pushCell(cells, FIRST_SHEET_NAME, 'W23', 'заработная плата');
+    pushCell(cells, FIRST_SHEET_NAME, 'AA23', 'премия');
+    pushCell(cells, FIRST_SHEET_NAME, 'AE23', 'больничный');
+    pushCell(cells, FIRST_SHEET_NAME, 'AI23', 'отпускные');
+    pushCell(cells, SECOND_SHEET_NAME, 'W5', 'заработная плата');
+    pushCell(cells, SECOND_SHEET_NAME, 'AA5', 'премия');
+    pushCell(cells, SECOND_SHEET_NAME, 'AE5', 'больничный');
+    pushCell(cells, SECOND_SHEET_NAME, 'AI5', 'отпускные');
+
+    pushCell(cells, SECOND_SHEET_NAME, 'G32', amountWords, lineFieldStyle());
+    pushCell(cells, SECOND_SHEET_NAME, 'AM32', payableParts.kopecks, lineFieldStyle());
+    pushCell(cells, SECOND_SHEET_NAME, 'AQ32', payableParts.rubles, lineFieldStyle());
+    pushCell(cells, SECOND_SHEET_NAME, 'AV32', payableParts.kopecks, lineFieldStyle());
+    pushCell(cells, SECOND_SHEET_NAME, 'BF32', accountant?.position || 'Главный бухгалтер', lineFieldStyle());
+    pushCell(cells, SECOND_SHEET_NAME, 'BV32', accountantShort, lineFieldStyle());
+    pushCell(cells, SECOND_SHEET_NAME, 'CQ32', statementNumber, lineFieldStyle());
+    pushCell(cells, SECOND_SHEET_NAME, 'CI33', paymentDate.getUTCDate(), lineFieldStyle());
+    pushCell(cells, SECOND_SHEET_NAME, 'CK33', formatMonthNameRuGenitive(paymentDate), lineFieldStyle());
+    pushCell(cells, SECOND_SHEET_NAME, 'CQ33', paymentYearCentury, lineFieldStyle());
+    pushCell(cells, SECOND_SHEET_NAME, 'CR33', paymentYearSuffix, lineFieldStyle());
+    pushCell(cells, SECOND_SHEET_NAME, 'H34', numberToWordsWithoutCurrency(depositedAmount), lineFieldStyle());
+    pushCell(cells, SECOND_SHEET_NAME, 'AM34', depositedParts.kopecks, lineFieldStyle());
+    pushCell(cells, SECOND_SHEET_NAME, 'AQ34', depositedParts.rubles, lineFieldStyle());
+    pushCell(cells, SECOND_SHEET_NAME, 'AV34', depositedParts.kopecks, lineFieldStyle());
+    pushCell(cells, SECOND_SHEET_NAME, 'BO34', accountantShort, lineFieldStyle());
+    pushCell(cells, SECOND_SHEET_NAME, 'CA36', paymentDate.getUTCDate(), lineFieldStyle());
+    pushCell(cells, SECOND_SHEET_NAME, 'CC36', formatMonthNameRuGenitive(paymentDate), lineFieldStyle());
+    pushCell(cells, SECOND_SHEET_NAME, 'CI36', paymentYearCentury, lineFieldStyle());
+    pushCell(cells, SECOND_SHEET_NAME, 'CJ36', paymentYearSuffix, lineFieldStyle());
+    pushCell(cells, SECOND_SHEET_NAME, 'CM36', '');
+
+    pushRowHeight(rowHeights, FIRST_SHEET_NAME, 6, 16);
+    pushRowHeight(rowHeights, FIRST_SHEET_NAME, 7, 16);
+    pushRowHeight(rowHeights, FIRST_SHEET_NAME, 11, 14);
+    pushRowHeight(rowHeights, FIRST_SHEET_NAME, 14, 14);
+    pushRowHeight(rowHeights, FIRST_SHEET_NAME, 16, 14);
+    pushRowHeight(rowHeights, SECOND_SHEET_NAME, 32, 14);
+    pushRowHeight(rowHeights, SECOND_SHEET_NAME, 34, 14);
+
+    const firstPageEntries = preparedEntries.slice(0, FIRST_SHEET_ROW_END - FIRST_SHEET_ROW_START + 1);
+    const secondPageEntries = preparedEntries.slice(firstPageEntries.length);
+
+    firstPageEntries.forEach((entry, index) => {
+        fillStatementEmployeeRow(cells, rowHeights, FIRST_SHEET_NAME, FIRST_SHEET_ROW_START + index, index + 1, entry);
+    });
+
+    if (secondPageEntries.length > 0) {
+        secondPageEntries.forEach((entry, index) => {
+            fillStatementEmployeeRow(cells, rowHeights, SECOND_SHEET_NAME, SECOND_SHEET_ROW_START + index, firstPageEntries.length + index + 1, entry);
+        });
+    }
+
+    if (secondPageEntries.length === 0) {
+        pushHiddenRows(rowVisibility, FIRST_SHEET_NAME, 19, 19);
+        pushHiddenRows(rowVisibility, FIRST_SHEET_NAME, FIRST_SHEET_ROW_START + firstPageEntries.length, FIRST_SHEET_ROW_END);
+        fillStatementTotalRow(cells, FIRST_SHEET_NAME, FIRST_SHEET_TOTAL_ROW, preparedEntries);
+        pushRangeCopy(rangeCopies, SECOND_SHEET_NAME, 'A31:CV38', FIRST_SHEET_NAME, 'A36');
+        pushCell(cells, FIRST_SHEET_NAME, 'A36', 'По настоящей платежной ведомости');
+        pushCell(cells, FIRST_SHEET_NAME, 'A37', 'выплачена сумма ');
+        pushCell(cells, FIRST_SHEET_NAME, 'A39', 'и депонирована сумма');
+        pushCell(cells, FIRST_SHEET_NAME, 'G37', amountWords, lineFieldStyle());
+        pushCell(cells, FIRST_SHEET_NAME, 'AM37', payableParts.kopecks, lineFieldStyle());
+        pushCell(cells, FIRST_SHEET_NAME, 'AQ37', payableParts.rubles, lineFieldStyle());
+        pushCell(cells, FIRST_SHEET_NAME, 'AV37', payableParts.kopecks, lineFieldStyle());
+        pushCell(cells, FIRST_SHEET_NAME, 'BF37', accountant?.position || 'Главный бухгалтер', lineFieldStyle());
+        pushCell(cells, FIRST_SHEET_NAME, 'BV37', accountantShort, lineFieldStyle());
+        pushCell(cells, FIRST_SHEET_NAME, 'CQ37', statementNumber, lineFieldStyle());
+        pushCell(cells, FIRST_SHEET_NAME, 'CI38', paymentDate.getUTCDate(), lineFieldStyle());
+        pushCell(cells, FIRST_SHEET_NAME, 'CK38', formatMonthNameRuGenitive(paymentDate), lineFieldStyle());
+        pushCell(cells, FIRST_SHEET_NAME, 'CQ38', paymentYearCentury, lineFieldStyle());
+        pushCell(cells, FIRST_SHEET_NAME, 'CR38', paymentYearSuffix, lineFieldStyle());
+        pushCell(cells, FIRST_SHEET_NAME, 'H39', numberToWordsWithoutCurrency(depositedAmount), lineFieldStyle());
+        pushCell(cells, FIRST_SHEET_NAME, 'AM39', depositedParts.kopecks, lineFieldStyle());
+        pushCell(cells, FIRST_SHEET_NAME, 'AQ39', depositedParts.rubles, lineFieldStyle());
+        pushCell(cells, FIRST_SHEET_NAME, 'AV39', depositedParts.kopecks, lineFieldStyle());
+        pushCell(cells, FIRST_SHEET_NAME, 'BO39', accountantShort, lineFieldStyle());
+        pushCell(cells, FIRST_SHEET_NAME, 'CA41', paymentDate.getUTCDate(), lineFieldStyle());
+        pushCell(cells, FIRST_SHEET_NAME, 'CC41', formatMonthNameRuGenitive(paymentDate), lineFieldStyle());
+        pushCell(cells, FIRST_SHEET_NAME, 'CI41', paymentYearCentury, lineFieldStyle());
+        pushCell(cells, FIRST_SHEET_NAME, 'CJ41', paymentYearSuffix, lineFieldStyle());
+        pushRowHeight(rowHeights, FIRST_SHEET_NAME, 36, 12);
+        pushRowHeight(rowHeights, FIRST_SHEET_NAME, 37, 12);
+        pushRowHeight(rowHeights, FIRST_SHEET_NAME, 38, 12);
+        pushRowHeight(rowHeights, FIRST_SHEET_NAME, 39, 12);
+        pushRowHeight(rowHeights, FIRST_SHEET_NAME, 40, 11.25);
+        pushRowHeight(rowHeights, FIRST_SHEET_NAME, 41, 12.75);
+        pushRowHeight(rowHeights, FIRST_SHEET_NAME, 43, 10.5);
+        hiddenSheets.push(SECOND_SHEET_NAME);
+        pushPrintArea(printAreas, FIRST_SHEET_NAME, 'A1:CV43');
+        pushSheetPageSetup(sheetPageSetup, FIRST_SHEET_NAME, 1, 1);
+    } else {
+        pushHiddenRows(rowVisibility, FIRST_SHEET_NAME, 19, 19);
+        fillStatementTotalRow(cells, SECOND_SHEET_NAME, SECOND_SHEET_TOTAL_ROW, preparedEntries);
+        pushHiddenRows(
+            rowVisibility,
+            SECOND_SHEET_NAME,
+            SECOND_SHEET_ROW_START + secondPageEntries.length,
+            SECOND_SHEET_ROW_END
+        );
+        pushHiddenRows(rowVisibility, SECOND_SHEET_NAME, SECOND_SHEET_TOTAL_ROW + 1, 30);
+        pushHiddenRows(rowVisibility, SECOND_SHEET_NAME, 37, 38);
+        pushHiddenRows(rowVisibility, FIRST_SHEET_NAME, FIRST_SHEET_TOTAL_ROW, FIRST_SHEET_TOTAL_ROW + 1);
+        pushPrintArea(printAreas, FIRST_SHEET_NAME, 'A1:CV34');
+        pushPrintArea(printAreas, SECOND_SHEET_NAME, 'A3:CV36');
+        pushSheetPageSetup(sheetPageSetup, FIRST_SHEET_NAME, 1, 1);
+        pushSheetPageSetup(sheetPageSetup, SECOND_SHEET_NAME, 1, 1);
+    }
+
+    return {
+        templateKey: template.key,
+        templateName: template.templateName,
+        fileBaseName: baseName,
+        previewTitle: preparedEntries.length === 1
+            ? `${firstEntry.employee.fio} · ${getStatementSourceLabel(firstEntry.source)}`
+            : `Расчетно-платежная ведомость · ${preparedEntries.length} сотрудников`,
+        pdfPostprocess: template.pdfPostprocess,
+        cells,
+        rowVisibility,
+        rowHeights,
+        printAreas,
+        rangeCopies,
+        hiddenSheets,
+        sheetPageSetup,
+    };
+};
+
+export const buildFinanceStatementTemplatePayload = async (params: {
+    employee: StatementEmployeePayload;
+    actor: StatementActor;
+    source: StatementSourcePayload;
+}): Promise<FinanceStatementTemplatePayload> => prepareFinanceStatementTemplatePayload({
+    actor: params.actor,
+    entries: [{ employee: params.employee, source: params.source }],
+});
+
+export const buildFinanceStatementBatchTemplatePayload = async (params: {
+    actor: StatementActor;
+    entries: StatementEntryPayload[];
+}): Promise<FinanceStatementTemplatePayload> => prepareFinanceStatementTemplatePayload(params);
+
 export const buildFinanceStatementFiles = async (params: {
     employee: StatementEmployeePayload;
     actor: StatementActor;
     source: StatementSourcePayload;
 }): Promise<StatementFiles> => {
-    const { employee, actor, source } = params;
-    const periodFromDate = parseDateOnly(source.periodFrom);
-    const periodToDate = parseDateOnly(source.periodTo);
-    const paymentDate = parseDateOnly(source.paymentDate) || new Date();
-    const documentKey = buildDocumentKey(employee, source);
-    const statementNumber = await getStatementNumber(documentKey);
-    const accountant = await getChiefAccountant();
-    const workedSummary = await getWorkedSummary(employee.id, source.periodFrom, source.periodTo);
-
-    const payableAmount = Number(source.payableAmount || 0);
-    const accruedAmount = Number(source.accruedAmount || 0);
-    const withheldAmount = Number(source.withheldAmount || 0);
-    const paymentDateText = formatDateOnly(paymentDate);
-    const amountWords = numberToWordsRu(payableAmount);
+    const templatePayload = await prepareFinanceStatementTemplatePayload(params);
+    const template = await getDocumentTemplateDefinition(templatePayload.templateKey);
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'finance-statement-'));
-    const employeeSlug = slugify(employee.fio || `employee-${employee.id}`) || `employee-${employee.id}`;
-    const baseName = `raschetno-platezhnaya-vedomost-${String(statementNumber).padStart(4, '0')}-${employeeSlug}`;
-    const excelPath = path.join(tempDir, `${baseName}.xlsx`);
-    const htmlPath = path.join(tempDir, `${baseName}.html`);
+    const excelPath = path.join(tempDir, `${templatePayload.fileBaseName}.xlsx`);
+    const htmlPath = path.join(tempDir, `${templatePayload.fileBaseName}.html`);
 
-    const workbook = XLSX.readFile(TEMPLATE_PATH, {
+    const workbook = XLSX.readFile(template.templatePath, {
         cellStyles: true,
         cellNF: true,
         cellDates: true,
     });
 
-    const sheetName = workbook.SheetNames[0];
-    const sheet = workbook.Sheets[sheetName];
-    if (!sheet) {
+    const primarySheet = workbook.Sheets[workbook.SheetNames[0]];
+    if (!primarySheet) {
         throw new Error('Не найден лист в шаблоне расчетно-платежной ведомости');
     }
 
-    const sourceLabel =
-        source.paymentKind === 'advance'
-            ? 'Аванс'
-            : source.paymentKind === 'vacation'
-                ? 'Отпускные'
-                : source.paymentKind === 'bonus'
-                    ? 'Премия'
-                    : 'Зарплата';
+    templatePayload.cells.forEach(({ sheetName, address, value }) => {
+        const targetSheetName = sheetName || workbook.SheetNames[0];
+        const sheet = workbook.Sheets[targetSheetName];
+        if (!sheet) return;
+        setCellValue(sheet, address, value);
+    });
 
-    const row = 25;
-    const totalRow = 35;
-    const rowCells: Array<[string, string | number]> = [
-        ['A7', ORGANIZATION_NAME],
-        ['A8', STRUCTURAL_DIVISION],
-        ['CK6', OKPO_CODE],
-        ['CO5', OKUD_CODE],
-        ['T10', paymentDateText.slice(8, 10)],
-        ['AH10', paymentDateText.slice(8, 10)],
-        ['D12', amountWords],
-        ['AP12', formatMoney(payableAmount)],
-        ['L15', actor.position || 'Директор'],
-        ['AF15', actor.fio],
-        ['U17', accountant?.fio || actor.fio],
-        ['BI19', statementNumber],
-        ['BQ19', formatDateOnly(new Date())],
-        ['CB19', formatDateOnly(periodFromDate)],
-        ['CH19', formatDateOnly(periodToDate)],
-        [`A${row}`, 1],
-        [`C${row}`, employee.id],
-        [`G${row}`, employee.position || sourceLabel],
-        [`M${row}`, employee.rate == null ? '' : Number(employee.rate)],
-        [`Q${row}`, formatWorkedCell(workedSummary.workdayDays, workedSummary.workdayHours)],
-        [`S${row}`, formatWorkedCell(workedSummary.weekendDays, workedSummary.weekendHours)],
-        [`U${row}`, formatWorkedCell(workedSummary.holidayDays, workedSummary.holidayHours)],
-        [`W${row}`, source.paymentKind === 'salary' ? formatMoney(accruedAmount) : '0,00'],
-        [`AA${row}`, source.paymentKind === 'advance' ? formatMoney(accruedAmount) : '0,00'],
-        [`AE${row}`, source.paymentKind === 'vacation' ? formatMoney(accruedAmount) : '0,00'],
-        [`AI${row}`, source.paymentKind === 'bonus' ? formatMoney(accruedAmount) : '0,00'],
-        [`AM${row}`, '0,00'],
-        [`AQ${row}`, '0,00'],
-        [`AU${row}`, formatMoney(accruedAmount)],
-        [`AY${row}`, formatMoney(withheldAmount)],
-        [`BD${row}`, '0,00'],
-        [`BI${row}`, '0,00'],
-        [`BN${row}`, formatMoney(withheldAmount)],
-        [`BS${row}`, '0,00'],
-        [`BY${row}`, '0,00'],
-        [`CE${row}`, formatMoney(payableAmount)],
-        [`CK${row}`, employee.fio],
-        [`A${totalRow}`, 'Итого'],
-        [`AU${totalRow}`, formatMoney(accruedAmount)],
-        [`AY${totalRow}`, formatMoney(withheldAmount)],
-        [`BN${totalRow}`, formatMoney(withheldAmount)],
-        [`BS${totalRow}`, '0,00'],
-        [`BY${totalRow}`, '0,00'],
-        [`CE${totalRow}`, formatMoney(payableAmount)],
-    ];
+    templatePayload.rowVisibility.forEach(({ sheetName, row, hidden }) => {
+        const sheet = workbook.Sheets[sheetName];
+        if (!sheet) return;
+        const rows = (sheet['!rows'] ||= []);
+        rows[row - 1] = {
+            ...(rows[row - 1] || {}),
+            hidden,
+        };
+    });
 
-    if (source.comment) {
-        rowCells.push(['A11', `${sourceLabel}: ${source.comment}`]);
-    }
-
-    rowCells.forEach(([cell, value]) => setCellValue(sheet, cell, value));
+    templatePayload.rowHeights.forEach(({ sheetName, row, height }) => {
+        const sheet = workbook.Sheets[sheetName];
+        if (!sheet) return;
+        const rows = (sheet['!rows'] ||= []);
+        rows[row - 1] = {
+            ...(rows[row - 1] || {}),
+            hpt: height,
+        };
+    });
 
     XLSX.writeFile(workbook, excelPath, {
         bookType: 'xlsx',
         cellStyles: true,
     });
 
-    const html = buildPreviewHtml(sheet, `${employee.fio} · ${sourceLabel}`);
+    const html = buildPreviewHtml(primarySheet, templatePayload.previewTitle);
     await fs.writeFile(htmlPath, html, 'utf8');
 
     return {
         excelPath,
         htmlPath,
-        fileBaseName: baseName,
+        fileBaseName: templatePayload.fileBaseName,
     };
 };
