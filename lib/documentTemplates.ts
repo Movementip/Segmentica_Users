@@ -1,13 +1,14 @@
+import { promises as fs } from 'fs';
 import path from 'path';
 import { query } from './db';
 
-export type DocumentTemplateKey = 'finance_statement_t49';
+export type DocumentTemplateKey = 'finance_statement_t49' | 'finance_payslip';
 
 export type DocumentTemplateSourceFormat = 'xlsx' | 'docx';
 export type DocumentTemplateRendererKey = 'libreoffice';
 export type DocumentTemplatePreviewMode = 'pdf' | 'html';
 export type DocumentTemplatePostprocess = 'none' | 'stack_pages_vertical';
-export type DocumentTemplateFillStrategyKey = 'finance_statement_t49';
+export type DocumentTemplateFillStrategyKey = 'finance_statement_t49' | 'finance_payslip';
 
 export type DocumentTemplateDefinition = {
     key: DocumentTemplateKey;
@@ -42,6 +43,26 @@ type DocumentTemplateRow = {
 
 const TEMPLATE_DIR = path.join(process.cwd(), 'templates', 'forms');
 
+const normalizeTemplateFilename = (value: string): string =>
+    String(value || '').normalize('NFC').toLocaleLowerCase('ru-RU');
+
+const resolveExistingTemplatePath = async (templatePath: string): Promise<string> => {
+    const directory = path.dirname(templatePath);
+    const requestedName = path.basename(templatePath);
+
+    try {
+        const entries = await fs.readdir(directory);
+        const matchedName = entries.find((entry) => normalizeTemplateFilename(entry) === normalizeTemplateFilename(requestedName));
+        if (matchedName) {
+            return path.join(directory, matchedName);
+        }
+    } catch {
+        return templatePath;
+    }
+
+    return templatePath;
+};
+
 const STATIC_TEMPLATES: Record<DocumentTemplateKey, DocumentTemplateDefinition> = {
     finance_statement_t49: {
         key: 'finance_statement_t49',
@@ -55,6 +76,21 @@ const STATIC_TEMPLATES: Record<DocumentTemplateKey, DocumentTemplateDefinition> 
         outputFormats: ['excel', 'pdf'],
         templateName: 'Форма Т-49 Расчетно-платежная ведомость.xlsx',
         templatePath: path.join(TEMPLATE_DIR, 'Форма Т-49 Расчетно-платежная ведомость.xlsx'),
+        versionNo: 1,
+        isActive: true,
+    },
+    finance_payslip: {
+        key: 'finance_payslip',
+        name: 'Расчетный лист',
+        description: 'Индивидуальный расчетный листок сотрудника за выбранный месяц.',
+        sourceFormat: 'xlsx',
+        rendererKey: 'libreoffice',
+        fillStrategyKey: 'finance_payslip',
+        previewMode: 'pdf',
+        pdfPostprocess: 'none',
+        outputFormats: ['excel', 'pdf'],
+        templateName: 'Форма_ Расчетный листок работника организации (образец запол.xlsx',
+        templatePath: path.join(TEMPLATE_DIR, 'Форма_ Расчетный листок работника организации (образец запол.xlsx'),
         versionNo: 1,
         isActive: true,
     },
@@ -99,6 +135,7 @@ const normalizeFillStrategyKey = (
 ): DocumentTemplateFillStrategyKey => {
     const strategy = String(value || '').trim().toLowerCase();
     if (strategy === 'finance_statement_t49') return 'finance_statement_t49';
+    if (strategy === 'finance_payslip') return 'finance_payslip';
     return fallback;
 };
 
@@ -139,9 +176,10 @@ const resolveDbTemplate = async (templateKey: DocumentTemplateKey): Promise<Docu
 
         const staticTemplate = STATIC_TEMPLATES[templateKey];
         const storagePath = String(row.storage_path || '').trim();
-        const resolvedPath = storagePath
+        const rawResolvedPath = storagePath
             ? (path.isAbsolute(storagePath) ? storagePath : path.join(process.cwd(), storagePath))
             : staticTemplate.templatePath;
+        const resolvedPath = await resolveExistingTemplatePath(rawResolvedPath);
 
         return {
             key: templateKey,
@@ -170,5 +208,16 @@ export const getDocumentTemplateDefinition = async (
     templateKey: DocumentTemplateKey
 ): Promise<DocumentTemplateDefinition> => {
     const fromDb = await resolveDbTemplate(templateKey);
-    return fromDb || STATIC_TEMPLATES[templateKey];
+    if (fromDb) {
+        return fromDb;
+    }
+
+    const staticTemplate = STATIC_TEMPLATES[templateKey];
+    const resolvedPath = await resolveExistingTemplatePath(staticTemplate.templatePath);
+
+    return {
+        ...staticTemplate,
+        templateName: path.basename(resolvedPath),
+        templatePath: resolvedPath,
+    };
 };

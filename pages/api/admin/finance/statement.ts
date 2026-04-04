@@ -8,9 +8,18 @@ import {
     buildFinanceStatementTemplatePayload,
     type StatementSourcePayload,
 } from '../../../../lib/financeStatementDocument';
+import {
+    buildFinancePayslipBatchTemplatePayload,
+    buildFinancePayslipTemplatePayload,
+} from '../../../../lib/financePayslipDocument';
 import { convertOfficeDocumentToPdf } from '../../../../lib/documentConverter';
 import { hasDocumentRenderer, renderXlsxTemplateDocument } from '../../../../lib/documentRendererClient';
-import { getFinancePayload } from '../finance';
+import {
+    getFinancePayload,
+    type FinanceEmployee,
+    type FinanceSuggestedPayment,
+    type FinanceSuggestedPaymentType,
+} from '../finance';
 
 export const config = {
     api: {
@@ -31,6 +40,12 @@ const resolveFormat = (value: string | null): 'html' | 'excel' | 'pdf' => {
     return 'html';
 };
 
+const resolveDocumentKind = (value: string | null): 'statement' | 'payslip' => {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (normalized === 'payslip' || normalized === 'pay-slip' || normalized === 'расчетный_лист') return 'payslip';
+    return 'statement';
+};
+
 const parseEmployeeIds = (value: string | null): number[] => {
     if (!value) return [];
     return Array.from(
@@ -43,30 +58,103 @@ const parseEmployeeIds = (value: string | null): number[] => {
     );
 };
 
-const getPrimarySuggestion = (items: Array<{
-    type: 'advance' | 'salary_cycle' | 'vacation' | 'bonus';
-    recommendedDate: string;
-}>): typeof items[number] | null => {
-    if (!items.length) return null;
-    return items.reduce<typeof items[number] | null>((best, item) => {
-        if (!best) return item;
-
-        const bestTime = new Date(best.recommendedDate).getTime();
-        const itemTime = new Date(item.recommendedDate).getTime();
-        if (itemTime !== bestTime) return itemTime > bestTime ? item : best;
-
-        const bestRank = best.type === 'salary_cycle' ? 3 : best.type === 'advance' ? 2 : best.type === 'vacation' ? 1 : 0;
-        const itemRank = item.type === 'salary_cycle' ? 3 : item.type === 'advance' ? 2 : item.type === 'vacation' ? 1 : 0;
-        return itemRank > bestRank ? item : best;
-    }, null);
-};
-
 const resolvePaymentKind = (value: string | null | undefined): StatementSourcePayload['paymentKind'] => {
     const normalized = String(value || '').trim().toLowerCase();
     if (normalized === 'аванс' || normalized === 'advance') return 'advance';
     if (normalized === 'отпускные' || normalized === 'vacation') return 'vacation';
     if (normalized === 'премия' || normalized === 'bonus') return 'bonus';
+    if (normalized === 'больничный' || normalized === 'больничные' || normalized === 'sick_leave' || normalized === 'sick') return 'sick_leave';
     return 'salary';
+};
+
+const getSuggestedPaymentPriority = (type: FinanceSuggestedPaymentType): number => {
+    if (type === 'vacation') return 0;
+    if (type === 'sick_leave') return 1;
+    if (type === 'advance') return 2;
+    if (type === 'salary_cycle') return 3;
+    return 4;
+};
+
+const parseMonthKey = (value: string | null): Date | null => {
+    const normalized = String(value || '').trim();
+    if (!/^\d{4}-\d{2}$/.test(normalized)) return null;
+    const [yearRaw, monthRaw] = normalized.split('-');
+    const year = Number(yearRaw);
+    const month = Number(monthRaw);
+    if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) return null;
+    return new Date(Date.UTC(year, month - 1, 1));
+};
+
+const formatDateOnly = (value: Date): string => value.toISOString().slice(0, 10);
+
+const startOfMonthUtc = (value: Date): Date =>
+    new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), 1));
+
+const endOfMonthUtc = (value: Date): Date =>
+    new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth() + 1, 0));
+
+const aggregateCurrentMonthPayroll = (
+    employee: Pick<FinanceEmployee, 'currentAccrued' | 'currentWithheld' | 'currentPaid' | 'currentPayable' | 'currentOrgDebt' | 'currentEmployeeDebt' | 'currentBreakdown' | 'paymentHistory' | 'suggestedPayments'>,
+    monthKey: string | null
+): StatementSourcePayload | null => {
+    const monthDate = parseMonthKey(monthKey) || new Date();
+    const periodFrom = formatDateOnly(startOfMonthUtc(monthDate));
+    const periodTo = formatDateOnly(endOfMonthUtc(monthDate));
+
+    if (
+        !employee.currentAccrued
+        && !employee.currentWithheld
+        && !employee.currentPaid
+        && !employee.currentPayable
+        && !employee.currentOrgDebt
+        && !employee.currentEmployeeDebt
+    ) {
+        return null;
+    }
+
+    const sortedSuggestions = [...employee.suggestedPayments].sort((a, b) => {
+        const dateDiff = String(a.recommendedDate).localeCompare(String(b.recommendedDate));
+        if (dateDiff !== 0) return dateDiff;
+        return getSuggestedPaymentPriority(a.type) - getSuggestedPaymentPriority(b.type);
+    });
+    const paymentDates = [
+        ...sortedSuggestions.map((item) => item.recommendedDate).filter((value): value is string => Boolean(value)),
+        ...employee.paymentHistory.map((item) => item.date).filter((value): value is string => Boolean(value && String(value).startsWith(monthKey || ''))),
+    ].sort();
+
+    const accruals = {
+        salary: Number(employee.currentBreakdown.salary || 0),
+        bonus: Number(employee.currentBreakdown.bonus || 0),
+        sickLeave: Number(employee.currentBreakdown.sickLeave || 0),
+        vacation: Number(employee.currentBreakdown.vacation || 0),
+        otherIncome: 0,
+        totalAccrued: Number(employee.currentAccrued || 0),
+        incomeTax: Number(employee.currentWithheld || 0),
+        hospitalOffset: 0,
+        advanceOffset: Number(employee.currentBreakdown.advance || 0),
+        orgDebt: Number(employee.currentOrgDebt || 0),
+        employeeDebt: Number(employee.currentEmployeeDebt || 0),
+        payable: Number(employee.currentPayable || 0),
+    };
+
+    return {
+        key: `month-current#${monthKey || periodFrom}`,
+        label: 'Сводное начисление за месяц',
+        paymentKind: 'salary',
+        sourceType: 'current',
+        paymentId: null,
+        accruedAmount: Number(employee.currentAccrued || 0),
+        withheldAmount: Number(employee.currentWithheld || 0),
+        paidAmount: Number(employee.currentPaid || 0),
+        payableAmount: Number(employee.currentPayable || 0),
+        amount: Number(employee.currentPayable || 0),
+        periodFrom,
+        periodTo,
+        paymentDate: paymentDates[paymentDates.length - 1] || null,
+        comment: sortedSuggestions.map((item) => item.note).filter(Boolean).join(' | ') || null,
+        sourceSummary: sortedSuggestions.map((item) => item.sourceSummary).filter(Boolean).join(' | ') || 'Сводная расчетка по выбранному месяцу',
+        accruals,
+    };
 };
 
 const getMimeType = (format: 'html' | 'excel' | 'pdf'): string => {
@@ -104,6 +192,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         const sourceType = normalizeQueryValue(req.query.sourceType);
         const sourceKey = normalizeQueryValue(req.query.sourceKey);
         const paymentId = normalizeQueryValue(req.query.paymentId);
+        const month = normalizeQueryValue(req.query.month);
+        const documentKind = resolveDocumentKind(normalizeQueryValue(req.query.documentKind));
         const disposition = normalizeQueryValue(req.query.disposition) === 'inline' ? 'inline' : 'attachment';
         const format = resolveFormat(normalizeQueryValue(req.query.format));
 
@@ -117,7 +207,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             return res.status(400).json({ error: 'Некорректный источник расчетки' });
         }
 
-        const payload = await getFinancePayload(24);
+        const payload = await getFinancePayload(24, month);
         const employee = isBatchCurrent ? null : payload.employees.find((item) => item.id === employeeId);
 
         if (!isBatchCurrent && !employee) {
@@ -134,37 +224,47 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             };
             source: StatementSourcePayload;
         }> = [];
+        let payslipBatchEntries: Parameters<typeof buildFinancePayslipBatchTemplatePayload>[0] = [];
 
         if (sourceType === 'current') {
             const currentEmployee = employee!;
-            const suggestion = currentEmployee.suggestedPayments.find((item) => item.key === sourceKey);
-            if (!suggestion) {
-                return res.status(404).json({ error: 'Текущее основание не найдено' });
-            }
+            if (!sourceKey) {
+                source = aggregateCurrentMonthPayroll(currentEmployee, month);
+                if (!source) {
+                    return res.status(404).json({ error: 'Для выбранного месяца нет начислений для расчетки' });
+                }
+            } else {
+                const suggestion = currentEmployee.suggestedPayments.find((item) => item.key === sourceKey);
+                if (!suggestion) {
+                    return res.status(404).json({ error: 'Текущее основание не найдено' });
+                }
 
-            source = {
-                key: suggestion.key,
-                label: suggestion.label,
-                paymentKind: suggestion.type === 'advance'
-                    ? 'advance'
-                    : suggestion.type === 'vacation'
-                        ? 'vacation'
-                        : suggestion.type === 'bonus'
-                            ? 'bonus'
-                            : 'salary',
-                sourceType: 'current',
-                paymentId: null,
-                accruedAmount: suggestion.accruedAmount,
-                withheldAmount: suggestion.withheldAmount,
-                paidAmount: suggestion.paidAmount,
-                payableAmount: suggestion.payableAmount,
-                amount: suggestion.amount,
-                periodFrom: suggestion.periodFrom,
-                periodTo: suggestion.periodTo,
-                paymentDate: suggestion.recommendedDate,
-                comment: suggestion.note,
-                sourceSummary: suggestion.sourceSummary,
-            };
+                source = {
+                    key: suggestion.key,
+                    label: suggestion.label,
+                    paymentKind: suggestion.type === 'advance'
+                        ? 'advance'
+                        : suggestion.type === 'vacation'
+                            ? 'vacation'
+                            : suggestion.type === 'bonus'
+                                ? 'bonus'
+                                : suggestion.type === 'sick_leave'
+                                    ? 'sick_leave'
+                                    : 'salary',
+                    sourceType: 'current',
+                    paymentId: null,
+                    accruedAmount: suggestion.accruedAmount,
+                    withheldAmount: suggestion.withheldAmount,
+                    paidAmount: suggestion.paidAmount,
+                    payableAmount: suggestion.payableAmount,
+                    amount: suggestion.amount,
+                    periodFrom: suggestion.periodFrom,
+                    periodTo: suggestion.periodTo,
+                    paymentDate: suggestion.recommendedDate,
+                    comment: suggestion.note,
+                    sourceSummary: suggestion.sourceSummary,
+                };
+            }
         }
 
         if (sourceType === 'current_batch') {
@@ -176,8 +276,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             batchEntries = employeeIds.flatMap((id) => {
                 const currentEmployee = employeeMap.get(id);
                 if (!currentEmployee) return [];
-                const suggestion = getPrimarySuggestion(currentEmployee.suggestedPayments);
-                if (!suggestion) return [];
+                const aggregatedSource = aggregateCurrentMonthPayroll(currentEmployee, month);
+                if (!aggregatedSource) return [];
 
                 return [{
                     employee: {
@@ -186,33 +286,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
                         position: currentEmployee.position,
                         rate: currentEmployee.rate,
                     },
-                    source: {
-                        key: suggestion.key,
-                        label: suggestion.label,
-                        paymentKind: suggestion.type === 'advance'
-                            ? 'advance'
-                            : suggestion.type === 'vacation'
-                                ? 'vacation'
-                                : suggestion.type === 'bonus'
-                                    ? 'bonus'
-                                    : 'salary',
-                        sourceType: 'current',
-                        paymentId: null,
-                        accruedAmount: suggestion.accruedAmount,
-                        withheldAmount: suggestion.withheldAmount,
-                        paidAmount: suggestion.paidAmount,
-                        payableAmount: suggestion.payableAmount,
-                        amount: suggestion.amount,
-                        periodFrom: suggestion.periodFrom,
-                        periodTo: suggestion.periodTo,
-                        paymentDate: suggestion.recommendedDate,
-                        comment: suggestion.note,
-                        sourceSummary: suggestion.sourceSummary,
-                    },
+                    source: aggregatedSource,
                 }];
             });
 
-            if (!batchEntries.length) {
+            payslipBatchEntries = employeeIds.flatMap((id) => {
+                const currentEmployee = employeeMap.get(id);
+                if (!currentEmployee) return [];
+                const aggregatedSource = aggregateCurrentMonthPayroll(currentEmployee, month);
+                if (!aggregatedSource) return [];
+
+                return [{
+                    employee: {
+                        id: currentEmployee.id,
+                        fio: currentEmployee.fio,
+                        position: currentEmployee.position,
+                        rate: currentEmployee.rate,
+                    },
+                    source: aggregatedSource,
+                    paymentHistory: currentEmployee.paymentHistory,
+                    settings: payload.settings,
+                    contributionDetails: currentEmployee.currentContributionDetails,
+                    currentOrgDebt: currentEmployee.currentOrgDebt,
+                    currentEmployeeDebt: currentEmployee.currentEmployeeDebt,
+                }];
+            });
+
+            if (documentKind === 'payslip' && !payslipBatchEntries.length) {
+                return res.status(400).json({ error: 'У выбранных сотрудников нет текущих начислений для расчетных листов' });
+            }
+
+            if (documentKind === 'statement' && !batchEntries.length) {
                 return res.status(400).json({ error: 'У выбранных сотрудников нет текущих начислений для ведомости' });
             }
         }
@@ -248,28 +352,47 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             return res.status(400).json({ error: 'Не удалось подготовить источник расчетки' });
         }
 
+        const resolvedEmployee = isBatchCurrent ? null : employee;
+
         if (hasDocumentRenderer() && (format === 'excel' || format === 'pdf')) {
             const templatePayload = isBatchCurrent
-                ? await buildFinanceStatementBatchTemplatePayload({
-                    actor: {
-                        fio: actor.employee.fio,
-                        position: actor.employee.position,
-                    },
-                    entries: batchEntries,
-                })
-                : await buildFinanceStatementTemplatePayload({
-                    employee: {
-                        id: employee.id,
-                        fio: employee.fio,
-                        position: employee.position,
-                        rate: employee.rate,
-                    },
-                    actor: {
-                        fio: actor.employee.fio,
-                        position: actor.employee.position,
-                    },
-                    source: source!,
-                });
+                ? documentKind === 'payslip'
+                    ? await buildFinancePayslipBatchTemplatePayload(payslipBatchEntries)
+                    : await buildFinanceStatementBatchTemplatePayload({
+                        actor: {
+                            fio: actor.employee.fio,
+                            position: actor.employee.position,
+                        },
+                        entries: batchEntries,
+                    })
+                : documentKind === 'payslip'
+                    ? await buildFinancePayslipTemplatePayload({
+                        employee: {
+                            id: resolvedEmployee!.id,
+                            fio: resolvedEmployee!.fio,
+                            position: resolvedEmployee!.position,
+                            rate: resolvedEmployee!.rate,
+                        },
+                        source: source!,
+                        paymentHistory: resolvedEmployee!.paymentHistory,
+                        settings: payload.settings,
+                        contributionDetails: resolvedEmployee!.currentContributionDetails,
+                        currentOrgDebt: resolvedEmployee!.currentOrgDebt,
+                        currentEmployeeDebt: resolvedEmployee!.currentEmployeeDebt,
+                    })
+                    : await buildFinanceStatementTemplatePayload({
+                        employee: {
+                            id: resolvedEmployee!.id,
+                            fio: resolvedEmployee!.fio,
+                            position: resolvedEmployee!.position,
+                            rate: resolvedEmployee!.rate,
+                        },
+                        actor: {
+                            fio: actor.employee.fio,
+                            position: actor.employee.position,
+                        },
+                        source: source!,
+                    });
             const rendered = await renderXlsxTemplateDocument({
                 templateName: templatePayload.templateName,
                 fileBaseName: templatePayload.fileBaseName,
@@ -278,6 +401,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
                 rowHeights: templatePayload.rowHeights,
                 printAreas: templatePayload.printAreas,
                 rangeCopies: templatePayload.rangeCopies,
+                sheetCopies: templatePayload.sheetCopies,
                 hiddenSheets: templatePayload.hiddenSheets,
                 sheetPageSetup: templatePayload.sheetPageSetup,
                 outputFormat: format,
@@ -294,12 +418,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             return res.status(400).json({ error: 'Для общей расчетки нужен включенный document renderer' });
         }
 
+        if (documentKind === 'payslip') {
+            return res.status(400).json({ error: 'Для расчетного листка нужен включенный document renderer' });
+        }
+
         const statementParams = {
             employee: {
-                id: employee.id,
-                fio: employee.fio,
-                position: employee.position,
-                rate: employee.rate,
+                id: resolvedEmployee!.id,
+                fio: resolvedEmployee!.fio,
+                position: resolvedEmployee!.position,
+                rate: resolvedEmployee!.rate,
             },
             actor: {
                 fio: actor.employee.fio,

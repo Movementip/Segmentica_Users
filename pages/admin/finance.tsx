@@ -1,7 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { withLayout } from '../../layout';
-import { Box, Button, Card, Dialog, Flex, Grid, Select, Table, Text, TextArea, TextField } from '@radix-ui/themes';
-import { FiDownload, FiFileText, FiPrinter, FiRefreshCw, FiSave, FiSearch } from 'react-icons/fi';
+import { Box, Button, Card, Dialog, DropdownMenu, Flex, Select, Text, TextField } from '@radix-ui/themes';
+import {
+    FiChevronLeft,
+    FiChevronRight,
+    FiExternalLink,
+    FiFileText,
+    FiPrinter,
+    FiRefreshCw,
+    FiSearch,
+    FiX,
+} from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
 import styles from './AdminFinance.module.css';
@@ -12,21 +21,21 @@ type FinanceSettings = {
     secondDay: number | null;
 };
 
-type FinanceEmployee = {
-    id: number;
-    fio: string;
-    position: string | null;
-    rate: number | null;
-    active: boolean;
-    totalPaid: number;
-    paymentCount: number;
-    lastPaymentDate: string | null;
-    currentAccrued: number;
-    currentWithheld: number;
-    currentPaid: number;
-    currentPayable: number;
-    suggestedPayments: FinanceSuggestedPayment[];
-    paymentHistory: FinancePayment[];
+type FinanceSuggestedPayment = {
+    key: string;
+    type: 'advance' | 'salary_cycle' | 'vacation' | 'bonus' | 'sick_leave';
+    encodedType: string;
+    label: string;
+    amount: number;
+    accruedAmount: number;
+    withheldAmount: number;
+    paidAmount: number;
+    payableAmount: number;
+    recommendedDate: string;
+    periodFrom: string | null;
+    periodTo: string | null;
+    note: string | null;
+    sourceSummary: string | null;
 };
 
 type FinancePayment = {
@@ -48,26 +57,44 @@ type FinancePayment = {
     calculation: Record<string, any> | null;
 };
 
-type FinanceSuggestedPayment = {
-    key: string;
-    type: 'advance' | 'salary_cycle' | 'vacation' | 'bonus';
-    encodedType: string;
-    label: string;
-    amount: number;
-    accruedAmount: number;
-    withheldAmount: number;
-    paidAmount: number;
-    payableAmount: number;
-    recommendedDate: string;
-    periodFrom: string | null;
-    periodTo: string | null;
-    note: string | null;
-    sourceSummary: string | null;
+type FinanceEmployee = {
+    id: number;
+    fio: string;
+    position: string | null;
+    rate: number | null;
+    active: boolean;
+    totalPaid: number;
+    paymentCount: number;
+    lastPaymentDate: string | null;
+    currentAccrued: number;
+    currentWithheld: number;
+    currentPaid: number;
+    currentPayable: number;
+    currentOrgDebt: number;
+    currentEmployeeDebt: number;
+    currentContributions: number;
+    currentContributionDetails: {
+        taxableIncomeMonth: number;
+        contributionBaseMonth: number;
+        contributionYearBase30: number;
+        contributionYearBase151: number;
+    };
+    currentBreakdown: {
+        advance: number;
+        salary: number;
+        vacation: number;
+        bonus: number;
+        sickLeave: number;
+    };
+    suggestedPayments: FinanceSuggestedPayment[];
+    paymentHistory: FinancePayment[];
 };
 
 type FinancePayload = {
     settings: FinanceSettings;
     paymentTableAvailable: boolean;
+    selectedMonth: string;
+    selectedMonthLabel: string;
     employees: FinanceEmployee[];
     recentPayments: FinancePayment[];
     totals: {
@@ -79,71 +106,139 @@ type FinancePayload = {
 
 type StatementPreviewState = {
     title: string;
-    url: string;
+    description: string;
+    previewUrl: string;
+    kind: 'batch-payroll' | 'single-statement' | 'selected-statements';
+    employeeIds: number[];
+    employeeId?: number;
 };
 
-function formatDate(value: string | null | undefined): string {
+type FinanceTabKey = 'summary' | 'accruals' | 'withheld' | 'paid' | 'contributions';
+
+type PayrollColumn = {
+    key: string;
+    label: React.ReactNode;
+    render: (employee: FinanceEmployee) => string;
+    total?: (employees: FinanceEmployee[]) => string;
+};
+
+const TABS: Array<{ key: FinanceTabKey; label: string }> = [
+    { key: 'summary', label: 'Сводка' },
+    { key: 'accruals', label: 'Начисления' },
+    { key: 'withheld', label: 'Удержания' },
+    { key: 'paid', label: 'Выплаченное' },
+    { key: 'contributions', label: 'Взносы' },
+];
+
+const CONTRIBUTION_THRESHOLD_LABEL = '2 979 000 ₽';
+
+const formatDate = (value: string | null | undefined): string => {
     if (!value) return '—';
     const parsed = new Date(value);
     if (Number.isNaN(parsed.getTime())) return String(value);
     return parsed.toLocaleDateString('ru-RU', { year: 'numeric', month: '2-digit', day: '2-digit' });
-}
+};
 
-function formatCurrency(value: number | null | undefined): string {
-    return new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB' }).format(Number(value) || 0);
-}
+const formatNumber = (value: number | null | undefined): string =>
+    new Intl.NumberFormat('ru-RU', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    }).format(Number(value) || 0);
 
-function formatSuggestedPaymentLabel(value: FinanceSuggestedPayment | null | undefined): string {
-    if (!value) return 'Ручная выплата';
-    return value.label;
-}
+const createMonthKey = (value: Date): string => {
+    const year = value.getFullYear();
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}`;
+};
 
-function getPrimarySuggestion(items: FinanceSuggestedPayment[]): FinanceSuggestedPayment | null {
-    if (!items.length) return null;
+const shiftMonthKey = (monthKey: string, delta: number): string => {
+    const [yearRaw, monthRaw] = monthKey.split('-');
+    const year = Number(yearRaw);
+    const month = Number(monthRaw);
+    if (!Number.isInteger(year) || !Number.isInteger(month)) return createMonthKey(new Date());
+    return createMonthKey(new Date(year, month - 1 + delta, 1));
+};
 
-    return items.reduce<FinanceSuggestedPayment | null>((best, item) => {
-        if (!best) return item;
+const formatMonthLabel = (monthKey: string): string => {
+    const [yearRaw, monthRaw] = monthKey.split('-');
+    const year = Number(yearRaw);
+    const month = Number(monthRaw);
+    if (!Number.isInteger(year) || !Number.isInteger(month)) return monthKey;
+    const label = new Date(year, month - 1, 1).toLocaleDateString('ru-RU', {
+        month: 'long',
+        year: 'numeric',
+    });
+    return label ? `${label.charAt(0).toUpperCase()}${label.slice(1)}` : monthKey;
+};
 
-        const bestTime = new Date(best.recommendedDate).getTime();
-        const itemTime = new Date(item.recommendedDate).getTime();
-        if (itemTime !== bestTime) return itemTime > bestTime ? item : best;
+const formatMonthFileLabel = (monthKey: string): string => {
+    const [yearRaw, monthRaw] = monthKey.split('-');
+    const year = Number(yearRaw);
+    const month = Number(monthRaw);
+    if (!Number.isInteger(year) || !Number.isInteger(month)) return monthKey;
+    return `${String(month).padStart(2, '0')}.${year}`;
+};
 
-        const bestRank = best.type === 'salary_cycle' ? 3 : best.type === 'advance' ? 2 : best.type === 'vacation' ? 1 : 0;
-        const itemRank = item.type === 'salary_cycle' ? 3 : item.type === 'advance' ? 2 : item.type === 'vacation' ? 1 : 0;
-        return itemRank > bestRank ? item : best;
-    }, null);
-}
+const toSurnameInitials = (value: string | null | undefined): string => {
+    const parts = String(value || '')
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+    if (!parts.length) return '';
+    const [surname, name, middleName] = parts;
+    const nameInitial = name ? `${name.charAt(0).toUpperCase()}.` : '';
+    const middleInitial = middleName ? ` ${middleName.charAt(0).toUpperCase()}.` : '';
+    return `${surname}${nameInitial ? ` ${nameInitial}` : ''}${middleInitial}`;
+};
 
-function formatPeriod(dateFrom: string | null | undefined, dateTo: string | null | undefined): string {
-    if (!dateFrom && !dateTo) return '—';
-    if (dateFrom && dateTo) return `${formatDate(dateFrom)} - ${formatDate(dateTo)}`;
-    return formatDate(dateFrom || dateTo || '');
-}
+const createMonthEndDate = (monthKey: string): string => {
+    const [yearRaw, monthRaw] = monthKey.split('-');
+    const year = Number(yearRaw);
+    const month = Number(monthRaw);
+    if (!Number.isInteger(year) || !Number.isInteger(month)) {
+        return new Date().toISOString().slice(0, 10);
+    }
+    return new Date(year, month, 0).toISOString().slice(0, 10);
+};
 
-function buildStatementUrl(params: {
-    employeeId: number;
+const getSuggestedPaymentTypeLabel = (type: FinanceSuggestedPayment['type']): string => {
+    if (type === 'advance') return 'Аванс';
+    if (type === 'vacation') return 'Отпускные';
+    if (type === 'bonus') return 'Премия';
+    if (type === 'sick_leave') return 'Больничный';
+    return 'Зарплата';
+};
+
+const buildStatementUrl = (params: {
+    employeeId?: number;
     employeeIds?: number[];
     sourceType: 'current' | 'history' | 'current_batch';
-    format: 'html' | 'excel' | 'pdf';
+    documentKind?: 'statement' | 'payslip';
+    format: 'excel' | 'pdf';
+    month: string;
     sourceKey?: string | null;
     paymentId?: string | null;
     disposition?: 'inline' | 'attachment';
-}): string {
+}): string => {
     const search = new URLSearchParams();
     search.set('sourceType', params.sourceType);
+    search.set('documentKind', params.documentKind || 'statement');
     search.set('format', params.format);
+    search.set('month', params.month);
     search.set('disposition', params.disposition || 'attachment');
+
     if (params.sourceType === 'current_batch') {
         if (params.employeeIds?.length) {
             search.set('employeeIds', params.employeeIds.join(','));
         }
-    } else {
+    } else if (params.employeeId) {
         search.set('employeeId', String(params.employeeId));
     }
+
     if (params.sourceKey) search.set('sourceKey', params.sourceKey);
     if (params.paymentId) search.set('paymentId', params.paymentId);
     return `/api/admin/finance/statement?${search.toString()}`;
-}
+};
 
 function AdminFinancePage(): JSX.Element {
     const { user, loading: authLoading } = useAuth();
@@ -151,27 +246,138 @@ function AdminFinancePage(): JSX.Element {
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
-    const [employees, setEmployees] = useState<FinanceEmployee[]>([]);
-    const [recentPayments, setRecentPayments] = useState<FinancePayment[]>([]);
-    const [paymentTableAvailable, setPaymentTableAvailable] = useState(false);
-    const [months, setMonths] = useState('6');
+    const [payload, setPayload] = useState<FinancePayload | null>(null);
+    const [monthKey, setMonthKey] = useState(() => createMonthKey(new Date()));
     const [search, setSearch] = useState('');
-    const [settings, setSettings] = useState<FinanceSettings>({ paymentsPerMonth: 2, firstDay: 10, secondDay: 25 });
-    const [rateDrafts, setRateDrafts] = useState<Record<number, string>>({});
-    const [paymentDialogEmployee, setPaymentDialogEmployee] = useState<FinanceEmployee | null>(null);
-    const [statementEmployee, setStatementEmployee] = useState<FinanceEmployee | null>(null);
-    const [statementPreview, setStatementPreview] = useState<StatementPreviewState | null>(null);
-    const [batchStatementOpen, setBatchStatementOpen] = useState(false);
-    const [batchStatementSelection, setBatchStatementSelection] = useState<number[]>([]);
-    const [paymentForm, setPaymentForm] = useState({
-        suggestionKey: 'manual',
+    const [activeTab, setActiveTab] = useState<FinanceTabKey>('summary');
+    const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<number[]>([]);
+    const [settingsDraft, setSettingsDraft] = useState<FinanceSettings>({ paymentsPerMonth: 2, firstDay: 10, secondDay: 25 });
+    const [manualPaymentEmployee, setManualPaymentEmployee] = useState<FinanceEmployee | null>(null);
+    const [manualPaymentError, setManualPaymentError] = useState<string | null>(null);
+    const [manualPaymentForm, setManualPaymentForm] = useState({
         paymentType: 'зарплата',
         amount: '',
         date: new Date().toISOString().slice(0, 10),
         comment: '',
     });
-    const [paymentError, setPaymentError] = useState<string | null>(null);
-    const previewFrameRef = useRef<HTMLIFrameElement | null>(null);
+    const [statementPreview, setStatementPreview] = useState<StatementPreviewState | null>(null);
+    const [previewPages, setPreviewPages] = useState<string[]>([]);
+    const [previewLoading, setPreviewLoading] = useState(false);
+    const [previewError, setPreviewError] = useState<string | null>(null);
+    const [previewPdfObjectUrl, setPreviewPdfObjectUrl] = useState<string | null>(null);
+    const previewPrintFrameRef = useRef<HTMLIFrameElement | null>(null);
+    const previewStageRef = useRef<HTMLDivElement | null>(null);
+
+    useEffect(() => {
+        if (!statementPreview) return undefined;
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.body.style.overflow = previousOverflow;
+        };
+    }, [statementPreview]);
+
+    useEffect(() => {
+        if (!statementPreview) {
+            setPreviewPages([]);
+            setPreviewLoading(false);
+            setPreviewError(null);
+            if (previewPrintFrameRef.current) {
+                previewPrintFrameRef.current.removeAttribute('src');
+            }
+            setPreviewPdfObjectUrl((current) => {
+                if (current) {
+                    window.URL.revokeObjectURL(current);
+                }
+                return null;
+            });
+            return undefined;
+        }
+
+        let cancelled = false;
+
+        const renderPreview = async () => {
+            try {
+                setPreviewLoading(true);
+                setPreviewError(null);
+                setPreviewPages([]);
+
+                const pdfjs = await import(/* webpackIgnore: true */ '/pdfjs/pdf.mjs');
+                pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/pdf.worker.min.mjs';
+                const response = await fetch(statementPreview.previewUrl, { credentials: 'include' });
+                if (!response.ok) {
+                    throw new Error('Не удалось загрузить PDF для предпросмотра');
+                }
+
+                const fileBytes = new Uint8Array(await response.arrayBuffer());
+                const pdfObjectUrl = window.URL.createObjectURL(new Blob([fileBytes], { type: 'application/pdf' }));
+                setPreviewPdfObjectUrl((current) => {
+                    if (current) {
+                        window.URL.revokeObjectURL(current);
+                    }
+                    return pdfObjectUrl;
+                });
+                const loadingTask = pdfjs.getDocument({ data: fileBytes });
+                const pdf = await loadingTask.promise;
+
+                const availableWidth = Math.max((previewStageRef.current?.clientWidth ?? 1200) - 8, 320);
+                const pages: string[] = [];
+
+                for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+                    const page = await pdf.getPage(pageNumber);
+                    const baseViewport = page.getViewport({ scale: 1 });
+                    const scale = availableWidth / baseViewport.width;
+                    const viewport = page.getViewport({ scale });
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d', { alpha: false });
+
+                    if (!context) {
+                        throw new Error('Не удалось подготовить canvas для предпросмотра PDF');
+                    }
+
+                    const outputScale = typeof window !== 'undefined'
+                        ? Math.min(window.devicePixelRatio || 1, 2)
+                        : 1;
+
+                    canvas.width = Math.floor(viewport.width * outputScale);
+                    canvas.height = Math.floor(viewport.height * outputScale);
+
+                    context.fillStyle = '#ffffff';
+                    context.fillRect(0, 0, canvas.width, canvas.height);
+
+                    if (outputScale !== 1) {
+                        context.setTransform(outputScale, 0, 0, outputScale, 0, 0);
+                    }
+
+                    await page.render({
+                        canvasContext: context,
+                        viewport,
+                        background: 'rgb(255,255,255)',
+                    }).promise;
+
+                    pages.push(canvas.toDataURL('image/png'));
+                }
+
+                if (!cancelled) {
+                    setPreviewPages(pages);
+                }
+            } catch (error) {
+                if (!cancelled) {
+                    setPreviewError(error instanceof Error ? error.message : 'Не удалось открыть предпросмотр PDF');
+                }
+            } finally {
+                if (!cancelled) {
+                    setPreviewLoading(false);
+                }
+            }
+        };
+
+        void renderPreview();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [statementPreview]);
 
     const canViewFinance = Boolean(user?.permissions?.includes('admin.finance'));
 
@@ -179,52 +385,36 @@ function AdminFinancePage(): JSX.Element {
         try {
             setLoading(true);
             setError(null);
-            const response = await fetch(`/api/admin/finance?months=${encodeURIComponent(months)}`);
+            const response = await fetch(`/api/admin/finance?months=6&month=${encodeURIComponent(monthKey)}`);
             const data = (await response.json().catch(() => ({}))) as FinancePayload | { error?: string };
             if (!response.ok) {
-                throw new Error((data as { error?: string })?.error || 'Ошибка загрузки финансов');
+                throw new Error((data as { error?: string })?.error || 'Ошибка загрузки расчета зарплаты');
             }
 
-            const payload = data as FinancePayload;
-            setEmployees(payload.employees || []);
-            setRecentPayments(payload.recentPayments || []);
-            setPaymentTableAvailable(Boolean(payload.paymentTableAvailable));
-            setSettings(payload.settings);
-            setRateDrafts(
-                Object.fromEntries((payload.employees || []).map((employee) => [employee.id, employee.rate == null ? '' : String(employee.rate)]))
-            );
+            const nextPayload = data as FinancePayload;
+            setPayload(nextPayload);
+            setSettingsDraft(nextPayload.settings);
+            setSelectedEmployeeIds((prev) => {
+                const existingIds = new Set(nextPayload.employees.map((employee) => employee.id));
+                const preserved = prev.filter((id) => existingIds.has(id));
+                if (preserved.length) return preserved;
+
+                return nextPayload.employees
+                    .filter((employee) => employee.active && (
+                        employee.currentAccrued > 0
+                        || employee.currentPaid > 0
+                        || employee.currentPayable > 0
+                        || employee.currentOrgDebt > 0
+                        || employee.currentEmployeeDebt > 0
+                    ))
+                    .map((employee) => employee.id);
+            });
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Ошибка загрузки финансов');
+            setError(err instanceof Error ? err.message : 'Ошибка загрузки расчета зарплаты');
         } finally {
             setLoading(false);
         }
-    }, [months]);
-
-    useEffect(() => {
-        if (authLoading) return;
-        if (!canViewFinance) return;
-        void loadData();
-    }, [authLoading, canViewFinance, loadData]);
-
-    const filteredEmployees = useMemo(() => {
-        const q = search.trim().toLowerCase();
-        if (!q) return employees;
-        return employees.filter((employee) =>
-            String(employee.id).includes(q) ||
-            String(employee.fio || '').toLowerCase().includes(q) ||
-            String(employee.position || '').toLowerCase().includes(q)
-        );
-    }, [employees, search]);
-
-    const batchStatementCandidates = useMemo(
-        () => filteredEmployees.filter((employee) => employee.active && employee.suggestedPayments.length > 0),
-        [filteredEmployees]
-    );
-
-    const getSuggestionByKey = (employee: FinanceEmployee | null, key: string): FinanceSuggestedPayment | null => {
-        if (!employee) return null;
-        return employee.suggestedPayments.find((item) => item.key === key) || null;
-    };
+    }, [monthKey]);
 
     const handleSaveSettings = async () => {
         try {
@@ -237,91 +427,484 @@ function AdminFinancePage(): JSX.Element {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     action: 'save-settings',
-                    paymentsPerMonth: settings.paymentsPerMonth,
-                    firstDay: settings.firstDay,
-                    secondDay: settings.paymentsPerMonth === 2 ? settings.secondDay : null,
+                    paymentsPerMonth: settingsDraft.paymentsPerMonth,
+                    firstDay: settingsDraft.firstDay,
+                    secondDay: settingsDraft.paymentsPerMonth === 2 ? settingsDraft.secondDay : null,
                 }),
             });
             const data = (await response.json().catch(() => ({}))) as { error?: string };
             if (!response.ok) {
-                throw new Error(data?.error || 'Ошибка сохранения графика');
+                throw new Error(data?.error || 'Не удалось сохранить график выплат');
             }
-            setNotice('График начисления сохранен.');
+
+            setNotice('График выплат сохранён.');
+            await loadData();
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Ошибка сохранения графика');
+            setError(err instanceof Error ? err.message : 'Не удалось сохранить график выплат');
         } finally {
             setSaving(false);
         }
     };
 
-    const handleSaveRate = async (employee: FinanceEmployee) => {
+    useEffect(() => {
+        if (authLoading || !canViewFinance) return;
+        void loadData();
+    }, [authLoading, canViewFinance, loadData]);
+
+    const employees = useMemo(() => payload?.employees || [], [payload]);
+    const recentPayments = useMemo(() => payload?.recentPayments || [], [payload]);
+
+    const filteredEmployees = useMemo(() => {
+        const q = search.trim().toLowerCase();
+        if (!q) return employees;
+        return employees.filter((employee) =>
+            String(employee.fio || '').toLowerCase().includes(q)
+            || String(employee.position || '').toLowerCase().includes(q)
+            || String(employee.id).includes(q)
+        );
+    }, [employees, search]);
+
+    const selectedEmployees = useMemo(
+        () => employees.filter((employee) => selectedEmployeeIds.includes(employee.id)),
+        [employees, selectedEmployeeIds]
+    );
+
+    const visibleEmployeeIds = useMemo(() => filteredEmployees.map((employee) => employee.id), [filteredEmployees]);
+    const allVisibleSelected = useMemo(
+        () => visibleEmployeeIds.length > 0 && visibleEmployeeIds.every((id) => selectedEmployeeIds.includes(id)),
+        [selectedEmployeeIds, visibleEmployeeIds]
+    );
+
+    const someVisibleSelected = useMemo(
+        () => visibleEmployeeIds.some((id) => selectedEmployeeIds.includes(id)),
+        [selectedEmployeeIds, visibleEmployeeIds]
+    );
+
+    const toggleEmployee = (employeeId: number) => {
+        setSelectedEmployeeIds((prev) => (
+            prev.includes(employeeId)
+                ? prev.filter((id) => id !== employeeId)
+                : [...prev, employeeId]
+        ));
+    };
+
+    const toggleVisible = () => {
+        setSelectedEmployeeIds((prev) => {
+            if (allVisibleSelected) {
+                return prev.filter((id) => !visibleEmployeeIds.includes(id));
+            }
+
+            return Array.from(new Set([...prev, ...visibleEmployeeIds]));
+        });
+    };
+
+    const activeColumns = useMemo<PayrollColumn[]>(() => {
+        if (activeTab === 'accruals') {
+            return [
+                {
+                    key: 'advance',
+                    label: 'Аванс, ₽',
+                    render: (employee) => formatNumber(employee.currentBreakdown.advance),
+                    total: (items) => formatNumber(items.reduce((sum, employee) => sum + employee.currentBreakdown.advance, 0)),
+                },
+                {
+                    key: 'salary',
+                    label: 'Зарплата, ₽',
+                    render: (employee) => formatNumber(employee.currentBreakdown.salary),
+                    total: (items) => formatNumber(items.reduce((sum, employee) => sum + employee.currentBreakdown.salary, 0)),
+                },
+                {
+                    key: 'vacation',
+                    label: 'Отпускные, ₽',
+                    render: (employee) => formatNumber(employee.currentBreakdown.vacation),
+                    total: (items) => formatNumber(items.reduce((sum, employee) => sum + employee.currentBreakdown.vacation, 0)),
+                },
+                {
+                    key: 'sickLeave',
+                    label: 'Больничный, ₽',
+                    render: (employee) => formatNumber(employee.currentBreakdown.sickLeave),
+                    total: (items) => formatNumber(items.reduce((sum, employee) => sum + employee.currentBreakdown.sickLeave, 0)),
+                },
+                {
+                    key: 'bonus',
+                    label: 'Премия, ₽',
+                    render: (employee) => formatNumber(employee.currentBreakdown.bonus),
+                    total: (items) => formatNumber(items.reduce((sum, employee) => sum + employee.currentBreakdown.bonus, 0)),
+                },
+            ];
+        }
+
+        if (activeTab === 'withheld') {
+            return [
+                {
+                    key: 'withheld',
+                    label: 'Удержано, ₽',
+                    render: (employee) => formatNumber(employee.currentWithheld),
+                    total: (items) => formatNumber(items.reduce((sum, employee) => sum + employee.currentWithheld, 0)),
+                },
+                {
+                    key: 'orgDebt',
+                    label: 'Долг компании, ₽',
+                    render: (employee) => formatNumber(employee.currentOrgDebt),
+                    total: (items) => formatNumber(items.reduce((sum, employee) => sum + employee.currentOrgDebt, 0)),
+                },
+                {
+                    key: 'employeeDebt',
+                    label: 'Долг сотрудника, ₽',
+                    render: (employee) => formatNumber(employee.currentEmployeeDebt),
+                    total: (items) => formatNumber(items.reduce((sum, employee) => sum + employee.currentEmployeeDebt, 0)),
+                },
+                {
+                    key: 'payable',
+                    label: 'К выплате, ₽',
+                    render: (employee) => formatNumber(employee.currentPayable),
+                    total: (items) => formatNumber(items.reduce((sum, employee) => sum + employee.currentPayable, 0)),
+                },
+            ];
+        }
+
+        if (activeTab === 'paid') {
+            return [
+                {
+                    key: 'paid',
+                    label: 'Выплачено, ₽',
+                    render: (employee) => formatNumber(employee.currentPaid),
+                    total: (items) => formatNumber(items.reduce((sum, employee) => sum + employee.currentPaid, 0)),
+                },
+                {
+                    key: 'historyPaid',
+                    label: 'Всего выплачено, ₽',
+                    render: (employee) => formatNumber(employee.totalPaid),
+                    total: (items) => formatNumber(items.reduce((sum, employee) => sum + employee.totalPaid, 0)),
+                },
+                {
+                    key: 'paymentCount',
+                    label: 'Платежей',
+                    render: (employee) => String(employee.paymentCount),
+                    total: (items) => String(items.reduce((sum, employee) => sum + employee.paymentCount, 0)),
+                },
+                {
+                    key: 'lastPaymentDate',
+                    label: 'Последняя выплата',
+                    render: (employee) => formatDate(employee.lastPaymentDate),
+                    total: () => '—',
+                },
+            ];
+        }
+
+        if (activeTab === 'contributions') {
+            return [
+                {
+                    key: 'taxableIncomeMonth',
+                    label: 'Облагаемый доход за месяц, ₽',
+                    render: (employee) => formatNumber(employee.currentContributionDetails.taxableIncomeMonth),
+                    total: (items) => formatNumber(items.reduce((sum, employee) => sum + employee.currentContributionDetails.taxableIncomeMonth, 0)),
+                },
+                {
+                    key: 'contributionBaseMonth',
+                    label: 'Доход для взносов за месяц, ₽',
+                    render: (employee) => formatNumber(employee.currentContributionDetails.contributionBaseMonth),
+                    total: (items) => formatNumber(items.reduce((sum, employee) => sum + employee.currentContributionDetails.contributionBaseMonth, 0)),
+                },
+                {
+                    key: 'contributionYearBase30',
+                    label: (
+                        <>
+                            <div>С начала года по ставке 30%, ₽</div>
+                            <div className={styles.metricHeaderHint}>в пределах {CONTRIBUTION_THRESHOLD_LABEL}</div>
+                        </>
+                    ),
+                    render: (employee) => formatNumber(employee.currentContributionDetails.contributionYearBase30),
+                    total: (items) => formatNumber(items.reduce((sum, employee) => sum + employee.currentContributionDetails.contributionYearBase30, 0)),
+                },
+                {
+                    key: 'contributionYearBase151',
+                    label: (
+                        <>
+                            <div>С начала года по ставке 15,1%, ₽</div>
+                            <div className={styles.metricHeaderHint}>свыше {CONTRIBUTION_THRESHOLD_LABEL}</div>
+                        </>
+                    ),
+                    render: (employee) => formatNumber(employee.currentContributionDetails.contributionYearBase151),
+                    total: (items) => formatNumber(items.reduce((sum, employee) => sum + employee.currentContributionDetails.contributionYearBase151, 0)),
+                },
+                {
+                    key: 'currentContributions',
+                    label: 'Взносы за месяц, ₽',
+                    render: (employee) => formatNumber(employee.currentContributions),
+                    total: (items) => formatNumber(items.reduce((sum, employee) => sum + employee.currentContributions, 0)),
+                },
+            ];
+        }
+
+        return [
+            {
+                key: 'accrued',
+                label: 'Начислено, ₽',
+                render: (employee) => formatNumber(employee.currentAccrued),
+                total: (items) => formatNumber(items.reduce((sum, employee) => sum + employee.currentAccrued, 0)),
+            },
+            {
+                key: 'withheld',
+                label: 'Удержано, ₽',
+                render: (employee) => formatNumber(employee.currentWithheld),
+                total: (items) => formatNumber(items.reduce((sum, employee) => sum + employee.currentWithheld, 0)),
+            },
+            {
+                key: 'paid',
+                label: 'Выплачено, ₽',
+                render: (employee) => formatNumber(employee.currentPaid),
+                total: (items) => formatNumber(items.reduce((sum, employee) => sum + employee.currentPaid, 0)),
+            },
+            {
+                key: 'payable',
+                label: 'К выплате, ₽',
+                render: (employee) => formatNumber(employee.currentPayable),
+                total: (items) => formatNumber(items.reduce((sum, employee) => sum + employee.currentPayable, 0)),
+            },
+            {
+                key: 'contributions',
+                label: 'Взносы, ₽',
+                render: (employee) => formatNumber(employee.currentContributions),
+                total: (items) => formatNumber(items.reduce((sum, employee) => sum + employee.currentContributions, 0)),
+            },
+        ];
+    }, [activeTab]);
+
+    const gridTemplateColumns = useMemo(
+        () => `44px minmax(320px, 1.8fr) ${activeColumns.map(() => 'minmax(140px, 1fr)').join(' ')}`,
+        [activeColumns]
+    );
+
+    const activeTabDescription = useMemo(() => {
+        if (activeTab === 'accruals') {
+            return 'Зарплата, аванс, отпускные, больничные и премии за выбранный месяц.';
+        }
+        if (activeTab === 'withheld') {
+            return 'НДФЛ, задолженность компании, задолженность сотрудника и итог к выплате.';
+        }
+        if (activeTab === 'paid') {
+            return 'Что уже реально проведено в журнале выплат за выбранный месяц.';
+        }
+        if (activeTab === 'contributions') {
+            return `Взносы считаются по месяцу с порогом ${CONTRIBUTION_THRESHOLD_LABEL}: 30% в пределах порога и 15,1% сверх него.`;
+        }
+        return 'Сводка по выбранному месяцу: начислено, удержано, выплачено, к выплате и взносы.';
+    }, [activeTab]);
+
+    const openPreview = (preview: StatementPreviewState) => {
+        setStatementPreview(preview);
+    };
+
+    const buildPreviewDownloadFileName = (
+        kind: StatementPreviewState['kind'],
+        employeeIds: number[],
+        format: 'pdf' | 'excel'
+    ): string => {
+        const extension = format === 'pdf' ? 'pdf' : 'xlsx';
+        const monthLabel = formatMonthFileLabel(monthKey);
+        const selectedEmployees = payload?.employees.filter((employee) => employeeIds.includes(employee.id)) || [];
+        const singleEmployee = selectedEmployees.length === 1 ? selectedEmployees[0] : null;
+        const employeeLabel = singleEmployee ? toSurnameInitials(singleEmployee.fio) : '';
+
+        if (kind === 'batch-payroll') {
+            const base = employeeLabel
+                ? `Расчетно платежная ведомость ${employeeLabel} ${monthLabel}`
+                : `Расчетно платежная ведомость ${monthLabel}`;
+            return `${base}.${extension}`;
+        }
+
+        const base = employeeLabel
+            ? `Расчетный листок ${employeeLabel} ${monthLabel}`
+            : `Расчетные листки ${monthLabel}`;
+        return `${base}.${extension}`;
+    };
+
+    const downloadStatementFile = async (url: string, fileName: string) => {
+        const response = await fetch(url, { credentials: 'include' });
+        if (!response.ok) {
+            throw new Error('Не удалось скачать документ');
+        }
+
+        const blob = await response.blob();
+        const objectUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(objectUrl);
+    };
+
+    const openBatchPayrollPreview = () => {
+        if (!selectedEmployeeIds.length) return;
+        openPreview({
+            title: 'Предпросмотр 1 документа',
+            description: 'Расчетная ведомость по выбранному месяцу и выбранным сотрудникам.',
+            previewUrl: buildStatementUrl({
+                sourceType: 'current_batch',
+                documentKind: 'statement',
+                employeeIds: selectedEmployeeIds,
+                month: monthKey,
+                format: 'pdf',
+                disposition: 'inline',
+            }),
+            kind: 'batch-payroll',
+            employeeIds: selectedEmployeeIds,
+        });
+    };
+
+    const openSelectedStatements = (format: 'excel' | 'pdf') => {
+        if (!selectedEmployeeIds.length) return;
+
+        window.open(
+            buildStatementUrl({
+                sourceType: 'current_batch',
+                documentKind: 'payslip',
+                employeeIds: selectedEmployeeIds,
+                month: monthKey,
+                format,
+                disposition: format === 'pdf' ? 'inline' : 'attachment',
+            }),
+            '_blank',
+            'noopener,noreferrer'
+        );
+    };
+
+    const openSelectedStatementsPreview = () => {
+        if (!selectedEmployeeIds.length) return;
+
+        openPreview({
+            title: `Предпросмотр ${selectedEmployeeIds.length} ${selectedEmployeeIds.length === 1 ? 'документа' : 'документов'}`,
+            description: selectedEmployeeIds.length === 1
+                ? `Расчетный лист за ${payload?.selectedMonthLabel || formatMonthLabel(monthKey)}.`
+                : `Расчетные листы по выбранному месяцу для ${selectedEmployeeIds.length} сотрудников.`,
+            previewUrl: buildStatementUrl({
+                sourceType: 'current_batch',
+                documentKind: 'payslip',
+                employeeIds: selectedEmployeeIds,
+                month: monthKey,
+                format: 'pdf',
+                disposition: 'inline',
+            }),
+            kind: 'selected-statements',
+            employeeIds: selectedEmployeeIds,
+        });
+    };
+
+    const handlePrintPreview = () => {
+        if (!statementPreview || !previewPdfObjectUrl) return;
+
+        if (previewPrintFrameRef.current) {
+            const frame = previewPrintFrameRef.current;
+            const printFrame = () => {
+                frame.contentWindow?.focus();
+                frame.contentWindow?.print();
+            };
+
+            if (frame.src !== previewPdfObjectUrl) {
+                frame.onload = () => {
+                    frame.onload = null;
+                    printFrame();
+                };
+                frame.src = previewPdfObjectUrl;
+                return;
+            }
+
+            printFrame();
+            return;
+        }
+
+        window.open(previewPdfObjectUrl, '_blank', 'noopener,noreferrer');
+    };
+
+    const handlePreviewDownload = (format: 'pdf' | 'excel') => {
+        if (!statementPreview) return;
+
+        if (statementPreview.kind === 'batch-payroll') {
+            void downloadStatementFile(
+                buildStatementUrl({
+                    sourceType: 'current_batch',
+                    documentKind: 'statement',
+                    employeeIds: statementPreview.employeeIds,
+                    month: monthKey,
+                    format,
+                    disposition: 'attachment',
+                }),
+                buildPreviewDownloadFileName(statementPreview.kind, statementPreview.employeeIds, format)
+            );
+            return;
+        }
+
+        if (statementPreview.kind === 'selected-statements') {
+            void downloadStatementFile(
+                buildStatementUrl({
+                    sourceType: 'current_batch',
+                    documentKind: 'payslip',
+                    employeeIds: statementPreview.employeeIds,
+                    month: monthKey,
+                    format,
+                    disposition: 'attachment',
+                }),
+                buildPreviewDownloadFileName(statementPreview.kind, statementPreview.employeeIds, format)
+            );
+            return;
+        }
+    };
+
+    const handleBuildEntries = async () => {
+        if (!selectedEmployeeIds.length) return;
+
         try {
             setSaving(true);
             setError(null);
             setNotice(null);
 
             const response = await fetch('/api/admin/finance', {
-                method: 'PUT',
+                method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    action: 'update-rate',
-                    employeeId: employee.id,
-                    rate: rateDrafts[employee.id] === '' ? null : Number(rateDrafts[employee.id]),
+                    action: 'bulk-payroll-month',
+                    month: monthKey,
+                    employeeIds: selectedEmployeeIds,
+                    comment: `Ручное проведение выплат за ${payload?.selectedMonthLabel || formatMonthLabel(monthKey)}`,
                 }),
             });
+
             const data = (await response.json().catch(() => ({}))) as { error?: string };
             if (!response.ok) {
-                throw new Error(data?.error || 'Ошибка сохранения ставки');
+                throw new Error(data?.error || 'Не удалось провести выплаты');
             }
-            setNotice(`Ставка сотрудника "${employee.fio}" обновлена.`);
+
+            setNotice('Выплаты по выбранному месяцу проведены.');
             await loadData();
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Ошибка сохранения ставки');
+            setError(err instanceof Error ? err.message : 'Не удалось провести выплаты');
         } finally {
             setSaving(false);
         }
     };
 
-    const openPaymentDialog = (employee: FinanceEmployee) => {
-        const firstSuggestion = getPrimarySuggestion(employee.suggestedPayments);
-        setPaymentDialogEmployee(employee);
-        setPaymentError(null);
-        setPaymentForm({
-            suggestionKey: firstSuggestion?.key || 'manual',
-            paymentType: firstSuggestion?.encodedType || 'зарплата',
-            amount: firstSuggestion ? String(firstSuggestion.amount) : (employee.rate == null ? '' : String(employee.rate)),
-            date: firstSuggestion?.recommendedDate || new Date().toISOString().slice(0, 10),
-            comment: firstSuggestion?.note || '',
+    const openManualPaymentDialog = () => {
+        if (selectedEmployees.length !== 1) return;
+        const employee = selectedEmployees[0];
+        setManualPaymentEmployee(employee);
+        setManualPaymentError(null);
+        setManualPaymentForm({
+            paymentType: 'зарплата',
+            amount: employee.currentPayable > 0 ? String(employee.currentPayable) : '',
+            date: createMonthEndDate(monthKey),
+            comment: '',
         });
     };
 
-    const handleSuggestionChange = (value: string) => {
-        setPaymentForm((prev) => {
-            const suggestion = getSuggestionByKey(paymentDialogEmployee, value);
-            if (!suggestion) {
-                return {
-                    ...prev,
-                    suggestionKey: 'manual',
-                    paymentType: 'зарплата',
-                };
-            }
+    const handleManualPaymentSave = async () => {
+        if (!manualPaymentEmployee) return;
 
-            return {
-                ...prev,
-                suggestionKey: suggestion.key,
-                paymentType: suggestion.encodedType,
-                amount: String(suggestion.amount),
-                date: suggestion.recommendedDate,
-                comment: suggestion.note || '',
-            };
-        });
-    };
-
-    const handlePayNow = async () => {
-        if (!paymentDialogEmployee) return;
         try {
             setSaving(true);
-            setPaymentError(null);
+            setManualPaymentError(null);
             setError(null);
             setNotice(null);
 
@@ -330,156 +913,36 @@ function AdminFinancePage(): JSX.Element {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     action: 'pay-now',
-                    employeeId: paymentDialogEmployee.id,
-                    amount: Number(paymentForm.amount),
-                    date: paymentForm.date,
-                    paymentType: paymentForm.paymentType,
-                    comment: paymentForm.comment,
+                    employeeId: manualPaymentEmployee.id,
+                    amount: Number(manualPaymentForm.amount),
+                    date: manualPaymentForm.date,
+                    paymentType: manualPaymentForm.paymentType,
+                    comment: manualPaymentForm.comment,
+                    month: monthKey,
                 }),
             });
             const data = (await response.json().catch(() => ({}))) as { error?: string };
             if (!response.ok) {
-                setPaymentError(data?.error || 'Ошибка выплаты');
-                return;
+                throw new Error(data?.error || 'Не удалось сохранить ручную выплату');
             }
 
-            setPaymentDialogEmployee(null);
-            setNotice(`Выплата сотруднику "${paymentDialogEmployee.fio}" сохранена.`);
+            setManualPaymentEmployee(null);
+            setNotice(`Выплата для "${manualPaymentEmployee.fio}" сохранена.`);
             await loadData();
         } catch (err) {
-            setPaymentError(err instanceof Error ? err.message : 'Ошибка выплаты');
+            setManualPaymentError(err instanceof Error ? err.message : 'Не удалось сохранить ручную выплату');
         } finally {
             setSaving(false);
         }
     };
 
-    const handleBulkPayrollToday = async () => {
-        try {
-            setSaving(true);
-            setError(null);
-            setNotice(null);
-
-            const response = await fetch('/api/admin/finance', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    action: 'bulk-payroll-today',
-                }),
-            });
-            const data = (await response.json().catch(() => ({}))) as { error?: string };
-            if (!response.ok) {
-                throw new Error(data?.error || 'Ошибка массовой выплаты по графику');
-            }
-
-            setNotice('Все начисления, которые по графику нужно выплатить сегодня, проведены текущей датой.');
-            await loadData();
-        } catch (err) {
-            setError(err instanceof Error ? err.message : 'Ошибка массовой выплаты по графику');
-        } finally {
-            setSaving(false);
-        }
-    };
-
-    const openStatementPreviewForSuggestion = (employee: FinanceEmployee, suggestion: FinanceSuggestedPayment) => {
-        setStatementPreview({
-            title: `${employee.fio} · ${suggestion.type === 'advance' ? 'Аванс' : suggestion.type === 'vacation' ? 'Отпускные' : suggestion.type === 'bonus' ? 'Премия' : 'Зарплата'}`,
-            url: buildStatementUrl({
-                employeeId: employee.id,
-                sourceType: 'current',
-                sourceKey: suggestion.key,
-                format: 'pdf',
-                disposition: 'inline',
-            }),
-        });
-    };
-
-    const openStatementPreviewForPayment = (employee: FinanceEmployee, payment: FinancePayment) => {
-        setStatementPreview({
-            title: `${employee.fio} · ${payment.paymentKind || payment.type || 'Выплата'}`,
-            url: buildStatementUrl({
-                employeeId: employee.id,
-                sourceType: 'history',
-                paymentId: payment.id,
-                format: 'pdf',
-                disposition: 'inline',
-            }),
-        });
-    };
-
-    const downloadStatementForSuggestion = (employee: FinanceEmployee, suggestion: FinanceSuggestedPayment, format: 'excel' | 'pdf') => {
-        window.open(
-            buildStatementUrl({
-                employeeId: employee.id,
-                sourceType: 'current',
-                sourceKey: suggestion.key,
-                format,
-                disposition: 'attachment',
-            }),
-            '_blank',
-            'noopener,noreferrer'
-        );
-    };
-
-    const downloadStatementForPayment = (employee: FinanceEmployee, payment: FinancePayment, format: 'excel' | 'pdf') => {
-        window.open(
-            buildStatementUrl({
-                employeeId: employee.id,
-                sourceType: 'history',
-                paymentId: payment.id,
-                format,
-                disposition: 'attachment',
-            }),
-            '_blank',
-            'noopener,noreferrer'
-        );
-    };
-
-    const handlePrintStatementPreview = () => {
-        previewFrameRef.current?.contentWindow?.focus();
-        previewFrameRef.current?.contentWindow?.print();
-    };
-
-    const openBatchStatementDialog = () => {
-        setBatchStatementSelection(batchStatementCandidates.map((employee) => employee.id));
-        setBatchStatementOpen(true);
-    };
-
-    const toggleBatchStatementEmployee = (employeeId: number) => {
-        setBatchStatementSelection((prev) => (
-            prev.includes(employeeId)
-                ? prev.filter((id) => id !== employeeId)
-                : [...prev, employeeId]
-        ));
-    };
-
-    const openBatchStatementPreview = () => {
-        if (!batchStatementSelection.length) return;
-        setStatementPreview({
-            title: `Расчетно-платежная ведомость · ${batchStatementSelection.length} сотрудников`,
-            url: buildStatementUrl({
-                employeeId: 0,
-                employeeIds: batchStatementSelection,
-                sourceType: 'current_batch',
-                format: 'pdf',
-                disposition: 'inline',
-            }),
-        });
-    };
-
-    const downloadBatchStatement = (format: 'excel' | 'pdf') => {
-        if (!batchStatementSelection.length) return;
-        window.open(
-            buildStatementUrl({
-                employeeId: 0,
-                employeeIds: batchStatementSelection,
-                sourceType: 'current_batch',
-                format,
-                disposition: 'attachment',
-            }),
-            '_blank',
-            'noopener,noreferrer'
-        );
-    };
+    const monthOptions = useMemo(
+        () => Array.from({ length: 24 }, (_, index) => {
+            const value = shiftMonthKey(createMonthKey(new Date()), -index);
+            return { value, label: formatMonthLabel(value) };
+        }),
+        []
+    );
 
     if (authLoading || loading) {
         return (
@@ -495,620 +958,360 @@ function AdminFinancePage(): JSX.Element {
 
     return (
         <div className={styles.container}>
-            <div className={styles.header}>
-                <div>
-                    <h1 className={styles.title}>Финансы</h1>
-                    <div className={styles.subtitle}>Начисления зарплаты, ставки сотрудников и ручные выплаты (доступ: director)</div>
-                </div>
-                <div className={styles.actions}>
-                    <Select.Root value={months} onValueChange={setMonths}>
-                        <Select.Trigger className={styles.periodSelect} />
-                        <Select.Content className={styles.selectContent}>
-                            <Select.Item value="1">1 месяц</Select.Item>
-                            <Select.Item value="3">3 месяца</Select.Item>
-                            <Select.Item value="6">6 месяцев</Select.Item>
-                            <Select.Item value="12">12 месяцев</Select.Item>
-                            <Select.Item value="24">24 месяца</Select.Item>
-                        </Select.Content>
-                    </Select.Root>
-                    <Button variant="surface" color="gray" highContrast className={`${styles.actionButton} ${styles.surfaceButton}`} onClick={() => void loadData()}>
-                        <FiRefreshCw className={styles.icon} />
-                        Обновить
-                    </Button>
-                </div>
-            </div>
-
-            <Card className={styles.scheduleCard}>
-                <div className={styles.sectionTitleRow}>
-                    <div>
-                        <Text size="4" weight="bold">График начисления зарплаты</Text>
-                        <Text as="div" size="2" color="gray">
-                            Это настройка графика. Автоматического начисления пока нет, но директор может управлять датами и делать выплаты вручную.
+            <div className={styles.payrollHero}>
+                <div className={styles.payrollHeroTop}>
+                    <div className={styles.payrollHeroTitleBlock}>
+                        <h1 className={styles.title}>Расчет зарплаты</h1>
+                        <Text as="div" className={styles.subtitle}>
+                            Месячный расчет начислений, удержаний, выплат, задолженностей и взносов.
                         </Text>
                     </div>
-                    <Button variant="solid" color="gray" highContrast className={styles.primaryButton} onClick={() => void handleSaveSettings()} disabled={saving}>
-                        <FiSave className={styles.icon} />
-                        Сохранить график
-                    </Button>
+                    <div className={styles.monthControls}>
+                        <Button
+                            variant="surface"
+                            color="gray"
+                            highContrast
+                            className={`${styles.monthArrowButton} ${styles.surfaceButton}`}
+                            onClick={() => setMonthKey((prev) => shiftMonthKey(prev, -1))}
+                        >
+                            <FiChevronLeft />
+                        </Button>
+                        <Select.Root value={monthKey} onValueChange={setMonthKey}>
+                            <Select.Trigger className={styles.monthSelect} />
+                            <Select.Content className={styles.selectContent}>
+                                {monthOptions.map((option) => (
+                                    <Select.Item key={option.value} value={option.value}>{option.label}</Select.Item>
+                                ))}
+                            </Select.Content>
+                        </Select.Root>
+                        <Button
+                            variant="surface"
+                            color="gray"
+                            highContrast
+                            className={`${styles.monthArrowButton} ${styles.surfaceButton}`}
+                            onClick={() => setMonthKey((prev) => shiftMonthKey(prev, 1))}
+                        >
+                            <FiChevronRight />
+                        </Button>
+                    </div>
                 </div>
 
-                <Grid columns={{ initial: '1', md: '3' }} gap="4">
-                    <div className={styles.field}>
-                        <Text as="label" size="2" weight="medium">Начислений в месяц</Text>
+                <div className={styles.scheduleInlineCard}>
+                    <div className={styles.scheduleInlineHeader}>
+                        <Text size="2" weight="medium" className={styles.panelLabel}>Режим начисления</Text>
+                        <Text size="2" color="gray" className={styles.scheduleInlineLead}>
+                            Настройка нужна для расчета месяца: аванс, зарплата, отпускные и больничные мы считаем по этому графику, а выплаты проводим вручную отдельным действием.
+                        </Text>
+                    </div>
+                    <div className={styles.scheduleInlineControls}>
                         <Select.Root
-                            value={String(settings.paymentsPerMonth)}
-                            onValueChange={(value) => setSettings((prev) => ({
+                            value={String(settingsDraft.paymentsPerMonth)}
+                            onValueChange={(value) => setSettingsDraft((prev) => ({
                                 ...prev,
                                 paymentsPerMonth: value === '1' ? 1 : 2,
                                 secondDay: value === '1' ? null : (prev.secondDay || 25),
                             }))}
                         >
-                            <Select.Trigger className={styles.fieldSelect} />
+                            <Select.Trigger className={styles.compactSelect} />
                             <Select.Content className={styles.selectContent}>
                                 <Select.Item value="1">1 раз в месяц</Select.Item>
                                 <Select.Item value="2">2 раза в месяц</Select.Item>
                             </Select.Content>
                         </Select.Root>
-                    </div>
-
-                    <div className={styles.field}>
-                        <Text as="label" size="2" weight="medium">Первая дата начисления</Text>
-                        <Select.Root value={String(settings.firstDay)} onValueChange={(value) => setSettings((prev) => ({ ...prev, firstDay: Number(value) }))}>
-                            <Select.Trigger className={styles.fieldSelect} />
-                            <Select.Content className={styles.selectContent}>
-                                {Array.from({ length: 31 }, (_, index) => index + 1).map((day) => (
-                                    <Select.Item key={day} value={String(day)}>{day}</Select.Item>
-                                ))}
-                            </Select.Content>
-                        </Select.Root>
-                    </div>
-
-                    <div className={styles.field}>
-                        <Text as="label" size="2" weight="medium">Вторая дата начисления</Text>
                         <Select.Root
-                            value={settings.paymentsPerMonth === 2 && settings.secondDay ? String(settings.secondDay) : '25'}
-                            onValueChange={(value) => setSettings((prev) => ({ ...prev, secondDay: Number(value) }))}
-                            disabled={settings.paymentsPerMonth !== 2}
+                            value={String(settingsDraft.firstDay)}
+                            onValueChange={(value) => setSettingsDraft((prev) => ({ ...prev, firstDay: Number(value) }))}
                         >
-                            <Select.Trigger className={styles.fieldSelect} />
+                            <Select.Trigger className={styles.compactDaySelect} />
                             <Select.Content className={styles.selectContent}>
                                 {Array.from({ length: 31 }, (_, index) => index + 1).map((day) => (
-                                    <Select.Item key={day} value={String(day)}>{day}</Select.Item>
+                                    <Select.Item key={`first-${day}`} value={String(day)}>{day}</Select.Item>
                                 ))}
                             </Select.Content>
                         </Select.Root>
+                        {settingsDraft.paymentsPerMonth === 2 ? (
+                            <Select.Root
+                                value={String(settingsDraft.secondDay || 25)}
+                                onValueChange={(value) => setSettingsDraft((prev) => ({ ...prev, secondDay: Number(value) }))}
+                            >
+                                <Select.Trigger className={styles.compactDaySelect} />
+                                <Select.Content className={styles.selectContent}>
+                                    {Array.from({ length: 31 }, (_, index) => index + 1).map((day) => (
+                                        <Select.Item key={`second-${day}`} value={String(day)}>{day}</Select.Item>
+                                    ))}
+                                </Select.Content>
+                            </Select.Root>
+                        ) : null}
+                        <Button
+                            variant="surface"
+                            color="gray"
+                            highContrast
+                            className={`${styles.inlineButton} ${styles.surfaceButton}`}
+                            onClick={() => void handleSaveSettings()}
+                            disabled={saving}
+                        >
+                            Сохранить
+                        </Button>
                     </div>
-                </Grid>
-            </Card>
+                    <Text size="1" color="gray" className={styles.scheduleInlineHint}>
+                        Если режим — 2 раза в месяц, первый день используется как аванс, второй — как основная зарплата.
+                    </Text>
+                </div>
+
+                <div className={styles.toolbarPanel}>
+                    <div className={styles.toolbarSearchBlock}>
+                        <Text size="2" weight="medium" className={styles.panelLabel}>Поиск сотрудника</Text>
+                        <TextField.Root
+                            value={search}
+                            onChange={(event) => setSearch(event.target.value)}
+                            className={styles.searchInput}
+                            placeholder="ФИО сотрудника"
+                        >
+                            <TextField.Slot>
+                                <FiSearch className={styles.icon} />
+                            </TextField.Slot>
+                        </TextField.Root>
+                    </div>
+
+                    <div className={styles.toolbarActionsBlock}>
+                        <div className={styles.actionButtonsRow}>
+                            <Button
+                                variant="solid"
+                                color="gray"
+                                highContrast
+                                className={styles.primaryButton}
+                                onClick={() => void handleBuildEntries()}
+                                disabled={saving || !selectedEmployeeIds.length || !payload?.paymentTableAvailable}
+                            >
+                                <FiFileText className={styles.icon} />
+                                {saving ? 'Проведение…' : 'Провести выплаты'}
+                            </Button>
+
+                            <Button
+                                variant="surface"
+                                color="gray"
+                                highContrast
+                                className={`${styles.actionButton} ${styles.surfaceButton}`}
+                                onClick={openManualPaymentDialog}
+                                disabled={selectedEmployees.length !== 1}
+                            >
+                                Ручная выплата
+                            </Button>
+
+                            <DropdownMenu.Root>
+                                <DropdownMenu.Trigger>
+                                    <Button
+                                        variant="surface"
+                                        color="gray"
+                                        highContrast
+                                        className={`${styles.actionButton} ${styles.surfaceButton}`}
+                                        disabled={!selectedEmployeeIds.length}
+                                    >
+                                        <FiPrinter className={styles.icon} />
+                                        Напечатать
+                                    </Button>
+                                </DropdownMenu.Trigger>
+                                <DropdownMenu.Content align="end" className={styles.printMenu}>
+                                    <DropdownMenu.Label>
+                                        Выбрано {selectedEmployeeIds.length} {selectedEmployeeIds.length === 1 ? 'сотрудник' : selectedEmployeeIds.length < 5 ? 'сотрудника' : 'сотрудников'}
+                                    </DropdownMenu.Label>
+                                    <DropdownMenu.Separator />
+                                    <DropdownMenu.Item onSelect={openBatchPayrollPreview}>Расчетно платежная ведомость</DropdownMenu.Item>
+                                    <DropdownMenu.Item onSelect={openSelectedStatementsPreview}>
+                                        {selectedEmployeeIds.length === 1 ? 'Расчетный лист' : 'Расчетные листы'}
+                                    </DropdownMenu.Item>
+                                </DropdownMenu.Content>
+                            </DropdownMenu.Root>
+
+                            <Button
+                                variant="surface"
+                                color="gray"
+                                highContrast
+                                className={`${styles.actionButton} ${styles.surfaceButton}`}
+                                onClick={() => void loadData()}
+                            >
+                                <FiRefreshCw className={styles.icon} />
+                                Обновить
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div className={styles.payrollHint}>
+                Зарплата не начисляется автоматически сама по себе. Экран только рассчитывает месяц. Дальше ты вручную нажимаешь
+                {' '}<strong>«Провести выплаты»</strong> для отмеченных сотрудников или <strong>«Ручная выплата»</strong> для одного сотрудника.
+                При массовом проведении выплаты попадут в журнал по своим датам графика: отдельно аванс, отдельно зарплата, отпускные и другие начисления.
+            </div>
 
             {error ? <div className={styles.errorBanner}>{error}</div> : null}
             {notice ? <div className={styles.successBanner}>{notice}</div> : null}
 
-            <Card className={styles.tableCard}>
-                <div className={styles.tableToolbar}>
-                    <div className={styles.searchInput}>
-                        <TextField.Root value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Поиск по сотруднику..." size="3">
-                            <TextField.Slot side="left">
-                                <FiSearch />
-                            </TextField.Slot>
-                        </TextField.Root>
+            <div className={styles.tabsRow}>
+                {TABS.map((tab) => (
+                    <button
+                        key={tab.key}
+                        type="button"
+                        className={tab.key === activeTab ? styles.activeTab : styles.tabButton}
+                        onClick={() => setActiveTab(tab.key)}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
+
+            <Card className={styles.payrollCard}>
+                <div className={styles.payrollCardHeader}>
+                    <div>
+                        <Text size="4" weight="bold">Месяц: {payload?.selectedMonthLabel || formatMonthLabel(monthKey)}</Text>
+                        <Text as="div" size="2" color="gray">
+                            {activeTabDescription}
+                        </Text>
                     </div>
-                    <div className={styles.tableToolbarActions}>
-                        <Button
-                            variant="surface"
-                            color="gray"
-                            highContrast
-                            className={`${styles.actionButton} ${styles.surfaceButton}`}
-                            onClick={() => void handleBulkPayrollToday()}
-                            disabled={!paymentTableAvailable || saving}
-                        >
-                            Провести выплаты сегодня
-                        </Button>
-                        <Button
-                            variant="surface"
-                            color="gray"
-                            highContrast
-                            className={`${styles.actionButton} ${styles.surfaceButton}`}
-                            onClick={openBatchStatementDialog}
-                            disabled={!batchStatementCandidates.length}
-                        >
-                            <FiFileText className={styles.icon} />
-                            Общая расчетка
-                        </Button>
-                    </div>
+                    <Text size="2" color="gray">
+                        Выбрано сотрудников: {selectedEmployeeIds.length}
+                    </Text>
                 </div>
 
-                <div className={styles.tableWrapper}>
-                    <Table.Root variant="surface" className={styles.table}>
-                        <Table.Header>
-                            <Table.Row>
-                                <Table.ColumnHeaderCell>ID</Table.ColumnHeaderCell>
-                                <Table.ColumnHeaderCell>Сотрудник</Table.ColumnHeaderCell>
-                                <Table.ColumnHeaderCell>Должность</Table.ColumnHeaderCell>
-                                <Table.ColumnHeaderCell>Ставка</Table.ColumnHeaderCell>
-                                <Table.ColumnHeaderCell>Начислено</Table.ColumnHeaderCell>
-                                <Table.ColumnHeaderCell>Удержано</Table.ColumnHeaderCell>
-                                <Table.ColumnHeaderCell>Выплачено</Table.ColumnHeaderCell>
-                                <Table.ColumnHeaderCell>К выплате</Table.ColumnHeaderCell>
-                                <Table.ColumnHeaderCell>Последняя выплата</Table.ColumnHeaderCell>
-                                <Table.ColumnHeaderCell className={styles.actionsCell}>Действия</Table.ColumnHeaderCell>
-                            </Table.Row>
-                        </Table.Header>
-                        <Table.Body>
-                            {filteredEmployees.map((employee) => {
-                                const primarySuggestion = getPrimarySuggestion(employee.suggestedPayments);
-                                return (
-                                <Table.Row key={employee.id}>
-                                    <Table.Cell>#{employee.id}</Table.Cell>
-                                    <Table.Cell>
-                                        <div className={styles.employeeName}>{employee.fio}</div>
-                                        <div className={styles.employeeMeta}>{employee.active ? 'Активен' : 'Неактивен'}</div>
-                                    </Table.Cell>
-                                    <Table.Cell>{employee.position || '—'}</Table.Cell>
-                                    <Table.Cell>
-                                        <div className={styles.rateEditor}>
-                                            <TextField.Root
-                                                type="number"
-                                                size="2"
-                                                className={styles.rateInput}
-                                                value={rateDrafts[employee.id] ?? ''}
-                                                onChange={(e) => setRateDrafts((prev) => ({ ...prev, [employee.id]: e.target.value }))}
-                                                placeholder="0"
-                                            />
-                                            <Button
-                                                variant="surface"
-                                                color="gray"
-                                                highContrast
-                                                className={`${styles.inlineButton} ${styles.surfaceButton}`}
-                                                onClick={() => void handleSaveRate(employee)}
-                                                disabled={saving}
-                                            >
-                                                <FiSave className={styles.icon} />
-                                                Ставка
-                                            </Button>
-                                        </div>
-                                    </Table.Cell>
-                                    <Table.Cell>
-                                        {employee.suggestedPayments.length ? (
-                                            <div className={styles.suggestionCell}>
-                                                <div className={styles.suggestionAmount}>{formatCurrency(employee.currentAccrued)}</div>
-                                                <div className={styles.suggestionMeta}>{formatSuggestedPaymentLabel(primarySuggestion)}</div>
-                                                {employee.suggestedPayments.length > 1 ? (
-                                                    <div className={styles.employeeMeta}>Ещё оснований: {employee.suggestedPayments.length - 1}</div>
-                                                ) : null}
-                                            </div>
-                                        ) : (
-                                            <div className={styles.suggestionCell}>
-                                                <div className={styles.suggestionAmount}>—</div>
-                                                <div className={styles.suggestionMeta}>Нет начислений к выплате</div>
-                                            </div>
-                                        )}
-                                    </Table.Cell>
-                                    <Table.Cell>{formatCurrency(employee.currentWithheld)}</Table.Cell>
-                                    <Table.Cell>{formatCurrency(employee.currentPaid)}</Table.Cell>
-                                    <Table.Cell>{formatCurrency(employee.currentPayable)}</Table.Cell>
-                                    <Table.Cell>{formatDate(employee.lastPaymentDate)}</Table.Cell>
-                                    <Table.Cell className={styles.actionsCell}>
-                                        <Flex gap="2" justify="end" wrap="wrap">
-                                            <Button
-                                                variant="surface"
-                                                color="gray"
-                                                highContrast
-                                                className={`${styles.inlineButton} ${styles.surfaceButton}`}
-                                                onClick={() => setStatementEmployee(employee)}
-                                            >
-                                                <FiFileText className={styles.icon} />
-                                                Расчетка
-                                            </Button>
-                                            <Button
-                                                variant="solid"
-                                                color="gray"
-                                                highContrast
-                                                className={styles.payButton}
-                                                onClick={() => openPaymentDialog(employee)}
-                                                disabled={!paymentTableAvailable || saving}
-                                            >
-                                                Выплатить сейчас
-                                            </Button>
-                                        </Flex>
-                                    </Table.Cell>
-                                </Table.Row>
-                                );
-                            })}
-                        </Table.Body>
-                    </Table.Root>
+                <div className={styles.payrollGrid}>
+                    <div className={styles.payrollHeaderRow} style={{ gridTemplateColumns }}>
+                        <div className={styles.checkboxCell}>
+                            <input
+                                type="checkbox"
+                                checked={allVisibleSelected}
+                                ref={(node) => {
+                                    if (node) node.indeterminate = !allVisibleSelected && someVisibleSelected;
+                                }}
+                                onChange={toggleVisible}
+                            />
+                        </div>
+                        <div className={styles.employeeHeaderCell}>Сотрудник</div>
+                        {activeColumns.map((column) => (
+                            <div key={column.key} className={styles.metricHeaderCell}>{column.label}</div>
+                        ))}
+                    </div>
+
+                    {filteredEmployees.map((employee) => (
+                        <div key={employee.id} className={styles.payrollRow} style={{ gridTemplateColumns }}>
+                            <div className={styles.checkboxCell}>
+                                <input
+                                    type="checkbox"
+                                    checked={selectedEmployeeIds.includes(employee.id)}
+                                    onChange={() => toggleEmployee(employee.id)}
+                                />
+                            </div>
+                            <div className={styles.employeeCell}>
+                                <div className={styles.employeeName}>{employee.fio}</div>
+                                <div className={styles.employeeRole}>{employee.position || '—'}</div>
+                                <div className={styles.employeeHints}>
+                                    {employee.suggestedPayments.length
+                                        ? employee.suggestedPayments
+                                            .map((item) => `${getSuggestedPaymentTypeLabel(item.type)}: ${formatNumber(item.payableAmount)} ₽`)
+                                            .join(' · ')
+                                        : 'Нет открытых начислений'}
+                                </div>
+                            </div>
+                            {activeColumns.map((column) => (
+                                <div key={column.key} className={styles.metricCell}>{column.render(employee)}</div>
+                            ))}
+                        </div>
+                    ))}
+
+                    <div className={styles.payrollTotalRow} style={{ gridTemplateColumns }}>
+                        <div />
+                        <div className={styles.totalLabel}>Итого</div>
+                        {activeColumns.map((column) => (
+                            <div key={column.key} className={styles.totalCell}>
+                                {column.total ? column.total(filteredEmployees) : '—'}
+                            </div>
+                        ))}
+                    </div>
                 </div>
             </Card>
 
             <Card className={styles.tableCard}>
                 <div className={styles.sectionTitleRow}>
                     <div>
-                        <Text size="4" weight="bold">Последние выплаты</Text>
-                        <Text as="div" size="2" color="gray">Журнал последних операций по таблице выплат.</Text>
+                        <Text size="4" weight="bold">Журнал проведённых выплат</Text>
+                        <Text as="div" size="2" color="gray">
+                            Здесь видно, что уже реально занесено в таблицу выплат за {payload?.selectedMonthLabel || formatMonthLabel(monthKey)}.
+                        </Text>
                     </div>
                 </div>
+
                 <div className={styles.tableWrapper}>
-                    <Table.Root variant="surface" className={styles.table}>
-                        <Table.Header>
-                            <Table.Row>
-                                <Table.ColumnHeaderCell>Дата</Table.ColumnHeaderCell>
-                                <Table.ColumnHeaderCell>Сотрудник</Table.ColumnHeaderCell>
-                                <Table.ColumnHeaderCell>Тип</Table.ColumnHeaderCell>
-                                <Table.ColumnHeaderCell>Статус</Table.ColumnHeaderCell>
-                                <Table.ColumnHeaderCell>Комментарий</Table.ColumnHeaderCell>
-                                <Table.ColumnHeaderCell className={styles.actionsCell}>Сумма</Table.ColumnHeaderCell>
-                            </Table.Row>
-                        </Table.Header>
-                        <Table.Body>
+                    <table className={styles.simpleTable}>
+                        <thead>
+                            <tr>
+                                <th>Дата</th>
+                                <th>Сотрудник</th>
+                                <th>Вид</th>
+                                <th>Период</th>
+                                <th>Начислено</th>
+                                <th>Удержано</th>
+                                <th>Выплачено</th>
+                            </tr>
+                        </thead>
+                        <tbody>
                             {recentPayments.length ? recentPayments.map((payment) => (
-                                <Table.Row key={payment.id}>
-                                    <Table.Cell>{formatDate(payment.date)}</Table.Cell>
-                                    <Table.Cell>{payment.employeeName || '—'}</Table.Cell>
-                                    <Table.Cell>{payment.type || '—'}</Table.Cell>
-                                    <Table.Cell>{payment.status?.trim() || 'Выплачено'}</Table.Cell>
-                                    <Table.Cell>{payment.comment?.trim() || payment.calculation?.note || '—'}</Table.Cell>
-                                    <Table.Cell className={styles.actionsCell}>{formatCurrency(payment.amount)}</Table.Cell>
-                                </Table.Row>
+                                <tr key={payment.id}>
+                                    <td>{formatDate(payment.date)}</td>
+                                    <td>{payment.employeeName || '—'}</td>
+                                    <td>{payment.paymentKind || payment.type || '—'}</td>
+                                    <td>{payment.periodFrom || payment.periodTo ? `${formatDate(payment.periodFrom)} - ${formatDate(payment.periodTo)}` : '—'}</td>
+                                    <td>{formatNumber(payment.accruedAmount || payment.amount)}</td>
+                                    <td>{formatNumber(payment.withheldAmount)}</td>
+                                    <td>{formatNumber(payment.paidAmount || payment.amount)}</td>
+                                </tr>
                             )) : (
-                                <Table.Row>
-                                    <Table.Cell colSpan={6}>
-                                        <Text color="gray">Выплат пока нет.</Text>
-                                    </Table.Cell>
-                                </Table.Row>
+                                <tr>
+                                    <td colSpan={7} className={styles.emptyCell}>За выбранный месяц выплат пока нет.</td>
+                                </tr>
                             )}
-                        </Table.Body>
-                    </Table.Root>
+                        </tbody>
+                    </table>
                 </div>
             </Card>
 
-            <Dialog.Root open={Boolean(paymentDialogEmployee)} onOpenChange={(open) => (!open ? setPaymentDialogEmployee(null) : undefined)}>
-                <Dialog.Content className={styles.paymentDialog}>
-                    <Dialog.Title>Выплатить сотруднику</Dialog.Title>
-                    <Dialog.Description>
-                        {paymentDialogEmployee ? `${paymentDialogEmployee.fio} (${paymentDialogEmployee.position || '—'})` : '—'}
-                    </Dialog.Description>
-
-                    <div className={styles.dialogForm}>
-                        {paymentDialogEmployee?.suggestedPayments?.length ? (
-                            <div className={styles.field}>
-                                <Text as="label" size="2" weight="medium">Основание выплаты</Text>
-                                <Select.Root value={paymentForm.suggestionKey} onValueChange={handleSuggestionChange}>
-                                    <Select.Trigger className={styles.fieldSelect} />
-                                    <Select.Content className={styles.selectContent}>
-                                        {paymentDialogEmployee.suggestedPayments.map((suggestion) => (
-                                            <Select.Item key={suggestion.key} value={suggestion.key}>
-                                                {suggestion.type === 'vacation' ? 'Отпускные' : suggestion.type === 'advance' ? 'Аванс' : 'Зарплата'} · {formatCurrency(suggestion.amount)}
-                                            </Select.Item>
-                                        ))}
-                                        <Select.Item value="manual">Ручная выплата</Select.Item>
-                                    </Select.Content>
-                                </Select.Root>
-                                {getSuggestionByKey(paymentDialogEmployee, paymentForm.suggestionKey)?.note ? (
-                                    <div className={styles.helpText}>
-                                        {getSuggestionByKey(paymentDialogEmployee, paymentForm.suggestionKey)?.note}
-                                    </div>
-                                ) : null}
+            {statementPreview ? (
+                <div className={styles.previewScreen} onClick={() => setStatementPreview(null)}>
+                    <div className={styles.previewBackdrop} />
+                    <section
+                        className={styles.previewPanel}
+                        onClick={(event) => event.stopPropagation()}
+                        aria-label={statementPreview.title}
+                    >
+                        <div className={styles.previewPanelHeader}>
+                            <div className={styles.previewPanelTitleBlock}>
+                                <h2 className={styles.previewPanelTitle}>{statementPreview.title}</h2>
                             </div>
-                        ) : null}
-                        {paymentForm.suggestionKey === 'manual' ? (
-                            <div className={styles.field}>
-                                <Text as="label" size="2" weight="medium">Тип выплаты</Text>
-                                <Select.Root
-                                    value={paymentForm.paymentType}
-                                    onValueChange={(value) => setPaymentForm((prev) => ({ ...prev, paymentType: value }))}
-                                >
-                                    <Select.Trigger className={styles.fieldSelect} />
-                                    <Select.Content className={styles.selectContent}>
-                                        <Select.Item value="зарплата">Зарплата</Select.Item>
-                                        <Select.Item value="премия">Премия</Select.Item>
-                                    </Select.Content>
-                                </Select.Root>
-                            </div>
-                        ) : null}
-                        <div className={styles.field}>
-                            <Text as="label" size="2" weight="medium">Сумма</Text>
-                            <TextField.Root
-                                type="number"
-                                size="3"
-                                value={paymentForm.amount}
-                                onChange={(e) => setPaymentForm((prev) => ({ ...prev, amount: e.target.value }))}
-                                className={styles.dialogInput}
-                            />
-                        </div>
-                        <div className={styles.field}>
-                            <Text as="label" size="2" weight="medium">Дата выплаты</Text>
-                            <TextField.Root
-                                type="date"
-                                size="3"
-                                value={paymentForm.date}
-                                onChange={(e) => setPaymentForm((prev) => ({ ...prev, date: e.target.value }))}
-                                className={styles.dialogInput}
-                            />
-                        </div>
-                        <div className={styles.field}>
-                            <Text as="label" size="2" weight="medium">Комментарий</Text>
-                            <TextArea
-                                size="3"
-                                value={paymentForm.comment}
-                                onChange={(e) => setPaymentForm((prev) => ({ ...prev, comment: e.target.value }))}
-                                className={styles.dialogTextArea}
-                                placeholder="Например: зарплата за март"
-                            />
-                        </div>
-                        {paymentError ? <div className={styles.inlineError}>{paymentError}</div> : null}
-                    </div>
-
-                    <Flex justify="end" gap="3" mt="4">
-                        <Button variant="surface" color="gray" highContrast className={`${styles.actionButton} ${styles.surfaceButton}`} onClick={() => setPaymentDialogEmployee(null)} disabled={saving}>
-                            Закрыть
-                        </Button>
-                        <Button variant="solid" color="gray" highContrast className={styles.primaryButton} onClick={() => void handlePayNow()} disabled={saving}>
-                            {saving ? 'Сохранение…' : 'Выплатить'}
-                        </Button>
-                    </Flex>
-                </Dialog.Content>
-            </Dialog.Root>
-
-            <Dialog.Root open={Boolean(statementEmployee)} onOpenChange={(open) => (!open ? setStatementEmployee(null) : undefined)}>
-                <Dialog.Content className={styles.paymentDialog}>
-                    <Dialog.Title>Расчетка сотрудника</Dialog.Title>
-                    <Dialog.Description>
-                        {statementEmployee ? `${statementEmployee.fio} (${statementEmployee.position || '—'})` : '—'}
-                    </Dialog.Description>
-
-                    {statementEmployee ? (
-                        <div className={styles.dialogForm}>
-                            <Grid columns={{ initial: '1', sm: '2', lg: '4' }} gap="3">
-                                <Card className={styles.statementMetricCard}>
-                                    <Text size="2" color="gray">Начислено</Text>
-                                    <Text as="div" size="5" weight="bold">{formatCurrency(statementEmployee.currentAccrued)}</Text>
-                                </Card>
-                                <Card className={styles.statementMetricCard}>
-                                    <Text size="2" color="gray">Удержано</Text>
-                                    <Text as="div" size="5" weight="bold">{formatCurrency(statementEmployee.currentWithheld)}</Text>
-                                </Card>
-                                <Card className={styles.statementMetricCard}>
-                                    <Text size="2" color="gray">Выплачено</Text>
-                                    <Text as="div" size="5" weight="bold">{formatCurrency(statementEmployee.currentPaid)}</Text>
-                                </Card>
-                                <Card className={styles.statementMetricCard}>
-                                    <Text size="2" color="gray">К выплате</Text>
-                                    <Text as="div" size="5" weight="bold">{formatCurrency(statementEmployee.currentPayable)}</Text>
-                                </Card>
-                            </Grid>
-
-                            <div className={styles.statementBlock}>
-                                <Text size="3" weight="bold">Текущие основания</Text>
-                                <div className={styles.tableWrapper}>
-                                    <Table.Root variant="surface" className={styles.table}>
-                                        <Table.Header>
-                                            <Table.Row>
-                                                <Table.ColumnHeaderCell>Вид</Table.ColumnHeaderCell>
-                                                <Table.ColumnHeaderCell>Период</Table.ColumnHeaderCell>
-                                                <Table.ColumnHeaderCell>Начислено</Table.ColumnHeaderCell>
-                                                <Table.ColumnHeaderCell>Удержано</Table.ColumnHeaderCell>
-                                                <Table.ColumnHeaderCell>К выплате</Table.ColumnHeaderCell>
-                                                <Table.ColumnHeaderCell>Источник</Table.ColumnHeaderCell>
-                                                <Table.ColumnHeaderCell className={styles.actionsCell}>Документы</Table.ColumnHeaderCell>
-                                            </Table.Row>
-                                        </Table.Header>
-                                        <Table.Body>
-                                            {statementEmployee.suggestedPayments.length ? statementEmployee.suggestedPayments.map((item) => (
-                                                <Table.Row key={item.key}>
-                                                    <Table.Cell>{item.type === 'advance' ? 'Аванс' : item.type === 'vacation' ? 'Отпускные' : 'Зарплата'}</Table.Cell>
-                                                    <Table.Cell>{formatPeriod(item.periodFrom, item.periodTo)}</Table.Cell>
-                                                    <Table.Cell>{formatCurrency(item.accruedAmount)}</Table.Cell>
-                                                    <Table.Cell>{formatCurrency(item.withheldAmount)}</Table.Cell>
-                                                    <Table.Cell>{formatCurrency(item.payableAmount)}</Table.Cell>
-                                                    <Table.Cell>{item.sourceSummary || item.note || '—'}</Table.Cell>
-                                                    <Table.Cell className={styles.actionsCell}>
-                                                        <Flex gap="2" justify="end" wrap="wrap" className={styles.statementActions}>
-                                                            <Button
-                                                                variant="surface"
-                                                                color="gray"
-                                                                highContrast
-                                                                className={`${styles.inlineButton} ${styles.surfaceButton}`}
-                                                                onClick={() => openStatementPreviewForSuggestion(statementEmployee, item)}
-                                                            >
-                                                                Просмотр
-                                                            </Button>
-                                                            <Button
-                                                                variant="surface"
-                                                                color="gray"
-                                                                highContrast
-                                                                className={`${styles.inlineButton} ${styles.surfaceButton}`}
-                                                                onClick={() => downloadStatementForSuggestion(statementEmployee, item, 'excel')}
-                                                            >
-                                                                Excel
-                                                            </Button>
-                                                            <Button
-                                                                variant="surface"
-                                                                color="gray"
-                                                                highContrast
-                                                                className={`${styles.inlineButton} ${styles.surfaceButton}`}
-                                                                onClick={() => downloadStatementForSuggestion(statementEmployee, item, 'pdf')}
-                                                            >
-                                                                PDF
-                                                            </Button>
-                                                        </Flex>
-                                                    </Table.Cell>
-                                                </Table.Row>
-                                            )) : (
-                                                <Table.Row>
-                                                    <Table.Cell colSpan={7}>
-                                                        <Text color="gray">Сейчас открытых начислений нет.</Text>
-                                                    </Table.Cell>
-                                                </Table.Row>
-                                            )}
-                                        </Table.Body>
-                                    </Table.Root>
-                                </div>
-                            </div>
-
-                            <div className={styles.statementBlock}>
-                                <Text size="3" weight="bold">Прошлые выплаты</Text>
-                                <div className={styles.tableWrapper}>
-                                    <Table.Root variant="surface" className={styles.table}>
-                                        <Table.Header>
-                                            <Table.Row>
-                                                <Table.ColumnHeaderCell>Дата</Table.ColumnHeaderCell>
-                                                <Table.ColumnHeaderCell>Вид</Table.ColumnHeaderCell>
-                                                <Table.ColumnHeaderCell>Период</Table.ColumnHeaderCell>
-                                                <Table.ColumnHeaderCell>Начислено</Table.ColumnHeaderCell>
-                                                <Table.ColumnHeaderCell>Удержано</Table.ColumnHeaderCell>
-                                                <Table.ColumnHeaderCell>Выплачено</Table.ColumnHeaderCell>
-                                                <Table.ColumnHeaderCell>Комментарий</Table.ColumnHeaderCell>
-                                                <Table.ColumnHeaderCell className={styles.actionsCell}>Документы</Table.ColumnHeaderCell>
-                                            </Table.Row>
-                                        </Table.Header>
-                                        <Table.Body>
-                                            {statementEmployee.paymentHistory.length ? statementEmployee.paymentHistory.map((payment) => (
-                                                <Table.Row key={payment.id}>
-                                                    <Table.Cell>{formatDate(payment.date)}</Table.Cell>
-                                                    <Table.Cell>{payment.paymentKind || payment.type || '—'}</Table.Cell>
-                                                    <Table.Cell>{formatPeriod(payment.periodFrom, payment.periodTo)}</Table.Cell>
-                                                    <Table.Cell>{formatCurrency(payment.accruedAmount || payment.amount)}</Table.Cell>
-                                                    <Table.Cell>{formatCurrency(payment.withheldAmount)}</Table.Cell>
-                                                    <Table.Cell>{formatCurrency(payment.paidAmount || payment.amount)}</Table.Cell>
-                                                    <Table.Cell>{payment.comment?.trim() || payment.calculation?.note || '—'}</Table.Cell>
-                                                    <Table.Cell className={styles.actionsCell}>
-                                                        <Flex gap="2" justify="end" wrap="wrap" className={styles.statementActions}>
-                                                            <Button
-                                                                variant="surface"
-                                                                color="gray"
-                                                                highContrast
-                                                                className={`${styles.inlineButton} ${styles.surfaceButton}`}
-                                                                onClick={() => openStatementPreviewForPayment(statementEmployee, payment)}
-                                                            >
-                                                                Просмотр
-                                                            </Button>
-                                                            <Button
-                                                                variant="surface"
-                                                                color="gray"
-                                                                highContrast
-                                                                className={`${styles.inlineButton} ${styles.surfaceButton}`}
-                                                                onClick={() => downloadStatementForPayment(statementEmployee, payment, 'excel')}
-                                                            >
-                                                                Excel
-                                                            </Button>
-                                                            <Button
-                                                                variant="surface"
-                                                                color="gray"
-                                                                highContrast
-                                                                className={`${styles.inlineButton} ${styles.surfaceButton}`}
-                                                                onClick={() => downloadStatementForPayment(statementEmployee, payment, 'pdf')}
-                                                            >
-                                                                PDF
-                                                            </Button>
-                                                        </Flex>
-                                                    </Table.Cell>
-                                                </Table.Row>
-                                            )) : (
-                                                <Table.Row>
-                                                    <Table.Cell colSpan={8}>
-                                                        <Text color="gray">История выплат пока пуста.</Text>
-                                                    </Table.Cell>
-                                                </Table.Row>
-                                            )}
-                                        </Table.Body>
-                                    </Table.Root>
-                                </div>
-                            </div>
-                        </div>
-                    ) : null}
-
-                    <Flex justify="end" gap="3" mt="4">
-                        <Button variant="surface" color="gray" highContrast className={`${styles.actionButton} ${styles.surfaceButton}`} onClick={() => setStatementEmployee(null)}>
-                            Закрыть
-                        </Button>
-                    </Flex>
-                </Dialog.Content>
-            </Dialog.Root>
-
-            <Dialog.Root open={batchStatementOpen} onOpenChange={setBatchStatementOpen}>
-                <Dialog.Content className={styles.paymentDialog}>
-                    <Dialog.Title>Общая расчетка</Dialog.Title>
-                    <Dialog.Description>
-                        Выбери сотрудников с текущими начислениями, которых нужно включить в ведомость.
-                    </Dialog.Description>
-
-                    <div className={styles.dialogForm}>
-                        <Flex gap="2" wrap="wrap">
-                            <Button
-                                variant="surface"
-                                color="gray"
-                                highContrast
-                                className={`${styles.inlineButton} ${styles.surfaceButton}`}
-                                onClick={() => setBatchStatementSelection(batchStatementCandidates.map((employee) => employee.id))}
+                            <button
+                                type="button"
+                                className={styles.previewCloseButton}
+                                onClick={() => setStatementPreview(null)}
+                                aria-label="Закрыть предпросмотр"
                             >
-                                Выбрать всех
-                            </Button>
-                            <Button
-                                variant="surface"
-                                color="gray"
-                                highContrast
-                                className={`${styles.inlineButton} ${styles.surfaceButton}`}
-                                onClick={() => setBatchStatementSelection([])}
-                            >
-                                Очистить
-                            </Button>
-                        </Flex>
-
-                        <div className={styles.batchStatementList}>
-                            {batchStatementCandidates.length ? batchStatementCandidates.map((employee) => {
-                                const checked = batchStatementSelection.includes(employee.id);
-                                const suggestion = getPrimarySuggestion(employee.suggestedPayments);
-                                return (
-                                    <label key={employee.id} className={styles.batchStatementItem}>
-                                        <input
-                                            type="checkbox"
-                                            checked={checked}
-                                            onChange={() => toggleBatchStatementEmployee(employee.id)}
-                                        />
-                                        <div className={styles.batchStatementMeta}>
-                                            <div className={styles.employeeName}>{employee.fio}</div>
-                                            <div className={styles.employeeMeta}>
-                                                {employee.position || '—'} · {suggestion ? formatSuggestedPaymentLabel(suggestion) : 'Без основания'} · {formatCurrency(suggestion?.payableAmount || 0)}
-                                            </div>
-                                        </div>
-                                    </label>
-                                );
-                            }) : (
-                                <Text color="gray">Нет сотрудников с текущими начислениями.</Text>
-                            )}
+                                <FiX />
+                            </button>
                         </div>
-                    </div>
 
-                    <Flex justify="between" align="center" gap="3" mt="4" wrap="wrap">
-                        <Text size="2" color="gray">Выбрано: {batchStatementSelection.length}</Text>
-                        <Flex gap="3" wrap="wrap" justify="end">
+                        <div className={styles.previewToolbar}>
                             <Button
                                 variant="surface"
                                 color="gray"
                                 highContrast
                                 className={`${styles.actionButton} ${styles.surfaceButton}`}
-                                onClick={openBatchStatementPreview}
-                                disabled={!batchStatementSelection.length}
+                                onClick={handlePrintPreview}
                             >
-                                Просмотр
+                                <FiPrinter className={styles.icon} />
+                                Напечатать
                             </Button>
                             <Button
                                 variant="surface"
                                 color="gray"
                                 highContrast
                                 className={`${styles.actionButton} ${styles.surfaceButton}`}
-                                onClick={() => downloadBatchStatement('excel')}
-                                disabled={!batchStatementSelection.length}
-                            >
-                                Excel
-                            </Button>
-                            <Button
-                                variant="surface"
-                                color="gray"
-                                highContrast
-                                className={`${styles.actionButton} ${styles.surfaceButton}`}
-                                onClick={() => downloadBatchStatement('pdf')}
-                                disabled={!batchStatementSelection.length}
+                                onClick={() => handlePreviewDownload('pdf')}
                             >
                                 PDF
                             </Button>
@@ -1117,60 +1320,119 @@ function AdminFinancePage(): JSX.Element {
                                 color="gray"
                                 highContrast
                                 className={`${styles.actionButton} ${styles.surfaceButton}`}
-                                onClick={() => setBatchStatementOpen(false)}
+                                onClick={() => handlePreviewDownload('excel')}
                             >
-                                Закрыть
+                                Excel
                             </Button>
-                        </Flex>
-                    </Flex>
-                </Dialog.Content>
-            </Dialog.Root>
+                            <Button
+                                variant="surface"
+                                color="gray"
+                                highContrast
+                                className={`${styles.actionButton} ${styles.surfaceButton}`}
+                                onClick={() => window.open(previewPdfObjectUrl || statementPreview.previewUrl, '_blank', 'noopener,noreferrer')}
+                            >
+                                <FiExternalLink className={styles.icon} />
+                                Открыть
+                            </Button>
+                        </div>
 
-            <Dialog.Root open={Boolean(statementPreview)} onOpenChange={(open) => (!open ? setStatementPreview(null) : undefined)}>
-                <Dialog.Content className={styles.previewDialog}>
-                    <Dialog.Title>{statementPreview?.title || 'Предпросмотр расчетки'}</Dialog.Title>
-                    <Dialog.Description>Документ сформирован из xlsx-шаблона, сконвертирован в PDF и показан в браузере.</Dialog.Description>
+                        <div className={styles.previewCanvas}>
+                            <div ref={previewStageRef} className={styles.previewStage}>
+                                {previewLoading ? (
+                                    <div className={styles.previewLoading}>Готовим предпросмотр PDF...</div>
+                                ) : null}
+                                {previewError ? (
+                                    <div className={styles.inlineError}>{previewError}</div>
+                                ) : null}
+                                {!previewLoading && !previewError ? (
+                                    <div className={styles.previewPages}>
+                                        {previewPages.map((pageSrc, index) => (
+                                            <img
+                                                key={`${statementPreview.previewUrl}-${index + 1}`}
+                                                src={pageSrc}
+                                                alt={`Страница ${index + 1}`}
+                                                className={styles.previewPageImage}
+                                            />
+                                        ))}
+                                    </div>
+                                ) : null}
+                            </div>
+                        </div>
 
-                    <Box mt="3">
-                        {statementPreview ? (
-                            <iframe
-                                ref={previewFrameRef}
-                                src={statementPreview.url}
-                                title={statementPreview.title}
-                                className={styles.previewFrame}
-                            />
-                        ) : null}
-                    </Box>
+                        <iframe
+                            ref={previewPrintFrameRef}
+                            title="Скрытый фрейм печати"
+                            className={styles.hiddenPrintFrame}
+                        />
+                    </section>
+                </div>
+            ) : null}
 
-                    <Flex justify="end" gap="3" mt="4" wrap="wrap">
-                        <Button
-                            variant="surface"
-                            color="gray"
-                            highContrast
-                            className={`${styles.actionButton} ${styles.surfaceButton}`}
-                            onClick={handlePrintStatementPreview}
+            <Dialog.Root open={Boolean(manualPaymentEmployee)} onOpenChange={(open) => (!open ? setManualPaymentEmployee(null) : undefined)}>
+                <Dialog.Content className={styles.paymentDialog}>
+                    <Dialog.Title>Ручная выплата</Dialog.Title>
+                    <Dialog.Description>
+                        {manualPaymentEmployee ? `${manualPaymentEmployee.fio} · ${manualPaymentEmployee.position || '—'}` : '—'}
+                    </Dialog.Description>
+
+                    <div className={styles.dialogForm}>
+                        <Select.Root
+                            value={manualPaymentForm.paymentType}
+                            onValueChange={(value) => setManualPaymentForm((prev) => ({ ...prev, paymentType: value }))}
                         >
-                            <FiPrinter className={styles.icon} />
-                            Печать
-                        </Button>
+                            <Select.Trigger className={styles.fieldSelect} />
+                            <Select.Content className={styles.selectContent}>
+                                <Select.Item value="зарплата">Зарплата</Select.Item>
+                                <Select.Item value="аванс">Аванс</Select.Item>
+                                <Select.Item value="отпускные">Отпускные</Select.Item>
+                                <Select.Item value="больничный">Больничный</Select.Item>
+                                <Select.Item value="премия">Премия</Select.Item>
+                            </Select.Content>
+                        </Select.Root>
+
+                        <TextField.Root
+                            value={manualPaymentForm.amount}
+                            onChange={(event) => setManualPaymentForm((prev) => ({ ...prev, amount: event.target.value }))}
+                            className={styles.dialogInput}
+                            placeholder="Сумма"
+                        />
+
+                        <input
+                            type="date"
+                            value={manualPaymentForm.date}
+                            onChange={(event) => setManualPaymentForm((prev) => ({ ...prev, date: event.target.value }))}
+                            className={styles.processingDateInput}
+                        />
+
+                        <TextField.Root
+                            value={manualPaymentForm.comment}
+                            onChange={(event) => setManualPaymentForm((prev) => ({ ...prev, comment: event.target.value }))}
+                            className={styles.dialogInput}
+                            placeholder="Комментарий"
+                        />
+
+                        {manualPaymentError ? <div className={styles.inlineError}>{manualPaymentError}</div> : null}
+                    </div>
+
+                    <Flex justify="end" gap="3" mt="4">
                         <Button
                             variant="surface"
                             color="gray"
                             highContrast
                             className={`${styles.actionButton} ${styles.surfaceButton}`}
-                            onClick={() => statementPreview ? window.open(statementPreview.url, '_blank', 'noopener,noreferrer') : undefined}
-                        >
-                            <FiDownload className={styles.icon} />
-                            Открыть в новой вкладке
-                        </Button>
-                        <Button
-                            variant="surface"
-                            color="gray"
-                            highContrast
-                            className={`${styles.actionButton} ${styles.surfaceButton}`}
-                            onClick={() => setStatementPreview(null)}
+                            onClick={() => setManualPaymentEmployee(null)}
                         >
                             Закрыть
+                        </Button>
+                        <Button
+                            variant="solid"
+                            color="gray"
+                            highContrast
+                            className={styles.primaryButton}
+                            onClick={() => void handleManualPaymentSave()}
+                            disabled={saving}
+                        >
+                            {saving ? 'Сохранение…' : 'Сохранить выплату'}
                         </Button>
                     </Flex>
                 </Dialog.Content>

@@ -21,6 +21,22 @@ export type FinanceEmployee = {
     currentWithheld: number;
     currentPaid: number;
     currentPayable: number;
+    currentOrgDebt: number;
+    currentEmployeeDebt: number;
+    currentContributions: number;
+    currentContributionDetails: {
+        taxableIncomeMonth: number;
+        contributionBaseMonth: number;
+        contributionYearBase30: number;
+        contributionYearBase151: number;
+    };
+    currentBreakdown: {
+        advance: number;
+        salary: number;
+        vacation: number;
+        bonus: number;
+        sickLeave: number;
+    };
     suggestedPayments: FinanceSuggestedPayment[];
     paymentHistory: FinancePayment[];
 };
@@ -44,9 +60,23 @@ export type FinancePayment = {
     calculation: Record<string, any> | null;
 };
 
+export type FinanceSuggestedPaymentType =
+    | 'advance'
+    | 'salary_cycle'
+    | 'vacation'
+    | 'bonus'
+    | 'sick_leave';
+
+export type FinancePaymentKindCode =
+    | 'advance'
+    | 'salary'
+    | 'vacation'
+    | 'bonus'
+    | 'sick_leave';
+
 export type FinanceSuggestedPayment = {
     key: string;
-    type: 'advance' | 'salary_cycle' | 'vacation' | 'bonus';
+    type: FinanceSuggestedPaymentType;
     encodedType: string;
     label: string;
     amount: number;
@@ -64,6 +94,8 @@ export type FinanceSuggestedPayment = {
 export type FinanceResponse = {
     settings: FinanceSettings;
     paymentTableAvailable: boolean;
+    selectedMonth: string;
+    selectedMonthLabel: string;
     employees: FinanceEmployee[];
     recentPayments: FinancePayment[];
     totals: {
@@ -77,7 +109,13 @@ const SETTINGS_KEY = 'payroll_schedule';
 const VACATION_PAYMENT_PREFIX = 'отпускные#';
 const ADVANCE_PAYMENT_PREFIX = 'аванс#';
 const SALARY_PAYMENT_PREFIX = 'зарплата#';
+const SICK_LEAVE_PAYMENT_PREFIX = 'больничный#';
+const OPEN_PAYMENT_PREFIX = 'open-payment#';
 const DEFAULT_TAX_RATE = 0.13;
+const CONTRIBUTION_THRESHOLD = 2_979_000;
+const CONTRIBUTION_RATE_BASE = 0.3;
+const CONTRIBUTION_RATE_ABOVE = 0.151;
+const SICK_SCHEDULE_STATUSES = new Set(['больничный', 'больничный лист']);
 
 const getTableColumns = async (tableName: string): Promise<Set<string>> => {
     const colsRes = await query(
@@ -160,6 +198,33 @@ const startOfMonth = (value: Date): Date => new Date(Date.UTC(value.getUTCFullYe
 
 const endOfMonth = (value: Date): Date => new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth() + 1, 0));
 
+const parseMonthKey = (value: unknown): Date | null => {
+    const normalized = String(value || '').trim();
+    if (!/^\d{4}-\d{2}$/.test(normalized)) return null;
+
+    const [yearRaw, monthRaw] = normalized.split('-');
+    const year = Number(yearRaw);
+    const month = Number(monthRaw);
+    if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) return null;
+    return new Date(Date.UTC(year, month - 1, 1));
+};
+
+const formatMonthKey = (value: Date): string => {
+    const year = value.getUTCFullYear();
+    const month = String(value.getUTCMonth() + 1).padStart(2, '0');
+    return `${year}-${month}`;
+};
+
+const formatMonthLabel = (value: Date): string =>
+    {
+        const label = value.toLocaleDateString('ru-RU', {
+        month: 'long',
+        year: 'numeric',
+        timeZone: 'UTC',
+        });
+        return label ? `${label.charAt(0).toUpperCase()}${label.slice(1)}` : formatMonthKey(value);
+    };
+
 const daysInMonth = (value: Date): number => endOfMonth(value).getUTCDate();
 
 const clampDayToMonth = (year: number, month: number, day: number): Date =>
@@ -217,15 +282,54 @@ const normalizeOptionalText = (value: unknown): string | null => {
     return text ? text : null;
 };
 
+const normalizePaymentKindCode = (value: unknown): FinancePaymentKindCode | null => {
+    const normalized = String(value || '').trim().toLowerCase();
+    if (!normalized) return null;
+    if (normalized.startsWith(ADVANCE_PAYMENT_PREFIX) || normalized === 'аванс' || normalized === 'advance') return 'advance';
+    if (
+        normalized.startsWith(VACATION_PAYMENT_PREFIX)
+        || normalized === 'отпускные'
+        || normalized === 'vacation'
+    ) return 'vacation';
+    if (
+        normalized.startsWith(SICK_LEAVE_PAYMENT_PREFIX)
+        || normalized === 'больничный'
+        || normalized === 'больничные'
+        || normalized === 'sick_leave'
+        || normalized === 'sick'
+    ) return 'sick_leave';
+    if (normalized === 'премия' || normalized === 'bonus') return 'bonus';
+    if (
+        normalized.startsWith(SALARY_PAYMENT_PREFIX)
+        || normalized === 'зарплата'
+        || normalized === 'salary'
+        || normalized === 'salary_cycle'
+    ) return 'salary';
+    return null;
+};
+
+const financePaymentKindToSuggestionType = (paymentKind: FinancePaymentKindCode): FinanceSuggestedPaymentType =>
+    paymentKind === 'salary' ? 'salary_cycle' : paymentKind;
+
+const getSuggestedPaymentTypeLabel = (type: FinanceSuggestedPaymentType): string => {
+    if (type === 'advance') return 'Аванс';
+    if (type === 'vacation') return 'Отпускные';
+    if (type === 'bonus') return 'Премия';
+    if (type === 'sick_leave') return 'Больничный';
+    return 'Зарплата';
+};
+
 const displayPaymentType = (value: string | null): string | null => {
     if (!value) return null;
     if (value.startsWith(VACATION_PAYMENT_PREFIX)) return 'Отпускные';
     if (value.startsWith(ADVANCE_PAYMENT_PREFIX)) return 'Аванс';
     if (value.startsWith(SALARY_PAYMENT_PREFIX)) return 'Зарплата';
+    if (value.startsWith(SICK_LEAVE_PAYMENT_PREFIX)) return 'Больничный';
     const normalized = value.trim().toLowerCase();
     if (normalized === 'аванс') return 'Аванс';
     if (normalized === 'зарплата') return 'Зарплата';
     if (normalized === 'премия') return 'Премия';
+    if (normalized === 'больничный' || normalized === 'больничные' || normalized === 'sick_leave') return 'Больничный';
     return value;
 };
 
@@ -236,37 +340,70 @@ const displayPaymentKind = (value: string | null): string | null => {
     if (normalized === 'salary' || normalized === 'salary_cycle') return 'Зарплата';
     if (normalized === 'vacation') return 'Отпускные';
     if (normalized === 'bonus') return 'Премия';
+    if (normalized === 'sick_leave') return 'Больничный';
     return value;
 };
 
-const resolvePaymentKindCode = (paymentType: string | null): 'advance' | 'salary' | 'vacation' | 'bonus' => {
-    const normalized = String(paymentType || '').trim().toLowerCase();
-    if (normalized.startsWith(ADVANCE_PAYMENT_PREFIX) || normalized === 'аванс') return 'advance';
-    if (normalized.startsWith(VACATION_PAYMENT_PREFIX) || normalized === 'отпускные') return 'vacation';
-    if (normalized === 'премия' || normalized === 'bonus') return 'bonus';
-    return 'salary';
+const resolvePaymentKindCode = (paymentType: string | null): FinancePaymentKindCode =>
+    normalizePaymentKindCode(paymentType) || 'salary';
+
+const getSuggestedPaymentPriority = (type: FinanceSuggestedPaymentType): number => {
+    if (type === 'vacation') return 0;
+    if (type === 'sick_leave') return 1;
+    if (type === 'advance') return 2;
+    if (type === 'salary_cycle') return 3;
+    return 4;
 };
 
 const suggestionSortValue = (value: FinanceSuggestedPayment): number => {
-    const typeRank =
-        value.type === 'salary_cycle' ? 3 :
-        value.type === 'advance' ? 2 :
-        value.type === 'vacation' ? 1 :
-        0;
-    return new Date(value.recommendedDate).getTime() * 10 + typeRank;
+    return new Date(value.recommendedDate).getTime() * 10 + getSuggestedPaymentPriority(value.type);
 };
 
 const pickPrimarySuggestion = (items: FinanceSuggestedPayment[]): FinanceSuggestedPayment | null => {
     if (!items.length) return null;
     return items.reduce((best, item) => {
         if (!best) return item;
-        return suggestionSortValue(item) > suggestionSortValue(best) ? item : best;
+        return suggestionSortValue(item) < suggestionSortValue(best) ? item : best;
     }, null as FinanceSuggestedPayment | null);
 };
 
 const isVacationStatusActive = (value: unknown): boolean => {
     const normalized = String(value || '').trim().toLowerCase();
     return !['cancelled', 'canceled', 'отменен', 'отменена', 'rejected', 'declined'].includes(normalized);
+};
+
+const isSickScheduleStatus = (value: unknown): boolean =>
+    SICK_SCHEDULE_STATUSES.has(String(value || '').trim().toLowerCase());
+
+const calculatePaymentBalance = (payment: Pick<FinancePayment, 'accruedAmount' | 'withheldAmount' | 'paidAmount' | 'payableAmount' | 'amount'>): number => {
+    const explicitPayable = Number(payment.payableAmount || 0);
+    if (Math.abs(explicitPayable) > 0.009) return roundMoney(explicitPayable);
+
+    const gross = Number(payment.accruedAmount || 0);
+    const withheld = Number(payment.withheldAmount || 0);
+    const paid = Number(payment.paidAmount || payment.amount || 0);
+    if (gross > 0 || withheld > 0) {
+        return roundMoney(gross - withheld - paid);
+    }
+
+    return 0;
+};
+
+const getPaymentAccruedAmount = (payment: {
+    paymentKind: FinancePaymentKindCode | null;
+    accruedAmount: number;
+    paidAmount: number;
+    amount?: number;
+}): number => {
+    const explicitAccrued = Number(payment.accruedAmount || 0);
+    if (explicitAccrued > 0) return explicitAccrued;
+
+    const fallbackPaid = Number(payment.paidAmount || payment.amount || 0);
+    if (payment.paymentKind === 'bonus' || payment.paymentKind === 'sick_leave' || payment.paymentKind === 'vacation' || payment.paymentKind === 'salary' || payment.paymentKind === 'advance') {
+        return fallbackPaid;
+    }
+
+    return fallbackPaid;
 };
 
 const ensureAppSettingsTable = async () => {
@@ -381,9 +518,66 @@ const getPaymentsMeta = async () => {
     };
 };
 
-export const getFinancePayload = async (monthsRequested: number): Promise<FinanceResponse> => {
+const settleOpenPaymentRecord = async (
+    executor: { query: (sql: string, params?: any[]) => Promise<any> },
+    paymentsMeta: Awaited<ReturnType<typeof getPaymentsMeta>>,
+    params: {
+        paymentId: string;
+        amount: number;
+        paymentDate: string;
+        comment: string;
+    }
+) => {
+    if (!paymentsMeta.idCol || !paymentsMeta.amountCol || !paymentsMeta.dateCol) {
+        throw new Error('Таблица выплат недоступна для обновления открытого начисления');
+    }
+
+    const sets = [
+        `${quoteIdent(paymentsMeta.amountCol)} = COALESCE(${quoteIdent(paymentsMeta.amountCol)}, 0) + $2`,
+        `${quoteIdent(paymentsMeta.dateCol)} = $3`,
+    ];
+    const values: any[] = [params.paymentId, params.amount, params.paymentDate];
+
+    if (paymentsMeta.paidCol) {
+        sets.push(`${quoteIdent(paymentsMeta.paidCol)} = COALESCE(${quoteIdent(paymentsMeta.paidCol)}, 0) + $2`);
+    }
+
+    if (paymentsMeta.payableCol) {
+        sets.push(`${quoteIdent(paymentsMeta.payableCol)} = GREATEST(COALESCE(${quoteIdent(paymentsMeta.payableCol)}, 0) - $2, 0)`);
+    }
+
+    if (paymentsMeta.statusCol) {
+        sets.push(
+            `${quoteIdent(paymentsMeta.statusCol)} = CASE
+                WHEN ${paymentsMeta.payableCol ? `GREATEST(COALESCE(${quoteIdent(paymentsMeta.payableCol)}, 0) - $2, 0)` : '0'} <= 0.009
+                    THEN 'выплачено'
+                ELSE 'частично выплачено'
+            END`
+        );
+    }
+
+    if (paymentsMeta.commentCol && params.comment) {
+        values.push(params.comment);
+        sets.push(`${quoteIdent(paymentsMeta.commentCol)} = COALESCE(${quoteIdent(paymentsMeta.commentCol)}, '') || CASE WHEN COALESCE(${quoteIdent(paymentsMeta.commentCol)}, '') = '' THEN $4 ELSE E'\\n' || $4 END`);
+    }
+
+    await executor.query(
+        `
+        UPDATE public.${quoteIdent(paymentsMeta.tableName)}
+        SET ${sets.join(', ')}
+        WHERE ${quoteIdent(paymentsMeta.idCol)}::text = $1
+        `,
+        values
+    );
+};
+
+export const getFinancePayload = async (monthsRequested: number, monthKey?: string | null): Promise<FinanceResponse> => {
     const settings = await getSettings();
     const today = parseDateOnly(new Date()) || new Date();
+    const selectedMonthDate = parseMonthKey(monthKey) || startOfMonth(today);
+    const selectedMonthStart = startOfMonth(selectedMonthDate);
+    const selectedMonthEnd = endOfMonth(selectedMonthDate);
+    const historyWindowStart = addMonths(startOfMonth(selectedMonthDate), -(monthsRequested - 1));
 
     const employeesRes = await query(
         `
@@ -411,6 +605,22 @@ export const getFinancePayload = async (monthsRequested: number): Promise<Financ
         currentWithheld: 0,
         currentPaid: 0,
         currentPayable: 0,
+        currentOrgDebt: 0,
+        currentEmployeeDebt: 0,
+        currentContributions: 0,
+        currentContributionDetails: {
+            taxableIncomeMonth: 0,
+            contributionBaseMonth: 0,
+            contributionYearBase30: 0,
+            contributionYearBase151: 0,
+        },
+        currentBreakdown: {
+            advance: 0,
+            salary: 0,
+            vacation: 0,
+            bonus: 0,
+            sickLeave: 0,
+        },
         suggestedPayments: [],
         paymentHistory: [],
     }));
@@ -420,6 +630,8 @@ export const getFinancePayload = async (monthsRequested: number): Promise<Financ
         return {
             settings,
             paymentTableAvailable: false,
+            selectedMonth: formatMonthKey(selectedMonthDate),
+            selectedMonthLabel: formatMonthLabel(selectedMonthDate),
             employees,
             recentPayments: [],
             totals: {
@@ -439,10 +651,11 @@ export const getFinancePayload = async (monthsRequested: number): Promise<Financ
             MAX(${quoteIdent(paymentsMeta.dateCol)}) AS last_payment_date
         FROM public.${quoteIdent(paymentsMeta.tableName)}
         WHERE ${quoteIdent(paymentsMeta.dateCol)} IS NOT NULL
-          AND ${quoteIdent(paymentsMeta.dateCol)} >= (date_trunc('month', CURRENT_DATE) - ($1::int - 1) * interval '1 month')
+          AND ${quoteIdent(paymentsMeta.dateCol)} >= $1::date
+          AND ${quoteIdent(paymentsMeta.dateCol)} <= $2::date
         GROUP BY ${quoteIdent(paymentsMeta.employeeCol)}
         `,
-        [monthsRequested]
+        [formatDateOnly(historyWindowStart), formatDateOnly(selectedMonthEnd)]
     );
 
     const aggregateByEmployee = new Map<number, { totalPaid: number; paymentCount: number; lastPaymentDate: string | null }>();
@@ -513,7 +726,21 @@ export const getFinancePayload = async (monthsRequested: number): Promise<Financ
             : null,
     }));
 
-    const rawPaymentsByEmployee = new Map<number, Array<{ date: Date; rawType: string | null; paidAmount: number; accruedAmount: number; withheldAmount: number }>>();
+    const rawPaymentsByEmployee = new Map<number, Array<{
+        id: string;
+        date: Date;
+        rawType: string | null;
+        rawStatus: string | null;
+        rawComment: string | null;
+        paymentKind: FinancePaymentKindCode | null;
+        paidAmount: number;
+        accruedAmount: number;
+        withheldAmount: number;
+        payableAmount: number;
+        periodFrom: string | null;
+        periodTo: string | null;
+        calculation: Record<string, any> | null;
+    }>>();
     const paymentHistoryByEmployee = new Map<number, FinancePayment[]>();
     allPayments.forEach((payment, index) => {
         const employeeId = payment.employeeId;
@@ -522,12 +749,24 @@ export const getFinancePayload = async (monthsRequested: number): Promise<Financ
 
         const sourceRow: any = paymentHistoryRes.rows?.[index] || {};
         const bucket = rawPaymentsByEmployee.get(employeeId) || [];
+        const rawType = normalizePaymentType(sourceRow.payment_type);
+        const rawKind = normalizeOptionalText(sourceRow.payment_kind)
+            || normalizeOptionalText(sourceRow.payment_calculation?.paymentKind)
+            || rawType;
         bucket.push({
+            id: payment.id,
             date: paymentDate,
-            rawType: normalizePaymentType(sourceRow.payment_type),
+            rawType,
+            rawStatus: normalizeOptionalText(sourceRow.payment_status),
+            rawComment: normalizeOptionalText(sourceRow.payment_comment),
+            paymentKind: normalizePaymentKindCode(rawKind),
             paidAmount: payment.paidAmount,
             accruedAmount: payment.accruedAmount,
             withheldAmount: payment.withheldAmount,
+            payableAmount: payment.payableAmount,
+            periodFrom: payment.periodFrom,
+            periodTo: payment.periodTo,
+            calculation: payment.calculation,
         });
         rawPaymentsByEmployee.set(employeeId, bucket);
 
@@ -535,6 +774,30 @@ export const getFinancePayload = async (monthsRequested: number): Promise<Financ
         historyBucket.push(payment);
         paymentHistoryByEmployee.set(employeeId, historyBucket);
     });
+
+    const sickScheduleRes = await query(
+        `
+        SELECT
+            "сотрудник_id" AS employee_id,
+            "дата" AS work_date,
+            "статус" AS work_status
+        FROM public."График_работы"
+        WHERE "дата" >= $1
+          AND "дата" <= $2
+        ORDER BY "сотрудник_id" ASC, "дата" ASC
+        `,
+        [formatDateOnly(addMonths(startOfMonth(selectedMonthStart), -2)), formatDateOnly(selectedMonthEnd)]
+    ).catch(() => ({ rows: [] as any[] }));
+
+    const sickDaysByEmployee = new Map<number, Set<string>>();
+    for (const row of sickScheduleRes.rows || []) {
+        const employeeId = Number(row.employee_id);
+        const workDate = parseDateOnly(row.work_date);
+        if (!employeeId || !workDate || !isSickScheduleStatus(row.work_status)) continue;
+        const bucket = sickDaysByEmployee.get(employeeId) || new Set<string>();
+        bucket.add(formatDateOnly(workDate));
+        sickDaysByEmployee.set(employeeId, bucket);
+    }
 
     const vacationRes = await query(
         `
@@ -549,7 +812,7 @@ export const getFinancePayload = async (monthsRequested: number): Promise<Financ
         WHERE date_to >= $1
         ORDER BY date_from ASC, id ASC
         `,
-        [formatDateOnly(addMonths(startOfMonth(today), -monthsRequested))]
+        [formatDateOnly(addMonths(startOfMonth(selectedMonthStart), -2))]
     );
 
     const vacationsByEmployee = new Map<number, Array<{
@@ -578,8 +841,8 @@ export const getFinancePayload = async (monthsRequested: number): Promise<Financ
     }
 
     const duePayrollCycles = (() => {
-        const cyclePeriodStart = addMonths(startOfMonth(today), -2);
-        const paymentDates = enumeratePaymentDates(settings, cyclePeriodStart, today).filter((date) => date <= today);
+        const cyclePeriodStart = addMonths(startOfMonth(selectedMonthStart), -2);
+        const paymentDates = enumeratePaymentDates(settings, cyclePeriodStart, selectedMonthEnd);
         if (paymentDates.length < 2) {
             return [] as Array<{
                 key: string;
@@ -605,7 +868,7 @@ export const getFinancePayload = async (monthsRequested: number): Promise<Financ
                 dateTo: payDate,
                 type,
             };
-        });
+        }).filter((cycle) => cycle.payDate >= selectedMonthStart && cycle.payDate <= selectedMonthEnd);
     })();
 
     const employeesWithSuggestions = mergedEmployees.map((employee) => {
@@ -613,6 +876,7 @@ export const getFinancePayload = async (monthsRequested: number): Promise<Financ
         const employeePayments = rawPaymentsByEmployee.get(employee.id) || [];
         const employeeVacations = vacationsByEmployee.get(employee.id) || [];
         const vacationDays = new Set<string>();
+        const sickDays = new Set(sickDaysByEmployee.get(employee.id) || []);
 
         for (const vacation of employeeVacations) {
             for (const day of enumerateDays(vacation.dateFrom, vacation.dateTo)) {
@@ -623,40 +887,91 @@ export const getFinancePayload = async (monthsRequested: number): Promise<Financ
         if (employee.rate && employee.rate > 0) {
             for (const cycle of duePayrollCycles) {
                 const alreadyPaid = employeePayments.some((payment) =>
-                    payment.rawType === cycle.key ||
-                    (cycle.type === 'advance' && payment.rawType === 'аванс' && formatDateOnly(payment.date) === formatDateOnly(cycle.payDate)) ||
-                    (cycle.type === 'salary_cycle' && payment.rawType === 'зарплата' && formatDateOnly(payment.date) === formatDateOnly(cycle.payDate))
+                    payment.rawType === cycle.key
+                    || (
+                        cycle.type === 'advance'
+                        && payment.paymentKind === 'advance'
+                        && formatDateOnly(payment.date) === formatDateOnly(cycle.payDate)
+                    )
+                    || (
+                        cycle.type === 'salary_cycle'
+                        && payment.paymentKind === 'salary'
+                        && formatDateOnly(payment.date) === formatDateOnly(cycle.payDate)
+                    )
                 );
 
                 if (alreadyPaid) continue;
 
-                const payableDays = enumerateDays(cycle.dateFrom, cycle.dateTo).filter((day) => !vacationDays.has(formatDateOnly(day)));
-                const accruedAmount = roundMoney(computeCalendarAmount(employee.rate, payableDays));
-                if (accruedAmount <= 0) continue;
-                const withheldAmount = computeWithholdingAmount(accruedAmount);
-                const payableAmount = computeNetAmount(accruedAmount, withheldAmount);
-
-                suggestedPayments.push({
-                    key: cycle.key,
-                    type: cycle.type,
-                    encodedType: cycle.key,
-                    label: `${cycle.type === 'advance' ? 'Аванс' : 'Зарплата'} за период ${formatDateOnly(cycle.dateFrom)} - ${formatDateOnly(cycle.dateTo)}`,
-                    amount: payableAmount,
-                    accruedAmount,
-                    withheldAmount,
-                    paidAmount: 0,
-                    payableAmount,
-                    recommendedDate: formatDateOnly(cycle.payDate),
-                    periodFrom: formatDateOnly(cycle.dateFrom),
-                    periodTo: formatDateOnly(cycle.dateTo),
-                    note: `Период без дней отпуска, дата выплаты по графику: ${formatDateOnly(cycle.payDate)}.`,
-                    sourceSummary: `${cycle.type === 'advance' ? 'Первый платеж месяца (аванс)' : 'Основная зарплата по графику'} · НДФЛ ${roundMoney(DEFAULT_TAX_RATE * 100)}%`,
+                const cycleDays = enumerateDays(cycle.dateFrom, cycle.dateTo);
+                const payableSalaryDays = cycleDays.filter((day) => {
+                    const dayKey = formatDateOnly(day);
+                    return !vacationDays.has(dayKey) && !sickDays.has(dayKey);
                 });
+                const sickLeaveDays = cycleDays.filter((day) => sickDays.has(formatDateOnly(day)));
+
+                const salaryAccruedAmount = roundMoney(computeCalendarAmount(employee.rate, payableSalaryDays));
+                if (salaryAccruedAmount > 0) {
+                    const withheldAmount = computeWithholdingAmount(salaryAccruedAmount);
+                    const payableAmount = computeNetAmount(salaryAccruedAmount, withheldAmount);
+
+                    suggestedPayments.push({
+                        key: cycle.key,
+                        type: cycle.type,
+                        encodedType: cycle.key,
+                        label: `${getSuggestedPaymentTypeLabel(cycle.type)} за период ${formatDateOnly(cycle.dateFrom)} - ${formatDateOnly(cycle.dateTo)}`,
+                        amount: payableAmount,
+                        accruedAmount: salaryAccruedAmount,
+                        withheldAmount,
+                        paidAmount: 0,
+                        payableAmount,
+                        recommendedDate: formatDateOnly(cycle.payDate),
+                        periodFrom: formatDateOnly(cycle.dateFrom),
+                        periodTo: formatDateOnly(cycle.dateTo),
+                        note: `Период без дней отпуска и больничного, дата выплаты по графику: ${formatDateOnly(cycle.payDate)}.`,
+                        sourceSummary: `${cycle.type === 'advance' ? 'Первый платеж месяца (аванс)' : 'Основная зарплата по графику'} · НДФЛ ${roundMoney(DEFAULT_TAX_RATE * 100)}%`,
+                    });
+                }
+
+                if (sickLeaveDays.length > 0) {
+                    const encodedType = `${SICK_LEAVE_PAYMENT_PREFIX}${formatDateOnly(cycle.dateFrom)}:${formatDateOnly(cycle.dateTo)}`;
+                    const sickAlreadyPaid = employeePayments.some((payment) =>
+                        payment.rawType === encodedType
+                        || (
+                            payment.paymentKind === 'sick_leave'
+                            && payment.periodFrom === formatDateOnly(cycle.dateFrom)
+                            && payment.periodTo === formatDateOnly(cycle.dateTo)
+                        )
+                    );
+
+                    if (!sickAlreadyPaid) {
+                        const accruedAmount = roundMoney(computeCalendarAmount(employee.rate, sickLeaveDays));
+                        if (accruedAmount > 0) {
+                            const withheldAmount = computeWithholdingAmount(accruedAmount);
+                            const payableAmount = computeNetAmount(accruedAmount, withheldAmount);
+                            suggestedPayments.push({
+                                key: encodedType,
+                                type: 'sick_leave',
+                                encodedType,
+                                label: `Больничный за период ${formatDateOnly(cycle.dateFrom)} - ${formatDateOnly(cycle.dateTo)}`,
+                                amount: payableAmount,
+                                accruedAmount,
+                                withheldAmount,
+                                paidAmount: 0,
+                                payableAmount,
+                                recommendedDate: formatDateOnly(cycle.payDate),
+                                periodFrom: formatDateOnly(cycle.dateFrom),
+                                periodTo: formatDateOnly(cycle.dateTo),
+                                note: `Дни со статусом "больничный" в рабочем графике за период ${formatDateOnly(cycle.dateFrom)} - ${formatDateOnly(cycle.dateTo)}.`,
+                                sourceSummary: 'Больничный по рабочему графику · НДФЛ 13%',
+                            });
+                        }
+                    }
+                }
             }
 
             for (const vacation of employeeVacations) {
                 const dueDate = addDays(vacation.dateFrom, -14);
-                if (dueDate > today) continue;
+                if (dueDate < selectedMonthStart || dueDate > selectedMonthEnd) continue;
 
                 const encodedType = `${VACATION_PAYMENT_PREFIX}${vacation.id}`;
                 const alreadyPaid = employeePayments.some((payment) => payment.rawType === encodedType);
@@ -687,39 +1002,181 @@ export const getFinancePayload = async (monthsRequested: number): Promise<Financ
             }
         }
 
+        for (const payment of employeePayments) {
+            if (payment.date > selectedMonthEnd) continue;
+            if (!payment.paymentKind || (payment.paymentKind !== 'bonus' && payment.paymentKind !== 'sick_leave')) continue;
+
+            const balance = calculatePaymentBalance({
+                accruedAmount: payment.accruedAmount,
+                withheldAmount: payment.withheldAmount,
+                paidAmount: payment.paidAmount,
+                payableAmount: payment.payableAmount,
+                amount: 0,
+            });
+            if (balance <= 0) continue;
+
+            const suggestedType = financePaymentKindToSuggestionType(payment.paymentKind);
+            const labelBase = getSuggestedPaymentTypeLabel(suggestedType);
+            suggestedPayments.push({
+                key: `open-payment#${payment.id}`,
+                type: suggestedType,
+                encodedType: `open-payment#${payment.id}`,
+                label: `${labelBase}${payment.periodFrom || payment.periodTo ? ` за период ${payment.periodFrom || payment.periodTo || ''}${payment.periodTo && payment.periodTo !== payment.periodFrom ? ` - ${payment.periodTo}` : ''}` : ''}`,
+                amount: balance,
+                accruedAmount: balance,
+                withheldAmount: 0,
+                paidAmount: 0,
+                payableAmount: balance,
+                recommendedDate: formatDateOnly(payment.date),
+                periodFrom: payment.periodFrom,
+                periodTo: payment.periodTo,
+                note: payment.rawComment || payment.calculation?.note || null,
+                sourceSummary: payment.calculation?.source || 'Непогашенное начисление из журнала выплат',
+            });
+        }
+
         suggestedPayments.sort((a, b) => {
             const dateDiff = String(a.recommendedDate).localeCompare(String(b.recommendedDate));
             if (dateDiff !== 0) return dateDiff;
-            if (a.type !== b.type) return a.type === 'vacation' ? -1 : 1;
+            if (a.type !== b.type) return getSuggestedPaymentPriority(a.type) - getSuggestedPaymentPriority(b.type);
             return a.label.localeCompare(b.label, 'ru');
         });
 
-        const primarySuggestion = pickPrimarySuggestion(suggestedPayments);
+        const employeePaymentsThisMonth = employeePayments.filter(
+            (payment) => payment.date >= selectedMonthStart && payment.date <= selectedMonthEnd
+        );
+        const unpaidCurrentSuggestions = suggestedPayments.filter(
+            (item) => !item.encodedType.startsWith(OPEN_PAYMENT_PREFIX)
+        );
+
+        const currentBreakdown = {
+            advance: 0,
+            salary: 0,
+            vacation: 0,
+            bonus: 0,
+            sickLeave: 0,
+        };
+        let currentAccrued = 0;
+        let currentWithheld = 0;
+        let currentScheduledPayable = 0;
+
+        for (const payment of employeePaymentsThisMonth) {
+            const accruedAmount = getPaymentAccruedAmount(payment);
+            const withheldAmount = Number(payment.withheldAmount || 0);
+            const payableAmount = Math.max(0, calculatePaymentBalance({
+                accruedAmount: payment.accruedAmount,
+                withheldAmount: payment.withheldAmount,
+                paidAmount: payment.paidAmount,
+                payableAmount: payment.payableAmount,
+                amount: 0,
+            }));
+
+            currentAccrued += accruedAmount;
+            currentWithheld += withheldAmount;
+            currentScheduledPayable += payableAmount;
+
+            if (payment.paymentKind === 'advance') currentBreakdown.advance += accruedAmount;
+            else if (payment.paymentKind === 'vacation') currentBreakdown.vacation += accruedAmount;
+            else if (payment.paymentKind === 'bonus') currentBreakdown.bonus += accruedAmount;
+            else if (payment.paymentKind === 'sick_leave') currentBreakdown.sickLeave += accruedAmount;
+            else currentBreakdown.salary += accruedAmount;
+        }
+
+        for (const item of unpaidCurrentSuggestions) {
+            currentAccrued += item.accruedAmount;
+            currentWithheld += item.withheldAmount;
+            currentScheduledPayable += item.payableAmount;
+
+            if (item.type === 'advance') currentBreakdown.advance += item.accruedAmount;
+            else if (item.type === 'vacation') currentBreakdown.vacation += item.accruedAmount;
+            else if (item.type === 'bonus') currentBreakdown.bonus += item.accruedAmount;
+            else if (item.type === 'sick_leave') currentBreakdown.sickLeave += item.accruedAmount;
+            else currentBreakdown.salary += item.accruedAmount;
+        }
+
+        currentAccrued = roundMoney(currentAccrued);
+        currentWithheld = roundMoney(currentWithheld);
+        currentScheduledPayable = roundMoney(currentScheduledPayable);
+        const contributionBaseBeforeMonth = roundMoney(employeePayments.reduce((sum, payment) => {
+            if (payment.date >= selectedMonthStart || payment.date.getUTCFullYear() !== selectedMonthStart.getUTCFullYear()) {
+                return sum;
+            }
+            return sum + getPaymentAccruedAmount(payment);
+        }, 0));
+        const contributionBaseMonth = roundMoney(currentAccrued);
+        const monthBaseAt30 = Math.min(
+            contributionBaseMonth,
+            Math.max(0, CONTRIBUTION_THRESHOLD - contributionBaseBeforeMonth)
+        );
+        const monthBaseAt151 = Math.max(0, contributionBaseMonth - monthBaseAt30);
+        const contributionYearBaseTotal = contributionBaseBeforeMonth + contributionBaseMonth;
+        const contributionYearBase30 = Math.min(contributionYearBaseTotal, CONTRIBUTION_THRESHOLD);
+        const contributionYearBase151 = Math.max(0, contributionYearBaseTotal - CONTRIBUTION_THRESHOLD);
+        const debtSummary = employeePayments.reduce(
+            (acc, payment) => {
+                if (payment.date >= selectedMonthStart || payment.date > selectedMonthEnd) return acc;
+                const balance = calculatePaymentBalance({
+                    accruedAmount: payment.accruedAmount,
+                    withheldAmount: payment.withheldAmount,
+                    paidAmount: payment.paidAmount,
+                    payableAmount: payment.payableAmount,
+                    amount: 0,
+                });
+                if (balance > 0) {
+                    acc.orgDebt += balance;
+                } else if (balance < 0) {
+                    acc.employeeDebt += Math.abs(balance);
+                }
+                return acc;
+            },
+            { orgDebt: 0, employeeDebt: 0 }
+        );
 
         return {
             ...employee,
-            currentAccrued: primarySuggestion?.accruedAmount || 0,
-            currentWithheld: primarySuggestion?.withheldAmount || 0,
-            currentPaid: roundMoney(employeePayments
-                .filter((payment) => payment.date.getUTCFullYear() === today.getUTCFullYear() && payment.date.getUTCMonth() === today.getUTCMonth())
-                .reduce((sum, payment) => sum + payment.paidAmount, 0)),
-            currentPayable: primarySuggestion?.payableAmount || 0,
+            currentAccrued,
+            currentWithheld,
+            currentPaid: roundMoney(employeePaymentsThisMonth.reduce((sum, payment) => sum + payment.paidAmount, 0)),
+            currentPayable: roundMoney(currentScheduledPayable + debtSummary.orgDebt - debtSummary.employeeDebt),
+            currentOrgDebt: roundMoney(debtSummary.orgDebt),
+            currentEmployeeDebt: roundMoney(debtSummary.employeeDebt),
+            currentContributions: roundMoney(monthBaseAt30 * CONTRIBUTION_RATE_BASE + monthBaseAt151 * CONTRIBUTION_RATE_ABOVE),
+            currentContributionDetails: {
+                taxableIncomeMonth: contributionBaseMonth,
+                contributionBaseMonth,
+                contributionYearBase30: roundMoney(contributionYearBase30),
+                contributionYearBase151: roundMoney(contributionYearBase151),
+            },
+            currentBreakdown: {
+                advance: roundMoney(currentBreakdown.advance),
+                salary: roundMoney(currentBreakdown.salary),
+                vacation: roundMoney(currentBreakdown.vacation),
+                bonus: roundMoney(currentBreakdown.bonus),
+                sickLeave: roundMoney(currentBreakdown.sickLeave),
+            },
             suggestedPayments,
             paymentHistory: (paymentHistoryByEmployee.get(employee.id) || []).slice(0, 12),
         };
     });
 
-    const recentPayments = allPayments.slice(0, 30);
+    const recentPayments = allPayments
+        .filter((payment) => {
+            const paymentDate = parseDateOnly(payment.date);
+            return paymentDate ? paymentDate >= selectedMonthStart && paymentDate <= selectedMonthEnd : false;
+        })
+        .slice(0, 30);
 
     return {
         settings,
         paymentTableAvailable: true,
+        selectedMonth: formatMonthKey(selectedMonthDate),
+        selectedMonthLabel: formatMonthLabel(selectedMonthDate),
         employees: employeesWithSuggestions,
         recentPayments,
         totals: {
             activeEmployees: employeesWithSuggestions.filter((employee) => employee.active).length,
-            totalPaid: employeesWithSuggestions.reduce((sum, employee) => sum + employee.totalPaid, 0),
-            paymentCount: employeesWithSuggestions.reduce((sum, employee) => sum + employee.paymentCount, 0),
+            totalPaid: roundMoney(employeesWithSuggestions.reduce((sum, employee) => sum + employee.currentPaid, 0)),
+            paymentCount: recentPayments.length,
         },
     };
 };
@@ -733,7 +1190,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             const monthsRaw = Array.isArray(req.query.months) ? req.query.months[0] : req.query.months;
             const monthsParsed = Number(monthsRaw);
             const monthsRequested = [1, 3, 6, 12, 24].includes(monthsParsed) ? monthsParsed : 6;
-            const payload = await getFinancePayload(monthsRequested);
+            const month = Array.isArray(req.query.month) ? req.query.month[0] : req.query.month;
+            const payload = await getFinancePayload(monthsRequested, typeof month === 'string' ? month : null);
             return res.status(200).json(payload);
         }
 
@@ -795,9 +1253,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
                 return res.status(400).json({ error: 'Таблица выплат недоступна для записи' });
             }
 
-            const payload = await getFinancePayload(6);
+            const month = typeof body.month === 'string' ? body.month.trim() : null;
+            const payload = await getFinancePayload(6, month);
             const employee = payload.employees.find((item) => item.id === employeeId) || null;
             const suggestion = employee?.suggestedPayments.find((item) => item.encodedType === paymentType) || null;
+            const openPaymentId = paymentType.startsWith(OPEN_PAYMENT_PREFIX)
+                ? paymentType.slice(OPEN_PAYMENT_PREFIX.length)
+                : null;
+
+            if (openPaymentId) {
+                await settleOpenPaymentRecord({ query: (sql, params) => query(sql, params) }, paymentsMeta, {
+                    paymentId: openPaymentId,
+                    amount,
+                    paymentDate,
+                    comment: comment || `Погашение открытого начисления на ${paymentDate}`,
+                });
+                return res.status(200).json({ ok: true });
+            }
+
             const paymentKind = resolvePaymentKindCode(paymentType);
             const accruedAmount = suggestion?.accruedAmount ?? amount;
             const withheldAmount = suggestion?.withheldAmount ?? 0;
@@ -890,40 +1363,61 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             return res.status(200).json({ ok: true });
         }
 
-        if (req.method === 'POST' && action === 'bulk-payroll-today') {
-            const paymentDate = new Date().toISOString().slice(0, 10);
+        if (req.method === 'POST' && (action === 'bulk-payroll-today' || action === 'bulk-payroll-month')) {
+            const month = typeof body.month === 'string' ? body.month.trim() : null;
+            const paymentDate = typeof body.date === 'string' && body.date.trim()
+                ? body.date.trim()
+                : new Date().toISOString().slice(0, 10);
             const defaultComment = typeof body.comment === 'string' && body.comment.trim()
                 ? body.comment.trim()
                 : 'Массовая выплата по графику';
+            const selectedEmployeeIds = Array.isArray(body.employeeIds)
+                ? body.employeeIds.map((value: unknown) => Number(value)).filter((id: number) => Number.isInteger(id) && id > 0)
+                : [];
 
             const paymentsMeta = await getPaymentsMeta();
             if (!paymentsMeta.exists || !paymentsMeta.employeeCol || !paymentsMeta.amountCol || !paymentsMeta.dateCol) {
                 return res.status(400).json({ error: 'Таблица выплат недоступна для записи' });
             }
 
-            const payload = await getFinancePayload(6);
-            const employeesToPay = payload.employees
-                .filter((employee) => employee.active)
-                .map((employee) => ({
-                    employee,
-                    suggestion: pickPrimarySuggestion(
-                        employee.suggestedPayments.filter((item) => item.type === 'advance' || item.type === 'salary_cycle')
-                    ),
-                }))
-                .filter((item) => item.suggestion && item.suggestion.amount > 0);
+            const payload = await getFinancePayload(6, month);
+            const suggestionsToPay = payload.employees
+                .filter((employee) => employee.active && (!selectedEmployeeIds.length || selectedEmployeeIds.includes(employee.id)))
+                .flatMap((employee) =>
+                    employee.suggestedPayments
+                        .filter((item) => item.amount > 0 && (action === 'bulk-payroll-month' || String(item.recommendedDate) <= paymentDate))
+                        .map((suggestion) => ({ employee, suggestion }))
+                );
 
-            if (!employeesToPay.length) {
-                return res.status(400).json({ error: 'Нет сотрудников с начислениями к выплате по графику на сегодня' });
+            if (!suggestionsToPay.length) {
+                return res.status(400).json({ error: 'Нет сотрудников с начислениями к выплате на сегодня' });
             }
 
             const pool = await getPool();
             const client = await pool.connect();
             try {
                 await client.query('BEGIN');
-                for (const item of employeesToPay) {
-                    const suggestion = item.suggestion!;
+                for (const item of suggestionsToPay) {
+                    const suggestion = item.suggestion;
+                    const effectivePaymentDate = action === 'bulk-payroll-month' && suggestion.recommendedDate
+                        ? suggestion.recommendedDate
+                        : paymentDate;
+                    const openPaymentId = suggestion.encodedType.startsWith(OPEN_PAYMENT_PREFIX)
+                        ? suggestion.encodedType.slice(OPEN_PAYMENT_PREFIX.length)
+                        : null;
+
+                    if (openPaymentId) {
+                        await settleOpenPaymentRecord(client, paymentsMeta, {
+                            paymentId: openPaymentId,
+                            amount: suggestion.amount,
+                            paymentDate: effectivePaymentDate,
+                            comment: defaultComment,
+                        });
+                        continue;
+                    }
+
                     const columns = [quoteIdent(paymentsMeta.employeeCol), quoteIdent(paymentsMeta.amountCol), quoteIdent(paymentsMeta.dateCol)];
-                    const values: any[] = [item.employee.id, suggestion.amount, paymentDate];
+                    const values: any[] = [item.employee.id, suggestion.amount, effectivePaymentDate];
 
                     if (paymentsMeta.typeCol) {
                         columns.push(quoteIdent(paymentsMeta.typeCol));
@@ -988,7 +1482,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
                             periodFrom: suggestion.periodFrom,
                             periodTo: suggestion.periodTo,
                             paymentKind: resolvePaymentKindCode(suggestion.encodedType),
-                            paymentDate,
+                            paymentDate: effectivePaymentDate,
                         }));
                     }
 

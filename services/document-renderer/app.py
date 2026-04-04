@@ -1,22 +1,25 @@
 import io
+import hashlib
 import os
 import shutil
 import subprocess
 import tempfile
 import traceback
+import unicodedata
 from copy import copy
 from pathlib import Path
+from urllib.parse import quote
 
 from flask import Flask, jsonify, request, send_file
 from openpyxl import load_workbook
 from openpyxl.cell.cell import MergedCell
 from openpyxl.utils import (
     column_index_from_string,
+    coordinate_to_tuple,
     get_column_letter,
     range_boundaries,
 )
 from openpyxl.worksheet.properties import PageSetupProperties
-from pypdf import PdfReader, PdfWriter, PageObject, Transformation
 
 
 app = Flask(__name__)
@@ -24,7 +27,27 @@ app = Flask(__name__)
 TEMPLATES_DIR = Path(os.environ.get("TEMPLATES_DIR", "/app/templates/forms")).resolve()
 LIBREOFFICE_BIN = os.environ.get("LIBREOFFICE_BIN", "/usr/bin/soffice")
 LIBREOFFICE_TIMEOUT_MS = int(os.environ.get("LIBREOFFICE_TIMEOUT_MS", "30000"))
+CACHE_DIR = Path(os.environ.get("DOCUMENT_RENDERER_CACHE_DIR", "/tmp/segmentica-render-cache")).resolve()
 SUPPORTED_POSTPROCESS = {"none", "stack_pages_vertical"}
+
+
+def to_ascii_filename(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", value or "")
+    ascii_only = normalized.encode("ascii", "ignore").decode("ascii")
+    cleaned = "".join(ch if ch.isalnum() or ch in {" ", ".", "-", "_", "(", ")"} else "_" for ch in ascii_only)
+    cleaned = " ".join(cleaned.split()).strip(" .")
+    return cleaned or "document"
+
+
+def apply_download_filename(response, filename: str, as_attachment: bool = True):
+    disposition = "attachment" if as_attachment else "inline"
+    safe_filename = str(filename or "document").replace("\\", "_").replace('"', "'").replace("\r", " ").replace("\n", " ").strip()
+    ascii_fallback = to_ascii_filename(safe_filename)
+    encoded = quote(safe_filename, safe="")
+    response.headers["Content-Disposition"] = (
+        f"{disposition}; filename=\"{ascii_fallback}\"; filename*=UTF-8''{encoded}"
+    )
+    return response
 
 
 def ensure_template_path(template_name: str) -> Path:
@@ -34,6 +57,55 @@ def ensure_template_path(template_name: str) -> Path:
     if not target.exists():
         raise FileNotFoundError(f"Template not found: {template_name}")
     return target
+
+
+def load_workbook_with_fallback(template_path: Path):
+    first_error = None
+    try:
+        workbook = load_workbook(template_path)
+        if workbook.sheetnames:
+            return workbook
+        first_error = RuntimeError("openpyxl loaded workbook without visible sheets")
+    except Exception as error:  # noqa: BLE001
+        first_error = error
+
+    temp_dir = Path(tempfile.mkdtemp(prefix="segmentica-template-normalize-"))
+    try:
+        proc = subprocess.run(
+            [
+                LIBREOFFICE_BIN,
+                "--headless",
+                "--nologo",
+                "--nolockcheck",
+                "--nodefault",
+                "--norestore",
+                "--convert-to",
+                "xlsx",
+                "--outdir",
+                str(temp_dir),
+                str(template_path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=LIBREOFFICE_TIMEOUT_MS / 1000,
+            check=False,
+        )
+
+        if proc.returncode != 0:
+            raise RuntimeError(
+                f"LibreOffice normalize failed with code {proc.returncode}: {proc.stderr.strip() or proc.stdout.strip() or 'no output'}"
+            ) from first_error
+
+        normalized_path = temp_dir / f"{template_path.stem}.xlsx"
+        if not normalized_path.exists():
+            raise RuntimeError("LibreOffice did not produce a normalized XLSX file") from first_error
+
+        workbook = load_workbook(normalized_path)
+        if not workbook.sheetnames:
+            raise RuntimeError("Normalized workbook still has no sheets") from first_error
+        return workbook
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
 
 
 def copy_range_between_sheets(
@@ -98,6 +170,31 @@ def copy_range_between_sheets(
             )
 
 
+def copy_sheet(workbook, source_sheet_name: str, target_sheet_name: str) -> None:
+    if source_sheet_name not in workbook.sheetnames:
+        return
+    if target_sheet_name in workbook.sheetnames:
+        return
+
+    source_ws = workbook[source_sheet_name]
+    cloned_ws = workbook.copy_worksheet(source_ws)
+    cloned_ws.title = target_sheet_name
+
+
+def get_writable_cell(worksheet, address: str):
+    cell = worksheet[address]
+    if not isinstance(cell, MergedCell):
+        return cell
+
+    row, col = coordinate_to_tuple(address)
+    for merged in worksheet.merged_cells.ranges:
+        min_col, min_row, max_col, max_row = range_boundaries(str(merged))
+        if min_row <= row <= max_row and min_col <= col <= max_col:
+            return worksheet.cell(row=min_row, column=min_col)
+
+    return worksheet.cell(row=row, column=col)
+
+
 def apply_cells_to_workbook(
     template_path: Path,
     output_path: Path,
@@ -106,10 +203,18 @@ def apply_cells_to_workbook(
     row_heights: list[dict],
     print_areas: list[dict],
     range_copies: list[dict],
+    sheet_copies: list[dict],
     hidden_sheets: list[str],
     sheet_page_setup: list[dict],
 ) -> None:
-    workbook = load_workbook(template_path)
+    workbook = load_workbook_with_fallback(template_path)
+
+    for item in sheet_copies:
+        source_sheet_name = str(item.get("sourceSheetName") or "").strip()
+        target_sheet_name = str(item.get("targetSheetName") or "").strip()
+        if not source_sheet_name or not target_sheet_name:
+            continue
+        copy_sheet(workbook, source_sheet_name, target_sheet_name)
 
     for item in range_copies:
         source_sheet_name = str(item.get("sourceSheetName") or "").strip()
@@ -134,7 +239,7 @@ def apply_cells_to_workbook(
             continue
         sheet_name = str(item.get("sheetName") or "").strip()
         worksheet = workbook[sheet_name] if sheet_name and sheet_name in workbook.sheetnames else workbook[workbook.sheetnames[0]]
-        cell = worksheet[address]
+        cell = get_writable_cell(worksheet, address)
         cell.value = item.get("value")
 
         style = item.get("style") or {}
@@ -257,35 +362,18 @@ def convert_to_pdf(input_path: Path, output_dir: Path) -> Path:
     return pdf_path
 
 
-def stack_pdf_pages(input_path: Path, output_path: Path) -> None:
-    reader = PdfReader(str(input_path))
-    if not reader.pages:
-        raise RuntimeError("PDF has no pages to stack")
+def ensure_cache_dir() -> None:
+    CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-    widths = [float(page.mediabox.width) for page in reader.pages]
-    heights = [float(page.mediabox.height) for page in reader.pages]
-    total_height = sum(heights)
-    max_width = max(widths)
 
-    writer = PdfWriter()
-    canvas = PageObject.create_blank_page(width=max_width, height=total_height)
-
-    cursor_y = total_height
-    for page in reader.pages:
-        page_width = float(page.mediabox.width)
-        page_height = float(page.mediabox.height)
-        cursor_y -= page_height
-        translate_x = 0
-        if page_width < max_width:
-            translate_x = (max_width - page_width) / 2
-        canvas.merge_transformed_page(
-            page,
-            Transformation().translate(tx=translate_x, ty=cursor_y),
-        )
-
-    writer.add_page(canvas)
-    with output_path.open("wb") as handle:
-        writer.write(handle)
+def build_cache_key(xlsx_bytes: bytes, output_format: str, postprocess: str) -> str:
+    digest = hashlib.sha256()
+    digest.update(xlsx_bytes)
+    digest.update(b"\0")
+    digest.update(output_format.encode("utf-8"))
+    digest.update(b"\0")
+    digest.update(postprocess.encode("utf-8"))
+    return digest.hexdigest()
 
 
 @app.get("/health")
@@ -311,6 +399,7 @@ def render_xlsx_template():
     row_heights = payload.get("rowHeights") or []
     print_areas = payload.get("printAreas") or []
     range_copies = payload.get("rangeCopies") or []
+    sheet_copies = payload.get("sheetCopies") or []
     hidden_sheets = payload.get("hiddenSheets") or []
     sheet_page_setup = payload.get("sheetPageSetup") or []
 
@@ -330,6 +419,8 @@ def render_xlsx_template():
         return jsonify({"error": "printAreas must be an array"}), 400
     if not isinstance(range_copies, list):
         return jsonify({"error": "rangeCopies must be an array"}), 400
+    if not isinstance(sheet_copies, list):
+        return jsonify({"error": "sheetCopies must be an array"}), 400
     if not isinstance(hidden_sheets, list):
         return jsonify({"error": "hiddenSheets must be an array"}), 400
     if not isinstance(sheet_page_setup, list):
@@ -347,33 +438,46 @@ def render_xlsx_template():
             row_heights,
             print_areas,
             range_copies,
+            sheet_copies,
             hidden_sheets,
             sheet_page_setup,
         )
+        generated_xlsx_bytes = generated_xlsx.read_bytes()
 
         if output_format == "excel":
-            excel_bytes = generated_xlsx.read_bytes()
-            return send_file(
-                io.BytesIO(excel_bytes),
+            response = send_file(
+                io.BytesIO(generated_xlsx_bytes),
                 mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 as_attachment=True,
-                download_name=f"{file_base_name}.xlsx",
+                download_name="document.xlsx",
             )
+            return apply_download_filename(response, f"{file_base_name}.xlsx", as_attachment=True)
+
+        ensure_cache_dir()
+        cache_key = build_cache_key(generated_xlsx_bytes, output_format, postprocess)
+        cached_pdf_path = CACHE_DIR / f"{cache_key}.pdf"
+        if cached_pdf_path.exists():
+            pdf_bytes = cached_pdf_path.read_bytes()
+            response = send_file(
+                io.BytesIO(pdf_bytes),
+                mimetype="application/pdf",
+                as_attachment=True,
+                download_name="document.pdf",
+            )
+            return apply_download_filename(response, f"{file_base_name}.pdf", as_attachment=True)
 
         pdf_path = convert_to_pdf(generated_xlsx, temp_dir)
         final_pdf = pdf_path
-        if postprocess == "stack_pages_vertical":
-            stacked_pdf = temp_dir / f"{file_base_name}-stacked.pdf"
-            stack_pdf_pages(pdf_path, stacked_pdf)
-            final_pdf = stacked_pdf
 
         pdf_bytes = final_pdf.read_bytes()
-        return send_file(
+        cached_pdf_path.write_bytes(pdf_bytes)
+        response = send_file(
             io.BytesIO(pdf_bytes),
             mimetype="application/pdf",
             as_attachment=True,
-            download_name=f"{file_base_name}.pdf",
+            download_name="document.pdf",
         )
+        return apply_download_filename(response, f"{file_base_name}.pdf", as_attachment=True)
     except FileNotFoundError as error:
         return jsonify({"error": str(error)}), 404
     except Exception as error:

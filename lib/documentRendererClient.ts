@@ -37,6 +37,10 @@ export type RenderXlsxTemplateParams = {
         targetSheetName: string;
         targetStartAddress: string;
     }>;
+    sheetCopies?: Array<{
+        sourceSheetName: string;
+        targetSheetName: string;
+    }>;
     hiddenSheets?: string[];
     sheetPageSetup?: Array<{
         sheetName: string;

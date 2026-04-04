@@ -7,6 +7,7 @@
   max-width: 1432px;
   box-sizing: border-box;
   min-width: 0;
+  position: relative;
 }
 
 .header {
@@ -182,13 +183,15 @@
 }
 
 .searchInput {
-  width: min(100%, 580px);
+  width: 100%;
 }
 
+.searchInput:global(.rt-TextFieldRoot),
 .searchInput :global(.rt-TextFieldRoot) {
-  height: 44px !important;
+  height: 48px !important;
 }
 
+.searchInput:global(.rt-TextFieldRoot) :global(.rt-TextFieldInput),
 .searchInput :global(.rt-TextFieldInput) {
   font-size: 16px;
 }
@@ -309,16 +312,152 @@
   min-width: 280px;
 }
 
-.previewDialog:global(.rt-DialogContent) {
-  width: min(1120px, calc(100vw - 24px)) !important;
+.previewScreen {
+  position: fixed;
+  inset: 0;
+  z-index: 100000100;
 }
 
-.previewFrame {
+.previewBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(17, 17, 17, 0.22);
+  backdrop-filter: blur(6px);
+}
+
+.previewPanel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(1120px, calc(100vw - 232px));
+  background: #ffffff;
+  box-shadow: -24px 0 60px rgba(17, 17, 17, 0.16);
+  padding: 24px 28px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  animation: previewPanelIn 180ms ease-out;
+  border-radius: 0;
+}
+
+.previewPanelHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.previewPanelTitleBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.previewPanelTitle {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.1;
+  font-weight: 700;
+  color: #212121;
+}
+
+.previewCloseButton {
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: #6b7280;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.previewCloseButton:hover {
+  background: #f3f4f6;
+  color: #212121;
+}
+
+.previewCloseButton svg {
+  width: 22px;
+  height: 22px;
+}
+
+.previewToolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.previewToolbar :global(.rt-Button),
+.previewToolbar :global(.rt-BaseButton) {
+  border-radius: 0 !important;
+}
+
+.previewCanvas {
+  flex: 1;
+  min-height: 0;
+  display: block;
+  overflow: auto;
+}
+
+.previewStage {
   width: 100%;
-  height: min(78vh, 920px);
-  border: 1px solid #e7e9ee;
-  border-radius: 14px;
+  min-height: calc(100vh - 240px);
+  background: #ffffff;
+  padding: 0;
+  overflow: auto;
+  border-radius: 0;
+}
+
+.previewPages {
+  width: 100%;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  align-items: stretch;
+}
+
+.previewPageImage {
+  width: 100%;
+  height: auto;
+  display: block;
   background: #fff;
+}
+
+.previewLoading {
+  display: flex;
+  min-height: calc(100vh - 240px);
+  align-items: center;
+  justify-content: center;
+  color: #66707f;
+  font-size: 15px;
+}
+
+.hiddenPrintFrame {
+  position: fixed;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+  border: 0;
+}
+
+@keyframes previewPanelIn {
+  from {
+    transform: translateX(32px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 }
 
 .errorBanner,
@@ -392,6 +531,369 @@
   min-width: 0;
 }
 
+.payrollHero {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-bottom: 20px;
+}
+
+.payrollHeroTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.payrollHeroTitleBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.payrollControlsGrid {
+  display: grid;
+  grid-template-columns: minmax(280px, 1.15fr) minmax(360px, 1fr) minmax(380px, 1.05fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.toolbarPanel,
+.actionsPanel {
+  border-radius: 22px;
+  border: 1px solid #ececec;
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(17, 17, 17, 0.04);
+  padding: 18px;
+}
+
+.toolbarPanel {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.toolbarSearchBlock {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  flex: 1 1 420px;
+  min-width: 320px;
+}
+
+.panelLabel {
+  display: block;
+  margin-bottom: 10px;
+  color: #5f6673;
+}
+
+.scheduleInlineCard {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 18px;
+  border-radius: 22px;
+  border: 1px solid #ececec;
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(17, 17, 17, 0.04);
+}
+
+.scheduleInlineHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.scheduleInlineLead {
+  max-width: 760px;
+  line-height: 1.5;
+}
+
+.scheduleInlineControls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.scheduleInlineHint {
+  margin-left: 0;
+  white-space: normal;
+}
+
+.compactSelect:global(.rt-SelectTrigger),
+.compactDaySelect:global(.rt-SelectTrigger) {
+  min-height: 42px !important;
+  border-radius: 14px !important;
+}
+
+.compactSelect:global(.rt-SelectTrigger) {
+  min-width: 180px;
+}
+
+.compactDaySelect:global(.rt-SelectTrigger) {
+  min-width: 80px;
+}
+
+.monthControls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.monthArrowButton {
+  min-width: 48px;
+  min-height: 48px;
+  padding-inline: 0 !important;
+}
+
+.monthSelect:global(.rt-SelectTrigger) {
+  min-width: 220px;
+  min-height: 48px !important;
+  border-radius: 18px !important;
+}
+
+.toolbarActionsBlock {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  flex: 1 1 420px;
+}
+
+.actionButtonsRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.processingDateInput {
+  height: 48px;
+  min-width: 220px;
+  padding: 0 14px;
+  border-radius: 14px;
+  border: 1px solid #dfe3ea;
+  background: #fff;
+  color: #232833;
+  font: inherit;
+  box-shadow: inset 0 0 0 1px rgba(1, 7, 49, 0.05);
+}
+
+.payrollHint {
+  margin-bottom: 18px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  border: 1px solid #ececec;
+  background: #fff;
+  color: #5f6673;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.tabsRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+
+.tabButton,
+.activeTab {
+  border: none;
+  min-height: 46px;
+  padding: 0 22px;
+  border-radius: 9999px;
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.tabButton {
+  background: #efefef;
+  color: #303030;
+}
+
+.activeTab {
+  background: #212121;
+  color: #fff;
+}
+
+.payrollCard:global(.rt-Card) {
+  border-radius: 28px;
+  border: 1px solid #ececec;
+  box-shadow: 0 16px 40px rgba(17, 17, 17, 0.04);
+  margin-bottom: 18px;
+}
+
+.payrollCard {
+  padding: 20px;
+}
+
+.payrollCardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.payrollGrid {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.payrollHeaderRow,
+.payrollRow,
+.payrollTotalRow {
+  display: grid;
+  align-items: center;
+  column-gap: 0;
+}
+
+.payrollHeaderRow {
+  min-width: 980px;
+  color: #757575;
+  font-size: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e9edf3;
+}
+
+.payrollRow {
+  min-width: 980px;
+  min-height: 84px;
+  border-bottom: 1px solid #eef1f5;
+}
+
+.payrollTotalRow {
+  min-width: 980px;
+  min-height: 82px;
+  font-weight: 700;
+}
+
+.checkboxCell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.checkboxCell input {
+  width: 22px;
+  height: 22px;
+  accent-color: #212121;
+}
+
+.employeeHeaderCell,
+.metricHeaderCell,
+.metricCell,
+.totalLabel,
+.totalCell {
+  padding: 0 12px;
+}
+
+.metricHeaderCell {
+  text-align: right;
+}
+
+.metricHeaderHint {
+  margin-top: 4px;
+  color: #8b93a1;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.employeeCell {
+  padding: 16px 12px;
+}
+
+.employeeRole {
+  margin-top: 6px;
+  color: #6f7683;
+  font-size: 14px;
+}
+
+.employeeHints {
+  margin-top: 8px;
+  color: #9aa1ad;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.metricCell,
+.totalCell {
+  text-align: right;
+  font-size: 15px;
+  color: #232833;
+}
+
+.totalLabel {
+  font-size: 15px;
+  color: #212121;
+}
+
+.summaryStrip {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.summaryCard:global(.rt-Card) {
+  border-radius: 22px;
+  border: 1px solid #ececec;
+  box-shadow: 0 16px 40px rgba(17, 17, 17, 0.04);
+}
+
+.summaryCard {
+  padding: 18px;
+}
+
+.simpleTable {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+}
+
+.simpleTable th,
+.simpleTable td {
+  padding: 12px 14px;
+  text-align: left;
+  border-bottom: 1px solid #eef1f5;
+  font-size: 14px;
+  color: #232833;
+}
+
+.simpleTable th {
+  color: #66707f;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.emptyCell {
+  text-align: center !important;
+  color: #7c8391 !important;
+}
+
+.printMenu:global(.rt-DropdownMenuContent) {
+  min-width: 280px;
+  border-radius: 18px !important;
+}
+
 @media (max-width: 900px) {
   .container {
     padding-inline: 1rem;
@@ -429,7 +931,25 @@
     min-width: 220px;
   }
 
-  .previewFrame {
-    height: 70vh;
+  .actionButtonsRow {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .toolbarPanel,
+  .toolbarActionsBlock,
+  .scheduleInlineHeader {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .toolbarSearchBlock,
+  .toolbarActionsBlock {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .summaryStrip {
+    grid-template-columns: 1fr;
   }
 }
