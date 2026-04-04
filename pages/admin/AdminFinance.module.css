@@ -125,6 +125,25 @@
   height: 16px;
 }
 
+.menuItemIcon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  color: #4b5563;
+}
+
+.wordIcon {
+  color: #185abd;
+}
+
+.pdfIcon {
+  color: #b42318;
+}
+
+.excelIcon {
+  color: #107c41;
+}
+
 .metricsGrid {
   margin-bottom: 18px;
 }
@@ -183,17 +202,76 @@
 }
 
 .searchInput {
+  flex: 1 1 auto;
+  min-width: 250px;
+  display: flex;
+  align-items: stretch;
   width: 100%;
 }
 
-.searchInput:global(.rt-TextFieldRoot),
-.searchInput :global(.rt-TextFieldRoot) {
-  height: 48px !important;
+.searchInput:focus-visible {
+  border: none;
+  box-shadow: none;
 }
 
-.searchInput:global(.rt-TextFieldRoot) :global(.rt-TextFieldInput),
+.searchInput:global(.rt-TextFieldRoot) {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 48px;
+  border-radius: 16px;
+  border: 1px solid #e0e0e0 !important;
+  background: #ffffff !important;
+  box-shadow: inset 0 0 0 1px rgba(1, 7, 49, 0.06) !important;
+  padding: 0 8px;
+  overflow: hidden;
+  transition: background-color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.searchInput:global(.rt-TextFieldRoot):focus-visible,
+.searchInput:global(.rt-TextFieldRoot):focus-within {
+  outline: none !important;
+  border-color: #111111 !important;
+  box-shadow: none !important;
+  background-color: #f5f5f5 !important;
+}
+
+.searchInput:global(.rt-TextFieldRoot):hover {
+  background-color: #f5f5f5 !important;
+}
+
 .searchInput :global(.rt-TextFieldInput) {
   font-size: 16px;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 46px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: #212121;
+  transition: all 0.2s;
+}
+
+.searchInput :global(.rt-TextFieldInput)::placeholder {
+  color: #8b92a1;
+}
+
+.searchInput :global(.rt-TextFieldInput):focus {
+  outline: none;
+  border-color: transparent;
+}
+
+.searchInput :global(.rt-TextFieldSlot) {
+  display: flex;
+  align-items: center;
+  padding-left: 8px;
+  padding-right: 12px;
+  color: #5f6673;
+}
+
+.searchInput :global(.rt-TextFieldSlot)[data-side='right'] {
+  display: none;
 }
 
 .tableWrapper {
@@ -377,7 +455,7 @@
 }
 
 .previewCloseButton:hover {
-  background: #f3f4f6;
+
   color: #212121;
 }
 
@@ -399,6 +477,58 @@
   border-radius: 0 !important;
 }
 
+.previewZoomControls {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+}
+
+.previewZoomButton,
+.previewZoomValue {
+  min-width: 46px;
+  height: 46px;
+  border: none;
+  border-left: 1px solid #e5e7eb;
+  background: transparent;
+  color: #212121;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, opacity 0.18s ease;
+}
+
+.previewZoomControls > :first-child {
+  border-left: none;
+}
+
+.previewZoomValue {
+  min-width: 72px;
+  padding: 0 14px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.previewZoomButton:hover,
+.previewZoomValue:hover {
+  background: #f5f5f5;
+}
+
+.previewZoomButton:disabled,
+.previewZoomValue:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: #fafafa;
+}
+
+.previewZoomButton svg {
+  width: 18px;
+  height: 18px;
+}
+
 .previewCanvas {
   flex: 1;
   min-height: 0;
@@ -416,19 +546,19 @@
 }
 
 .previewPages {
-  width: 100%;
+  width: fit-content;
+  min-width: 100%;
   min-height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 0;
-  align-items: stretch;
+  gap: 16px;
+  align-items: flex-start;
 }
 
 .previewPageImage {
-  width: 100%;
-  height: auto;
   display: block;
   background: #fff;
+  box-shadow: 0 8px 24px rgba(17, 17, 17, 0.08);
 }
 
 .previewLoading {
@@ -611,9 +741,28 @@
   flex-wrap: wrap;
 }
 
+.scheduleInlineTitleBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 280px;
+}
+
+.scheduleInlineNote {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1 1 420px;
+  max-width: 680px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: #fafafa;
+  border: 1px solid #efefef;
+}
+
 .scheduleInlineLead {
-  max-width: 760px;
   line-height: 1.5;
+  margin: 0;
 }
 
 .scheduleInlineControls {
@@ -626,6 +775,8 @@
 .scheduleInlineHint {
   margin-left: 0;
   white-space: normal;
+  margin-bottom: 0;
+  line-height: 1.45;
 }
 
 .compactSelect:global(.rt-SelectTrigger),
@@ -652,6 +803,15 @@
   min-width: 48px;
   min-height: 48px;
   padding-inline: 0 !important;
+}
+
+.monthArrowButton:global(.rt-BaseButton):disabled,
+.monthArrowButton:global(.rt-Button):disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  background: #f8f8f8 !important;
+  border-color: #e8e8e8 !important;
+  box-shadow: none !important;
 }
 
 .monthSelect:global(.rt-SelectTrigger) {
@@ -938,9 +1098,15 @@
 
   .toolbarPanel,
   .toolbarActionsBlock,
-  .scheduleInlineHeader {
+  .scheduleInlineHeader,
+  .previewToolbar {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .previewZoomControls {
+    margin-left: 0;
+    width: fit-content;
   }
 
   .toolbarSearchBlock,

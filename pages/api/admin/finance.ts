@@ -841,34 +841,41 @@ export const getFinancePayload = async (monthsRequested: number, monthKey?: stri
     }
 
     const duePayrollCycles = (() => {
-        const cyclePeriodStart = addMonths(startOfMonth(selectedMonthStart), -2);
-        const paymentDates = enumeratePaymentDates(settings, cyclePeriodStart, selectedMonthEnd);
-        if (paymentDates.length < 2) {
-            return [] as Array<{
-                key: string;
-                payDate: Date;
-                dateFrom: Date;
-                dateTo: Date;
-                type: 'advance' | 'salary_cycle';
-            }>;
+        const year = selectedMonthStart.getUTCFullYear();
+        const month = selectedMonthStart.getUTCMonth();
+
+        if (settings.paymentsPerMonth === 1) {
+            const payDate = clampDayToMonth(year, month, settings.firstDay);
+            return [{
+                key: `${SALARY_PAYMENT_PREFIX}${formatDateOnly(payDate)}`,
+                payDate,
+                dateFrom: selectedMonthStart,
+                dateTo: selectedMonthEnd,
+                type: 'salary_cycle' as const,
+            }];
         }
 
-        return paymentDates.slice(1).map((payDate, index) => {
-            const previousPayDate = paymentDates[index];
-            const monthDates = paymentDates
-                .filter((date) => date.getUTCFullYear() === payDate.getUTCFullYear() && date.getUTCMonth() === payDate.getUTCMonth())
-                .sort((a, b) => a.getTime() - b.getTime());
-            const isAdvance = settings.paymentsPerMonth === 2 && monthDates[0] && formatDateOnly(monthDates[0]) === formatDateOnly(payDate);
-            const type: 'advance' | 'salary_cycle' = isAdvance ? 'advance' : 'salary_cycle';
+        const firstHalfEnd = new Date(Date.UTC(year, month, Math.min(15, daysInMonth(selectedMonthStart))));
+        const secondHalfStart = addDays(firstHalfEnd, 1);
+        const advancePayDate = clampDayToMonth(year, month, settings.firstDay);
+        const salaryPayDate = clampDayToMonth(year, month, settings.secondDay || settings.firstDay);
 
-            return {
-                key: `${type === 'advance' ? ADVANCE_PAYMENT_PREFIX : SALARY_PAYMENT_PREFIX}${formatDateOnly(payDate)}`,
-                payDate,
-                dateFrom: addDays(previousPayDate, 1),
-                dateTo: payDate,
-                type,
-            };
-        }).filter((cycle) => cycle.payDate >= selectedMonthStart && cycle.payDate <= selectedMonthEnd);
+        return [
+            {
+                key: `${ADVANCE_PAYMENT_PREFIX}${formatDateOnly(advancePayDate)}`,
+                payDate: advancePayDate,
+                dateFrom: selectedMonthStart,
+                dateTo: firstHalfEnd,
+                type: 'advance' as const,
+            },
+            {
+                key: `${SALARY_PAYMENT_PREFIX}${formatDateOnly(salaryPayDate)}`,
+                payDate: salaryPayDate,
+                dateFrom: secondHalfStart,
+                dateTo: selectedMonthEnd,
+                type: 'salary_cycle' as const,
+            },
+        ].filter((cycle) => cycle.dateFrom <= cycle.dateTo);
     })();
 
     const employeesWithSuggestions = mergedEmployees.map((employee) => {

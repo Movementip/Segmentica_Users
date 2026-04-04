@@ -2,13 +2,13 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { query } from './db';
 
-export type DocumentTemplateKey = 'finance_statement_t49' | 'finance_payslip';
+export type DocumentTemplateKey = 'finance_statement_t49' | 'finance_payslip' | 'finance_timesheet_t13';
 
-export type DocumentTemplateSourceFormat = 'xlsx' | 'docx';
+export type DocumentTemplateSourceFormat = 'xls' | 'xlsx' | 'docx';
 export type DocumentTemplateRendererKey = 'libreoffice';
 export type DocumentTemplatePreviewMode = 'pdf' | 'html';
 export type DocumentTemplatePostprocess = 'none' | 'stack_pages_vertical';
-export type DocumentTemplateFillStrategyKey = 'finance_statement_t49' | 'finance_payslip';
+export type DocumentTemplateFillStrategyKey = 'finance_statement_t49' | 'finance_payslip' | 'finance_timesheet_t13';
 
 export type DocumentTemplateDefinition = {
     key: DocumentTemplateKey;
@@ -94,6 +94,21 @@ const STATIC_TEMPLATES: Record<DocumentTemplateKey, DocumentTemplateDefinition> 
         versionNo: 1,
         isActive: true,
     },
+    finance_timesheet_t13: {
+        key: 'finance_timesheet_t13',
+        name: 'Форма Т-13 Табель учета рабочего времени',
+        description: 'Печатная форма табеля учета рабочего времени за выбранный месяц.',
+        sourceFormat: 'xlsx',
+        rendererKey: 'libreoffice',
+        fillStrategyKey: 'finance_timesheet_t13',
+        previewMode: 'pdf',
+        pdfPostprocess: 'stack_pages_vertical',
+        outputFormats: ['excel', 'pdf'],
+        templateName: 'Форма Т-13 Табель учета рабочего времени.xlsx',
+        templatePath: path.join(TEMPLATE_DIR, 'Форма Т-13 Табель учета рабочего времени.xlsx'),
+        versionNo: 1,
+        isActive: true,
+    },
 };
 
 const normalizeOutputFormats = (value: unknown): Array<'excel' | 'pdf'> => {
@@ -107,7 +122,7 @@ const normalizeOutputFormats = (value: unknown): Array<'excel' | 'pdf'> => {
 
 const normalizeSourceFormat = (value: unknown, fallback: DocumentTemplateSourceFormat): DocumentTemplateSourceFormat => {
     const format = String(value || '').trim().toLowerCase();
-    if (format === 'xlsx' || format === 'docx') return format;
+    if (format === 'xls' || format === 'xlsx' || format === 'docx') return format;
     return fallback;
 };
 
@@ -136,6 +151,7 @@ const normalizeFillStrategyKey = (
     const strategy = String(value || '').trim().toLowerCase();
     if (strategy === 'finance_statement_t49') return 'finance_statement_t49';
     if (strategy === 'finance_payslip') return 'finance_payslip';
+    if (strategy === 'finance_timesheet_t13') return 'finance_timesheet_t13';
     return fallback;
 };
 

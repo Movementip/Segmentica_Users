@@ -71,6 +71,8 @@ def load_workbook_with_fallback(template_path: Path):
 
     temp_dir = Path(tempfile.mkdtemp(prefix="segmentica-template-normalize-"))
     try:
+        user_installation_dir = temp_dir / "lo-profile"
+        user_installation_dir.mkdir(parents=True, exist_ok=True)
         proc = subprocess.run(
             [
                 LIBREOFFICE_BIN,
@@ -79,6 +81,7 @@ def load_workbook_with_fallback(template_path: Path):
                 "--nolockcheck",
                 "--nodefault",
                 "--norestore",
+                f"-env:UserInstallation=file://{user_installation_dir}",
                 "--convert-to",
                 "xlsx",
                 "--outdir",
@@ -98,6 +101,18 @@ def load_workbook_with_fallback(template_path: Path):
 
         normalized_path = temp_dir / f"{template_path.stem}.xlsx"
         if not normalized_path.exists():
+            normalized_candidates = sorted(
+                [
+                    path
+                    for path in temp_dir.glob("*.xlsx")
+                    if path.is_file()
+                ],
+                key=lambda path: path.stat().st_mtime,
+                reverse=True,
+            )
+            normalized_path = normalized_candidates[0] if normalized_candidates else None
+
+        if normalized_path is None or not normalized_path.exists():
             raise RuntimeError("LibreOffice did not produce a normalized XLSX file") from first_error
 
         workbook = load_workbook(normalized_path)
@@ -129,13 +144,18 @@ def copy_range_between_sheets(
             target_ws.row_dimensions[row + row_offset].height = source_ws.row_dimensions[row].height
         target_ws.row_dimensions[row + row_offset].hidden = source_ws.row_dimensions[row].hidden
 
+    target_min_row = target_row
+    target_max_row = target_row + (max_row - min_row)
+    target_min_col = target_col
+    target_max_col = target_col + (max_col - min_col)
+
     for merged in list(target_ws.merged_cells.ranges):
         merged_min_col, merged_min_row, merged_max_col, merged_max_row = range_boundaries(str(merged))
         if (
-            merged_min_row >= target_row
-            and merged_max_row <= target_row + (max_row - min_row)
-            and merged_min_col >= target_col
-            and merged_max_col <= target_col + (max_col - min_col)
+            merged_min_row <= target_max_row
+            and merged_max_row >= target_min_row
+            and merged_min_col <= target_max_col
+            and merged_max_col >= target_min_col
         ):
             target_ws.unmerge_cells(str(merged))
 
@@ -144,8 +164,8 @@ def copy_range_between_sheets(
             source_cell = source_ws.cell(row=row, column=col)
             if isinstance(source_cell, MergedCell):
                 continue
-            target_cell = target_ws.cell(row=row + row_offset, column=col + col_offset)
-            target_cell.value = source_cell.value
+            target_address = f"{get_column_letter(col + col_offset)}{row + row_offset}"
+            target_cell = set_cell_value(target_ws, target_address, source_cell.value)
             target_cell.font = copy(source_cell.font)
             target_cell.fill = copy(source_cell.fill)
             target_cell.border = copy(source_cell.border)
@@ -195,6 +215,26 @@ def get_writable_cell(worksheet, address: str):
     return worksheet.cell(row=row, column=col)
 
 
+def set_cell_value(worksheet, address: str, value):
+    try:
+        cell = get_writable_cell(worksheet, address)
+        cell.value = value
+        return cell
+    except AttributeError as error:
+        if "MergedCell" not in str(error):
+            raise
+
+        row, col = coordinate_to_tuple(address)
+        for merged in list(worksheet.merged_cells.ranges):
+            min_col, min_row, max_col, max_row = range_boundaries(str(merged))
+            if min_row <= row <= max_row and min_col <= col <= max_col:
+                top_left = worksheet.cell(row=min_row, column=min_col)
+                top_left.value = value
+                return top_left
+
+        raise RuntimeError(f"Failed to write merged cell value at {worksheet.title}!{address}") from error
+
+
 def apply_cells_to_workbook(
     template_path: Path,
     output_path: Path,
@@ -239,8 +279,7 @@ def apply_cells_to_workbook(
             continue
         sheet_name = str(item.get("sheetName") or "").strip()
         worksheet = workbook[sheet_name] if sheet_name and sheet_name in workbook.sheetnames else workbook[workbook.sheetnames[0]]
-        cell = get_writable_cell(worksheet, address)
-        cell.value = item.get("value")
+        cell = set_cell_value(worksheet, address, item.get("value"))
 
         style = item.get("style") or {}
         if isinstance(style, dict) and style:
@@ -326,6 +365,51 @@ def apply_cells_to_workbook(
     workbook.save(output_path)
 
 
+def should_normalize_excel_output(template_name: str, output_format: str) -> bool:
+    normalized_name = str(template_name or "").lower()
+    normalized_format = str(output_format or "").lower()
+    return normalized_format == "excel" and "т-13" in normalized_name and "табель" in normalized_name
+
+
+def normalize_excel_output(workbook_path: Path, temp_dir: Path) -> Path:
+    normalize_dir = temp_dir / "xlsx-normalized"
+    normalize_dir.mkdir(parents=True, exist_ok=True)
+    user_installation_dir = normalize_dir / "lo-profile"
+    user_installation_dir.mkdir(parents=True, exist_ok=True)
+
+    proc = subprocess.run(
+        [
+            LIBREOFFICE_BIN,
+            "--headless",
+            "--nologo",
+            "--nolockcheck",
+            "--nodefault",
+            "--norestore",
+            f"-env:UserInstallation=file://{user_installation_dir}",
+            "--convert-to",
+            "xlsx",
+            "--outdir",
+            str(normalize_dir),
+            str(workbook_path),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=LIBREOFFICE_TIMEOUT_MS / 1000,
+        check=False,
+    )
+
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"LibreOffice Excel normalize failed with code {proc.returncode}: {proc.stderr.strip() or proc.stdout.strip() or 'no output'}"
+        )
+
+    normalized_path = normalize_dir / workbook_path.name
+    if not normalized_path.exists():
+        raise RuntimeError("LibreOffice did not produce a normalized Excel file")
+
+    return normalized_path
+
+
 def convert_to_pdf(input_path: Path, output_dir: Path) -> Path:
     user_installation_dir = output_dir / "lo-profile"
     user_installation_dir.mkdir(parents=True, exist_ok=True)
@@ -364,6 +448,20 @@ def convert_to_pdf(input_path: Path, output_dir: Path) -> Path:
 
 def ensure_cache_dir() -> None:
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def clear_cache_dir() -> None:
+    if not CACHE_DIR.exists():
+        return
+
+    for path in CACHE_DIR.iterdir():
+        try:
+            if path.is_dir():
+                shutil.rmtree(path, ignore_errors=True)
+            else:
+                path.unlink(missing_ok=True)
+        except Exception:  # noqa: BLE001
+            continue
 
 
 def build_cache_key(xlsx_bytes: bytes, output_format: str, postprocess: str) -> str:
@@ -426,6 +524,7 @@ def render_xlsx_template():
     if not isinstance(sheet_page_setup, list):
         return jsonify({"error": "sheetPageSetup must be an array"}), 400
 
+    clear_cache_dir()
     temp_dir = Path(tempfile.mkdtemp(prefix="segmentica-render-"))
     try:
         template_path = ensure_template_path(template_name)
@@ -442,7 +541,10 @@ def render_xlsx_template():
             hidden_sheets,
             sheet_page_setup,
         )
-        generated_xlsx_bytes = generated_xlsx.read_bytes()
+        final_xlsx_path = generated_xlsx
+        if should_normalize_excel_output(template_name, output_format):
+            final_xlsx_path = normalize_excel_output(generated_xlsx, temp_dir)
+        generated_xlsx_bytes = final_xlsx_path.read_bytes()
 
         if output_format == "excel":
             response = send_file(

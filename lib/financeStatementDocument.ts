@@ -62,6 +62,21 @@ type WorkedSummary = {
     holidayHours: number;
 };
 
+type StatementAccrualColumns = {
+    salary: number;
+    bonus: number;
+    sickLeave: number;
+    vacation: number;
+    otherIncome: number;
+    totalAccrued: number;
+    incomeTax: number;
+    hospitalOffset: number;
+    advanceOffset: number;
+    orgDebt: number;
+    employeeDebt: number;
+    payable: number;
+};
+
 type StatementNumberingState = {
     lastNumber: number;
     assignments: Record<string, number>;
@@ -148,6 +163,7 @@ type StatementEntryPayload = {
 
 type StatementPreparedEntry = StatementEntryPayload & {
     workedSummary: WorkedSummary;
+    accrualColumns: StatementAccrualColumns;
 };
 
 const TEMPLATE_KEY: DocumentTemplateKey = 'finance_statement_t49';
@@ -165,6 +181,9 @@ const WORKED_STATUSES = new Set([
     'удалённо',
     'командировка',
 ]);
+
+const SICK_STATUSES = new Set(['больничный', 'больничный лист']);
+const DEFAULT_TAX_RATE = 0.13;
 
 const numberFormatter = new Intl.NumberFormat('ru-RU', {
     minimumFractionDigits: 2,
@@ -767,23 +786,28 @@ const buildDocumentKeyForEntries = (entries: StatementEntryPayload[]) =>
         .sort()
         .join('|');
 
-const getSourceAccrualColumns = (source: StatementSourcePayload) => {
+const getSourceAccrualColumns = (source: StatementSourcePayload): StatementAccrualColumns => {
     const accruedAmount = Number(source.accruedAmount || 0);
     const withheldAmount = Number(source.withheldAmount || 0);
     const payableAmount = Number(source.payableAmount || 0);
     if (source.accruals) {
+        const totalAccrued = Number(source.accruals.totalAccrued || 0);
+        const incomeTax = Number(source.accruals.incomeTax || 0);
+        const hospitalOffset = Number(source.accruals.hospitalOffset || 0);
+        const orgDebt = Number(source.accruals.orgDebt || 0);
+        const employeeDebt = Number(source.accruals.employeeDebt || 0);
         return {
             salary: Number(source.accruals.salary || 0),
             bonus: Number(source.accruals.bonus || 0),
             sickLeave: Number(source.accruals.sickLeave || 0),
             vacation: Number(source.accruals.vacation || 0),
             otherIncome: Number(source.accruals.otherIncome || 0),
-            totalAccrued: Number(source.accruals.totalAccrued || 0),
-            incomeTax: Number(source.accruals.incomeTax || 0),
-            hospitalOffset: Number(source.accruals.hospitalOffset || 0),
+            totalAccrued,
+            incomeTax,
+            hospitalOffset,
             advanceOffset: Number(source.accruals.advanceOffset || 0),
-            orgDebt: Number(source.accruals.orgDebt || 0),
-            employeeDebt: Number(source.accruals.employeeDebt || 0),
+            orgDebt,
+            employeeDebt,
             payable: Number(source.accruals.payable || 0),
         };
     }
@@ -804,11 +828,115 @@ const getSourceAccrualColumns = (source: StatementSourcePayload) => {
     };
 };
 
+const getMonthlyStatementAccrualColumns = async (
+    employee: StatementEmployeePayload,
+    source: StatementSourcePayload
+): Promise<StatementAccrualColumns> => {
+    const isRecordedMonthAggregate = source.key.startsWith('month-recorded#')
+        || source.sourceSummary === 'Журнал выплат за выбранный месяц';
+
+    if (
+        isRecordedMonthAggregate
+        || source.sourceType !== 'current'
+        || !source.accruals
+        || employee.rate == null
+        || employee.rate <= 0
+    ) {
+        return getSourceAccrualColumns(source);
+    }
+
+    const start = parseDateOnly(source.periodFrom);
+    const end = parseDateOnly(source.periodTo);
+    if (!start || !end || start > end) {
+        return getSourceAccrualColumns(source);
+    }
+
+    const startIso = formatIsoDate(start);
+    const endIso = formatIsoDate(end);
+
+    const [scheduleRes, vacationRes] = await Promise.all([
+        query(
+            `
+            SELECT "дата" AS day, "статус" AS status
+            FROM public."График_работы"
+            WHERE "сотрудник_id" = $1
+              AND "дата" BETWEEN $2::date AND $3::date
+            ORDER BY "дата" ASC
+            `,
+            [employee.id, startIso, endIso]
+        ),
+        query(
+            `
+            SELECT date_from, date_to
+            FROM public.employee_vacations
+            WHERE employee_id = $1
+              AND status <> 'cancelled'
+              AND date_from <= $3::date
+              AND date_to >= $2::date
+            ORDER BY date_from ASC, id ASC
+            `,
+            [employee.id, startIso, endIso]
+        ),
+    ]);
+
+    const vacationDays = new Set<string>();
+    for (const row of vacationRes.rows || []) {
+        const rowFrom = parseDateOnly(row.date_from);
+        const rowTo = parseDateOnly(row.date_to);
+        if (!rowFrom || !rowTo) continue;
+        const rangeFrom = rowFrom < start ? start : rowFrom;
+        const rangeTo = rowTo > end ? end : rowTo;
+        if (rangeFrom > rangeTo) continue;
+        for (const day of enumerateDays(rangeFrom, rangeTo)) {
+            vacationDays.add(formatIsoDate(day));
+        }
+    }
+
+    const sickDays = new Set<string>();
+    for (const row of scheduleRes.rows || []) {
+        const day = parseDateOnly(row.day);
+        const status = String(row.status || '').trim().toLowerCase();
+        if (!day || !SICK_STATUSES.has(status)) continue;
+        const key = formatIsoDate(day);
+        if (vacationDays.has(key)) continue;
+        sickDays.add(key);
+    }
+
+    const totalMonthDays = Math.max(enumerateDays(start, end).length, 1);
+    const dailyRate = Number(employee.rate) / totalMonthDays;
+    const vacationAmount = roundMoney(dailyRate * vacationDays.size);
+    const sickLeaveAmount = roundMoney(dailyRate * sickDays.size);
+    const salaryAmount = roundMoney(Math.max(0, Number(employee.rate) - vacationAmount - sickLeaveAmount));
+    const bonusAmount = roundMoney(Number(source.accruals.bonus || 0));
+    const otherIncomeAmount = roundMoney(Number(source.accruals.otherIncome || 0));
+    const totalAccrued = roundMoney(salaryAmount + bonusAmount + sickLeaveAmount + vacationAmount + otherIncomeAmount);
+    const incomeTax = roundMoney(totalAccrued * DEFAULT_TAX_RATE);
+    const orgDebt = roundMoney(Number(source.accruals.orgDebt || 0));
+    const employeeDebt = roundMoney(Number(source.accruals.employeeDebt || 0));
+    const payable = roundMoney(totalAccrued - incomeTax + orgDebt - employeeDebt);
+
+    return {
+        salary: salaryAmount,
+        bonus: bonusAmount,
+        sickLeave: sickLeaveAmount,
+        vacation: vacationAmount,
+        otherIncome: otherIncomeAmount,
+        totalAccrued,
+        incomeTax,
+        hospitalOffset: 0,
+        advanceOffset: 0,
+        orgDebt,
+        employeeDebt,
+        payable,
+    };
+};
+
 const prepareStatementEntries = async (entries: StatementEntryPayload[]): Promise<StatementPreparedEntry[]> =>
     Promise.all(
         entries.map(async (entry) => ({
             ...entry,
             workedSummary: await getWorkedSummary(entry.employee.id, entry.source.periodFrom, entry.source.periodTo),
+            accrualColumns: await getMonthlyStatementAccrualColumns(entry.employee, entry.source),
         }))
     );
 
@@ -821,7 +949,7 @@ const fillStatementEmployeeRow = (
     entry: StatementPreparedEntry
 ) => {
     const sourceLabel = getStatementSourceLabel(entry.source);
-    const columns = getSourceAccrualColumns(entry.source);
+    const columns = entry.accrualColumns;
 
     pushCell(cells, sheetName, `A${row}`, ordinal);
     pushCell(cells, sheetName, `C${row}`, entry.employee.id);
@@ -886,7 +1014,7 @@ const fillStatementTotalRow = (
 ) => {
     const totals = entries.reduce(
         (acc, entry) => {
-            const columns = getSourceAccrualColumns(entry.source);
+            const columns = entry.accrualColumns;
             acc.salary += columns.salary;
             acc.bonus += columns.bonus;
             acc.sickLeave += columns.sickLeave;
@@ -960,10 +1088,10 @@ const prepareFinanceStatementTemplatePayload = async (params: {
     const accountant = await getChiefAccountant();
     const template = await getDocumentTemplateDefinition(TEMPLATE_KEY);
 
-    const payableAmount = preparedEntries.reduce((sum, entry) => sum + Number(entry.source.payableAmount || 0), 0);
+    const statementAmount = roundMoney(preparedEntries.reduce((sum, entry) => sum + entry.accrualColumns.payable, 0));
     const depositedAmount = 0;
-    const amountWords = numberToWordsWithoutCurrency(payableAmount);
-    const payableParts = splitMoney(payableAmount);
+    const amountWords = numberToWordsWithoutCurrency(statementAmount);
+    const statementParts = splitMoney(statementAmount);
     const depositedParts = splitMoney(depositedAmount);
     const paymentYearFull = String(paymentDate.getUTCFullYear());
     const paymentYearCentury = paymentYearFull.slice(0, 2);
@@ -1008,9 +1136,9 @@ const prepareFinanceStatementTemplatePayload = async (params: {
     pushCell(cells, FIRST_SHEET_NAME, 'AH10', cashToYearCentury, lineFieldStyle());
     pushCell(cells, FIRST_SHEET_NAME, 'AI10', cashToYearSuffix, lineFieldStyle());
     pushCell(cells, FIRST_SHEET_NAME, 'D11', amountWords, lineFieldStyle());
-    pushCell(cells, FIRST_SHEET_NAME, 'AL11', payableParts.kopecks, lineFieldStyle());
-    pushCell(cells, FIRST_SHEET_NAME, 'AP11', payableParts.rubles, lineFieldStyle());
-    pushCell(cells, FIRST_SHEET_NAME, 'AV11', payableParts.kopecks, lineFieldStyle());
+    pushCell(cells, FIRST_SHEET_NAME, 'AL11', statementParts.kopecks, lineFieldStyle());
+    pushCell(cells, FIRST_SHEET_NAME, 'AP11', statementParts.rubles, lineFieldStyle());
+    pushCell(cells, FIRST_SHEET_NAME, 'AV11', statementParts.kopecks, lineFieldStyle());
     pushCell(cells, FIRST_SHEET_NAME, 'L14', actor.position || 'Директор', lineFieldStyle());
     pushCell(cells, FIRST_SHEET_NAME, 'AF14', actorShort, lineFieldStyle());
     pushCell(cells, FIRST_SHEET_NAME, 'U16', accountantShort, lineFieldStyle());
@@ -1032,9 +1160,9 @@ const prepareFinanceStatementTemplatePayload = async (params: {
     pushCell(cells, SECOND_SHEET_NAME, 'AI5', 'отпускные');
 
     pushCell(cells, SECOND_SHEET_NAME, 'G32', amountWords, lineFieldStyle());
-    pushCell(cells, SECOND_SHEET_NAME, 'AM32', payableParts.kopecks, lineFieldStyle());
-    pushCell(cells, SECOND_SHEET_NAME, 'AQ32', payableParts.rubles, lineFieldStyle());
-    pushCell(cells, SECOND_SHEET_NAME, 'AV32', payableParts.kopecks, lineFieldStyle());
+    pushCell(cells, SECOND_SHEET_NAME, 'AM32', statementParts.kopecks, lineFieldStyle());
+    pushCell(cells, SECOND_SHEET_NAME, 'AQ32', statementParts.rubles, lineFieldStyle());
+    pushCell(cells, SECOND_SHEET_NAME, 'AV32', statementParts.kopecks, lineFieldStyle());
     pushCell(cells, SECOND_SHEET_NAME, 'BF32', accountant?.position || 'Главный бухгалтер', lineFieldStyle());
     pushCell(cells, SECOND_SHEET_NAME, 'BV32', accountantShort, lineFieldStyle());
     pushCell(cells, SECOND_SHEET_NAME, 'CQ32', statementNumber, lineFieldStyle());
@@ -1084,9 +1212,9 @@ const prepareFinanceStatementTemplatePayload = async (params: {
         pushCell(cells, FIRST_SHEET_NAME, 'A38', 'выплачена сумма ');
         pushCell(cells, FIRST_SHEET_NAME, 'A40', 'и депонирована сумма');
         pushCell(cells, FIRST_SHEET_NAME, 'G38', amountWords, lineFieldStyle());
-        pushCell(cells, FIRST_SHEET_NAME, 'AM38', payableParts.kopecks, lineFieldStyle());
-        pushCell(cells, FIRST_SHEET_NAME, 'AQ38', payableParts.rubles, lineFieldStyle());
-        pushCell(cells, FIRST_SHEET_NAME, 'AV38', payableParts.kopecks, lineFieldStyle());
+        pushCell(cells, FIRST_SHEET_NAME, 'AM38', statementParts.kopecks, lineFieldStyle());
+        pushCell(cells, FIRST_SHEET_NAME, 'AQ38', statementParts.rubles, lineFieldStyle());
+        pushCell(cells, FIRST_SHEET_NAME, 'AV38', statementParts.kopecks, lineFieldStyle());
         pushCell(cells, FIRST_SHEET_NAME, 'BF38', accountant?.position || 'Главный бухгалтер', lineFieldStyle());
         pushCell(cells, FIRST_SHEET_NAME, 'BV38', accountantShort, lineFieldStyle());
         pushCell(cells, FIRST_SHEET_NAME, 'CQ38', statementNumber, lineFieldStyle());
@@ -1143,6 +1271,7 @@ const prepareFinanceStatementTemplatePayload = async (params: {
         rowHeights,
         printAreas,
         rangeCopies,
+        sheetCopies: [],
         hiddenSheets,
         sheetPageSetup,
     };

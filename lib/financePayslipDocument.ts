@@ -12,6 +12,9 @@ type PayslipPaymentHistoryItem = {
     amount: number;
     date: string;
     paidAmount: number;
+    accruedAmount?: number;
+    withheldAmount?: number;
+    payableAmount?: number;
     paymentKind: string | null;
     periodFrom: string | null;
     periodTo: string | null;
@@ -34,6 +37,7 @@ type PayslipBuildParams = {
         secondDay: number | null;
     };
     contributionDetails: PayslipContributionDetails;
+    currentContributions: number;
     currentOrgDebt: number;
     currentEmployeeDebt: number;
 };
@@ -385,12 +389,16 @@ const buildSalaryLines = async (
     return lines;
 };
 
-const buildPaymentLines = (
+const isRecordedMonthAggregateSource = (source: StatementSourcePayload): boolean =>
+    source.key.startsWith('month-recorded#')
+    || source.sourceSummary === 'Журнал выплат за выбранный месяц';
+
+const getPaymentsForMonth = (
     paymentHistory: PayslipPaymentHistoryItem[],
     monthStart: Date,
     monthEnd: Date
-): PaymentLine[] => {
-    const filtered = paymentHistory
+): PayslipPaymentHistoryItem[] =>
+    paymentHistory
         .filter((item) => {
             const paymentDate = parseDateOnly(item.date);
             const periodFrom = parseDateOnly(item.periodFrom);
@@ -407,7 +415,12 @@ const buildPaymentLines = (
         })
         .sort((a, b) => String(a.date).localeCompare(String(b.date)) || String(a.id).localeCompare(String(b.id)));
 
-    return filtered.slice(0, 2).map((item) => {
+const buildPaymentLines = (
+    paymentHistory: PayslipPaymentHistoryItem[],
+    monthStart: Date,
+    monthEnd: Date
+): PaymentLine[] => {
+    const items = getPaymentsForMonth(paymentHistory, monthStart, monthEnd).map((item) => {
         const paymentDate = parseDateOnly(item.date);
         const amount = roundMoney(item.paidAmount || item.amount || 0);
         return {
@@ -415,40 +428,19 @@ const buildPaymentLines = (
             amount,
         };
     });
-};
+    if (items.length <= 3) {
+        return items;
+    }
 
-const getSalaryPaidForMonth = (
-    paymentHistory: PayslipPaymentHistoryItem[],
-    monthStart: Date,
-    monthEnd: Date
-): number => {
-    return roundMoney(
-        paymentHistory.reduce((sum, item) => {
-            const kind = String(item.paymentKind || '').trim().toLowerCase();
-            if (kind !== 'salary' && kind !== 'advance') {
-                return sum;
-            }
-
-            const periodFrom = parseDateOnly(item.periodFrom);
-            const periodTo = parseDateOnly(item.periodTo);
-            const paymentDate = parseDateOnly(item.date);
-
-            let intersectsMonth = false;
-            if (periodFrom || periodTo) {
-                const effectiveFrom = periodFrom || periodTo;
-                const effectiveTo = periodTo || periodFrom;
-                intersectsMonth = Boolean(effectiveFrom && effectiveTo && effectiveFrom <= monthEnd && effectiveTo >= monthStart);
-            } else {
-                intersectsMonth = Boolean(paymentDate && paymentDate >= monthStart && paymentDate <= addDays(monthEnd, 31));
-            }
-
-            if (!intersectsMonth) {
-                return sum;
-            }
-
-            return sum + roundMoney(item.paidAmount || item.amount || 0);
-        }, 0)
-    );
+    const head = items.slice(0, 2);
+    const restAmount = roundMoney(items.slice(2).reduce((sum, item) => sum + item.amount, 0));
+    return [
+        ...head,
+        {
+            label: 'Прочие выплаты за месяц',
+            amount: restAmount,
+        },
+    ];
 };
 
 const buildFinancePayslipSheetCells = async (
@@ -472,13 +464,24 @@ const buildFinancePayslipSheetCells = async (
     };
 
     const previousBalance = roundMoney(params.currentOrgDebt - params.currentEmployeeDebt);
-    const salaryLines = await buildSalaryLines(
-        params.employee.id,
-        monthDate,
-        params.settings,
-        roundMoney(accruals.advanceOffset || 0),
-        roundMoney(accruals.salary || 0),
-    );
+    const salaryLines = await (isRecordedMonthAggregateSource(params.source)
+        ? (() => {
+            const amount = roundMoney(accruals.salary || 0);
+            if (amount <= 0) return Promise.resolve([] as AccrualLine[]);
+            return getWorkedSummaryForRange(params.employee.id, periodFrom, periodTo).then((summary) => ([{
+                label: 'заработная плата',
+                period: `${formatDateRu(periodFrom).slice(0, 5)} - ${formatDateRu(periodTo).slice(0, 5)}`,
+                quantity: formatCountOrDash(summary.days, summary.hours),
+                amount,
+            }]));
+        })()
+        : buildSalaryLines(
+            params.employee.id,
+            monthDate,
+            params.settings,
+            roundMoney(accruals.advanceOffset || 0),
+            roundMoney(accruals.salary || 0),
+        ));
     const vacationSummary = await getVacationSummaryForMonth(params.employee.id, periodFrom, periodTo);
     const sickSummary = await getSickSummaryForMonth(params.employee.id, periodFrom, periodTo);
 
@@ -525,7 +528,7 @@ const buildFinancePayslipSheetCells = async (
 
     const limitedAccrualLines = accrualLines.slice(0, 5);
     const accrualRows = [20, 21, 22, 23, 24];
-    const displayedAccruedTotal = roundMoney(limitedAccrualLines.reduce((sum, item) => sum + item.amount, 0));
+    const totalAccrued = roundMoney(params.source.accruedAmount || accruals.totalAccrued || limitedAccrualLines.reduce((sum, item) => sum + item.amount, 0));
 
     const deductionLines: DeductionLine[] = [];
     if (roundMoney(accruals.incomeTax || 0) > 0) {
@@ -543,17 +546,15 @@ const buildFinancePayslipSheetCells = async (
         });
     }
 
-    const totalWithheld = roundMoney(deductionLines.reduce((sum, item) => sum + item.amount, 0));
-    const totalPayable = roundMoney(previousBalance + displayedAccruedTotal - totalWithheld);
+    const totalWithheld = roundMoney(params.source.withheldAmount || deductionLines.reduce((sum, item) => sum + item.amount, 0));
+    const monthPayable = roundMoney(
+        params.source.payableAmount || accruals.payable || (totalAccrued - totalWithheld + roundMoney(accruals.orgDebt || 0) - roundMoney(accruals.employeeDebt || 0))
+    );
+    const totalPayable = roundMoney(previousBalance + monthPayable);
+    const paymentsForMonth = getPaymentsForMonth(params.paymentHistory, periodFrom, periodTo);
     const paymentLines = buildPaymentLines(params.paymentHistory, periodFrom, periodTo);
-    const totalPaid = roundMoney(paymentLines.reduce((sum, item) => sum + item.amount, 0));
-    const salaryGrossTotal = roundMoney(salaryLines.reduce((sum, item) => sum + item.amount, 0));
-    const salaryTaxShare = displayedAccruedTotal > 0
-        ? roundMoney(totalWithheld * (salaryGrossTotal / displayedAccruedTotal))
-        : 0;
-    const salaryPayableOnly = roundMoney(salaryGrossTotal - salaryTaxShare);
-    const salaryPaidOnly = getSalaryPaidForMonth(params.paymentHistory, periodFrom, periodTo);
-    const currentBalance = roundMoney(previousBalance + salaryPayableOnly - salaryPaidOnly);
+    const totalPaid = roundMoney(paymentsForMonth.reduce((sum, item) => sum + roundMoney(item.paidAmount || item.amount || 0), 0));
+    const currentBalance = roundMoney(totalPayable - totalPaid);
     const yearIncome = roundMoney(
         Number(params.contributionDetails.contributionYearBase30 || 0) + Number(params.contributionDetails.contributionYearBase151 || 0)
     );
@@ -566,7 +567,7 @@ const buildFinancePayslipSheetCells = async (
     pushCellForSheet(cells, sheetName, 'C8', params.employee.rate != null ? formatMoneyRub(params.employee.rate) : '-');
     pushCellForSheet(cells, sheetName, 'C13', formatMonthLabelRu(monthDate));
     pushCellForSheet(cells, sheetName, 'F15', formatBalance(previousBalance));
-    pushCellForSheet(cells, sheetName, 'C17', formatMoneyRub(displayedAccruedTotal));
+    pushCellForSheet(cells, sheetName, 'C17', formatMoneyRub(totalAccrued));
 
     accrualRows.forEach((row, index) => {
         const item = limitedAccrualLines[index];
@@ -590,10 +591,11 @@ const buildFinancePayslipSheetCells = async (
     pushCellForSheet(cells, sheetName, 'D35', paymentLines[0] ? formatMoneyRub(paymentLines[0].amount) : '-');
     pushCellForSheet(cells, sheetName, 'A37', paymentLines[1]?.label || '-');
     pushCellForSheet(cells, sheetName, 'D37', paymentLines[1] ? formatMoneyRub(paymentLines[1].amount) : '-');
-    pushCellForSheet(cells, sheetName, 'D39', '-');
+    pushCellForSheet(cells, sheetName, 'A39', paymentLines[2]?.label || 'В натуральной форме');
+    pushCellForSheet(cells, sheetName, 'D39', paymentLines[2] ? formatMoneyRub(paymentLines[2].amount) : '-');
     pushCellForSheet(cells, sheetName, 'F41', formatBalance(currentBalance));
     pushCellForSheet(cells, sheetName, 'D44', formatMoneyRub(yearIncome));
-    pushCellForSheet(cells, sheetName, 'D45', formatMoneyRub(0));
+    pushCellForSheet(cells, sheetName, 'D45', formatMoneyRub(params.currentContributions));
 
     return cells;
 };

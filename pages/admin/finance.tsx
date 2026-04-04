@@ -6,11 +6,14 @@ import {
     FiChevronRight,
     FiExternalLink,
     FiFileText,
+    FiMinus,
+    FiPlus,
     FiPrinter,
     FiRefreshCw,
     FiSearch,
     FiX,
 } from 'react-icons/fi';
+import { BsFillFileEarmarkExcelFill, BsFillFileEarmarkPdfFill } from 'react-icons/bs';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
 import styles from './AdminFinance.module.css';
@@ -108,10 +111,20 @@ type StatementPreviewState = {
     title: string;
     description: string;
     previewUrl: string;
-    kind: 'batch-payroll' | 'single-statement' | 'selected-statements';
+    kind: 'batch-payroll' | 'single-statement' | 'selected-statements' | 'timesheet';
     employeeIds: number[];
     employeeId?: number;
 };
+
+type PreviewPageImage = {
+    src: string;
+    width: number;
+    height: number;
+};
+
+const PREVIEW_ZOOM_MIN = 0.6;
+const PREVIEW_ZOOM_MAX = 2;
+const PREVIEW_ZOOM_STEP = 0.2;
 
 type FinanceTabKey = 'summary' | 'accruals' | 'withheld' | 'paid' | 'contributions';
 
@@ -213,7 +226,7 @@ const buildStatementUrl = (params: {
     employeeId?: number;
     employeeIds?: number[];
     sourceType: 'current' | 'history' | 'current_batch';
-    documentKind?: 'statement' | 'payslip';
+    documentKind?: 'statement' | 'payslip' | 'timesheet';
     format: 'excel' | 'pdf';
     month: string;
     sourceKey?: string | null;
@@ -261,12 +274,15 @@ function AdminFinancePage(): JSX.Element {
         comment: '',
     });
     const [statementPreview, setStatementPreview] = useState<StatementPreviewState | null>(null);
-    const [previewPages, setPreviewPages] = useState<string[]>([]);
+    const [previewPages, setPreviewPages] = useState<PreviewPageImage[]>([]);
     const [previewLoading, setPreviewLoading] = useState(false);
     const [previewError, setPreviewError] = useState<string | null>(null);
     const [previewPdfObjectUrl, setPreviewPdfObjectUrl] = useState<string | null>(null);
+    const [previewZoom, setPreviewZoom] = useState(1);
     const previewPrintFrameRef = useRef<HTMLIFrameElement | null>(null);
     const previewStageRef = useRef<HTMLDivElement | null>(null);
+    const previewPdfBytesRef = useRef<Uint8Array | null>(null);
+    const previewPdfSourceUrlRef = useRef<string | null>(null);
 
     useEffect(() => {
         if (!statementPreview) return undefined;
@@ -282,9 +298,12 @@ function AdminFinancePage(): JSX.Element {
             setPreviewPages([]);
             setPreviewLoading(false);
             setPreviewError(null);
+            setPreviewZoom(1);
             if (previewPrintFrameRef.current) {
                 previewPrintFrameRef.current.removeAttribute('src');
             }
+            previewPdfBytesRef.current = null;
+            previewPdfSourceUrlRef.current = null;
             setPreviewPdfObjectUrl((current) => {
                 if (current) {
                     window.URL.revokeObjectURL(current);
@@ -304,29 +323,38 @@ function AdminFinancePage(): JSX.Element {
 
                 const pdfjs = await import(/* webpackIgnore: true */ '/pdfjs/pdf.mjs');
                 pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/pdf.worker.min.mjs';
-                const response = await fetch(statementPreview.previewUrl, { credentials: 'include' });
-                if (!response.ok) {
-                    throw new Error('Не удалось загрузить PDF для предпросмотра');
+                let fileBytes = previewPdfBytesRef.current;
+
+                if (!fileBytes || previewPdfSourceUrlRef.current !== statementPreview.previewUrl) {
+                    const response = await fetch(statementPreview.previewUrl, { credentials: 'include' });
+                    if (!response.ok) {
+                        const errorText = await response.text().catch(() => '');
+                        throw new Error(errorText || 'Не удалось загрузить PDF для предпросмотра');
+                    }
+
+                    fileBytes = new Uint8Array(await response.arrayBuffer());
+                    previewPdfBytesRef.current = fileBytes;
+                    previewPdfSourceUrlRef.current = statementPreview.previewUrl;
+
+                    const pdfObjectUrl = window.URL.createObjectURL(new Blob([fileBytes], { type: 'application/pdf' }));
+                    setPreviewPdfObjectUrl((current) => {
+                        if (current) {
+                            window.URL.revokeObjectURL(current);
+                        }
+                        return pdfObjectUrl;
+                    });
                 }
 
-                const fileBytes = new Uint8Array(await response.arrayBuffer());
-                const pdfObjectUrl = window.URL.createObjectURL(new Blob([fileBytes], { type: 'application/pdf' }));
-                setPreviewPdfObjectUrl((current) => {
-                    if (current) {
-                        window.URL.revokeObjectURL(current);
-                    }
-                    return pdfObjectUrl;
-                });
-                const loadingTask = pdfjs.getDocument({ data: fileBytes });
+                const loadingTask = pdfjs.getDocument({ data: fileBytes.slice() });
                 const pdf = await loadingTask.promise;
 
                 const availableWidth = Math.max((previewStageRef.current?.clientWidth ?? 1200) - 8, 320);
-                const pages: string[] = [];
+                const pages: PreviewPageImage[] = [];
 
                 for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
                     const page = await pdf.getPage(pageNumber);
                     const baseViewport = page.getViewport({ scale: 1 });
-                    const scale = availableWidth / baseViewport.width;
+                    const scale = (availableWidth / baseViewport.width) * previewZoom;
                     const viewport = page.getViewport({ scale });
                     const canvas = document.createElement('canvas');
                     const context = canvas.getContext('2d', { alpha: false });
@@ -355,7 +383,11 @@ function AdminFinancePage(): JSX.Element {
                         background: 'rgb(255,255,255)',
                     }).promise;
 
-                    pages.push(canvas.toDataURL('image/png'));
+                    pages.push({
+                        src: canvas.toDataURL('image/png'),
+                        width: viewport.width,
+                        height: viewport.height,
+                    });
                 }
 
                 if (!cancelled) {
@@ -377,7 +409,7 @@ function AdminFinancePage(): JSX.Element {
         return () => {
             cancelled = true;
         };
-    }, [statementPreview]);
+    }, [previewZoom, statementPreview]);
 
     const canViewFinance = Boolean(user?.permissions?.includes('admin.finance'));
 
@@ -467,6 +499,11 @@ function AdminFinancePage(): JSX.Element {
     const selectedEmployees = useMemo(
         () => employees.filter((employee) => selectedEmployeeIds.includes(employee.id)),
         [employees, selectedEmployeeIds]
+    );
+
+    const totalEmployees = useMemo(
+        () => (selectedEmployees.length ? selectedEmployees : filteredEmployees),
+        [filteredEmployees, selectedEmployees]
     );
 
     const visibleEmployeeIds = useMemo(() => filteredEmployees.map((employee) => employee.id), [filteredEmployees]);
@@ -693,7 +730,13 @@ function AdminFinancePage(): JSX.Element {
     }, [activeTab]);
 
     const openPreview = (preview: StatementPreviewState) => {
+        setPreviewZoom(1);
         setStatementPreview(preview);
+    };
+
+    const updatePreviewZoom = (nextZoom: number) => {
+        const normalizedZoom = Math.min(PREVIEW_ZOOM_MAX, Math.max(PREVIEW_ZOOM_MIN, Number(nextZoom.toFixed(2))));
+        setPreviewZoom(normalizedZoom);
     };
 
     const buildPreviewDownloadFileName = (
@@ -714,6 +757,13 @@ function AdminFinancePage(): JSX.Element {
             return `${base}.${extension}`;
         }
 
+        if (kind === 'timesheet') {
+            const base = employeeLabel
+                ? `Табель учета рабочего времени ${employeeLabel} ${monthLabel}`
+                : `Табели учета рабочего времени ${monthLabel}`;
+            return `${base}.${extension}`;
+        }
+
         const base = employeeLabel
             ? `Расчетный листок ${employeeLabel} ${monthLabel}`
             : `Расчетные листки ${monthLabel}`;
@@ -723,7 +773,8 @@ function AdminFinancePage(): JSX.Element {
     const downloadStatementFile = async (url: string, fileName: string) => {
         const response = await fetch(url, { credentials: 'include' });
         if (!response.ok) {
-            throw new Error('Не удалось скачать документ');
+            const errorText = await response.text().catch(() => '');
+            throw new Error(errorText || 'Не удалось скачать документ');
         }
 
         const blob = await response.blob();
@@ -793,6 +844,27 @@ function AdminFinancePage(): JSX.Element {
         });
     };
 
+    const openTimesheetPreview = () => {
+        if (!selectedEmployeeIds.length) return;
+
+        openPreview({
+            title: 'Предпросмотр 1 документа',
+            description: selectedEmployeeIds.length === 1
+                ? `Табель учета рабочего времени за ${payload?.selectedMonthLabel || formatMonthLabel(monthKey)}.`
+                : `Табель учета рабочего времени по выбранному месяцу для ${selectedEmployeeIds.length} сотрудников.`,
+            previewUrl: buildStatementUrl({
+                sourceType: 'current_batch',
+                documentKind: 'timesheet',
+                employeeIds: selectedEmployeeIds,
+                month: monthKey,
+                format: 'pdf',
+                disposition: 'inline',
+            }),
+            kind: 'timesheet',
+            employeeIds: selectedEmployeeIds,
+        });
+    };
+
     const handlePrintPreview = () => {
         if (!statementPreview || !previewPdfObjectUrl) return;
 
@@ -821,6 +893,20 @@ function AdminFinancePage(): JSX.Element {
 
     const handlePreviewDownload = (format: 'pdf' | 'excel') => {
         if (!statementPreview) return;
+        const previewDownloadName = buildPreviewDownloadFileName(statementPreview.kind, statementPreview.employeeIds, format);
+        const handleDownloadError = (error: unknown) => {
+            setPreviewError(error instanceof Error ? error.message : 'Не удалось скачать документ');
+        };
+
+        if (format === 'pdf' && previewPdfObjectUrl) {
+            const link = document.createElement('a');
+            link.href = previewPdfObjectUrl;
+            link.download = previewDownloadName;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            return;
+        }
 
         if (statementPreview.kind === 'batch-payroll') {
             void downloadStatementFile(
@@ -832,8 +918,8 @@ function AdminFinancePage(): JSX.Element {
                     format,
                     disposition: 'attachment',
                 }),
-                buildPreviewDownloadFileName(statementPreview.kind, statementPreview.employeeIds, format)
-            );
+                previewDownloadName
+            ).catch(handleDownloadError);
             return;
         }
 
@@ -847,9 +933,23 @@ function AdminFinancePage(): JSX.Element {
                     format,
                     disposition: 'attachment',
                 }),
-                buildPreviewDownloadFileName(statementPreview.kind, statementPreview.employeeIds, format)
-            );
+                previewDownloadName
+            ).catch(handleDownloadError);
             return;
+        }
+
+        if (statementPreview.kind === 'timesheet') {
+            void downloadStatementFile(
+                buildStatementUrl({
+                    sourceType: 'current_batch',
+                    documentKind: 'timesheet',
+                    employeeIds: statementPreview.employeeIds,
+                    month: monthKey,
+                    format,
+                    disposition: 'attachment',
+                }),
+                previewDownloadName
+            ).catch(handleDownloadError);
         }
     };
 
@@ -943,6 +1043,8 @@ function AdminFinancePage(): JSX.Element {
         }),
         []
     );
+    const currentMonthKey = useMemo(() => createMonthKey(new Date()), []);
+    const isNextMonthDisabled = monthKey >= currentMonthKey;
 
     if (authLoading || loading) {
         return (
@@ -989,7 +1091,12 @@ function AdminFinancePage(): JSX.Element {
                             color="gray"
                             highContrast
                             className={`${styles.monthArrowButton} ${styles.surfaceButton}`}
-                            onClick={() => setMonthKey((prev) => shiftMonthKey(prev, 1))}
+                            onClick={() => {
+                                if (isNextMonthDisabled) return;
+                                setMonthKey((prev) => shiftMonthKey(prev, 1));
+                            }}
+                            disabled={isNextMonthDisabled}
+                            title={isNextMonthDisabled ? 'Следующий месяц ещё не наступил' : undefined}
                         >
                             <FiChevronRight />
                         </Button>
@@ -998,10 +1105,20 @@ function AdminFinancePage(): JSX.Element {
 
                 <div className={styles.scheduleInlineCard}>
                     <div className={styles.scheduleInlineHeader}>
-                        <Text size="2" weight="medium" className={styles.panelLabel}>Режим начисления</Text>
-                        <Text size="2" color="gray" className={styles.scheduleInlineLead}>
-                            Настройка нужна для расчета месяца: аванс, зарплата, отпускные и больничные мы считаем по этому графику, а выплаты проводим вручную отдельным действием.
-                        </Text>
+                        <div className={styles.scheduleInlineTitleBlock}>
+                            <Text size="2" weight="medium" className={styles.panelLabel}>Режим начисления</Text>
+                            <Text size="1" color="gray" className={styles.scheduleInlineHint}>
+                                Если режим — 2 раза в месяц, первый день используется как аванс, второй — как основная зарплата.
+                            </Text>
+                        </div>
+                        <div className={styles.scheduleInlineNote}>
+                            <Text size="2" color="gray" className={styles.scheduleInlineLead}>
+                                Настройка влияет только на расчёт месяца: аванс, зарплата, отпускные и больничные считаются по этому графику.
+                            </Text>
+                            <Text size="2" color="gray" className={styles.scheduleInlineLead}>
+                                Выплаты проводим вручную отдельным действием.
+                            </Text>
+                        </div>
                     </div>
                     <div className={styles.scheduleInlineControls}>
                         <Select.Root
@@ -1053,9 +1170,6 @@ function AdminFinancePage(): JSX.Element {
                             Сохранить
                         </Button>
                     </div>
-                    <Text size="1" color="gray" className={styles.scheduleInlineHint}>
-                        Если режим — 2 раза в месяц, первый день используется как аванс, второй — как основная зарплата.
-                    </Text>
                 </div>
 
                 <div className={styles.toolbarPanel}>
@@ -1119,6 +1233,9 @@ function AdminFinancePage(): JSX.Element {
                                     <DropdownMenu.Item onSelect={openBatchPayrollPreview}>Расчетно платежная ведомость</DropdownMenu.Item>
                                     <DropdownMenu.Item onSelect={openSelectedStatementsPreview}>
                                         {selectedEmployeeIds.length === 1 ? 'Расчетный лист' : 'Расчетные листы'}
+                                    </DropdownMenu.Item>
+                                    <DropdownMenu.Item onSelect={openTimesheetPreview}>
+                                        {selectedEmployeeIds.length === 1 ? 'Табель учета рабочего времени' : 'Табели учета рабочего времени'}
                                     </DropdownMenu.Item>
                                 </DropdownMenu.Content>
                             </DropdownMenu.Root>
@@ -1222,7 +1339,7 @@ function AdminFinancePage(): JSX.Element {
                         <div className={styles.totalLabel}>Итого</div>
                         {activeColumns.map((column) => (
                             <div key={column.key} className={styles.totalCell}>
-                                {column.total ? column.total(filteredEmployees) : '—'}
+                                {column.total ? column.total(totalEmployees) : '—'}
                             </div>
                         ))}
                     </div>
@@ -1274,7 +1391,7 @@ function AdminFinancePage(): JSX.Element {
             </Card>
 
             {statementPreview ? (
-                <div className={styles.previewScreen} onClick={() => setStatementPreview(null)}>
+                <div className={styles.previewScreen}>
                     <div className={styles.previewBackdrop} />
                     <section
                         className={styles.previewPanel}
@@ -1313,6 +1430,7 @@ function AdminFinancePage(): JSX.Element {
                                 className={`${styles.actionButton} ${styles.surfaceButton}`}
                                 onClick={() => handlePreviewDownload('pdf')}
                             >
+                                <BsFillFileEarmarkPdfFill className={`${styles.icon} ${styles.pdfIcon}`} />
                                 PDF
                             </Button>
                             <Button
@@ -1322,6 +1440,7 @@ function AdminFinancePage(): JSX.Element {
                                 className={`${styles.actionButton} ${styles.surfaceButton}`}
                                 onClick={() => handlePreviewDownload('excel')}
                             >
+                                <BsFillFileEarmarkExcelFill className={`${styles.icon} ${styles.excelIcon}`} />
                                 Excel
                             </Button>
                             <Button
@@ -1334,6 +1453,35 @@ function AdminFinancePage(): JSX.Element {
                                 <FiExternalLink className={styles.icon} />
                                 Открыть
                             </Button>
+                            <div className={styles.previewZoomControls}>
+                                <button
+                                    type="button"
+                                    className={styles.previewZoomButton}
+                                    onClick={() => updatePreviewZoom(previewZoom - PREVIEW_ZOOM_STEP)}
+                                    disabled={previewLoading || previewZoom <= PREVIEW_ZOOM_MIN}
+                                    aria-label="Уменьшить масштаб"
+                                >
+                                    <FiMinus />
+                                </button>
+                                <button
+                                    type="button"
+                                    className={styles.previewZoomValue}
+                                    onClick={() => updatePreviewZoom(1)}
+                                    disabled={previewLoading || previewZoom === 1}
+                                    aria-label="Сбросить масштаб"
+                                >
+                                    {Math.round(previewZoom * 100)}%
+                                </button>
+                                <button
+                                    type="button"
+                                    className={styles.previewZoomButton}
+                                    onClick={() => updatePreviewZoom(previewZoom + PREVIEW_ZOOM_STEP)}
+                                    disabled={previewLoading || previewZoom >= PREVIEW_ZOOM_MAX}
+                                    aria-label="Увеличить масштаб"
+                                >
+                                    <FiPlus />
+                                </button>
+                            </div>
                         </div>
 
                         <div className={styles.previewCanvas}>
@@ -1346,12 +1494,13 @@ function AdminFinancePage(): JSX.Element {
                                 ) : null}
                                 {!previewLoading && !previewError ? (
                                     <div className={styles.previewPages}>
-                                        {previewPages.map((pageSrc, index) => (
+                                        {previewPages.map((page, index) => (
                                             <img
                                                 key={`${statementPreview.previewUrl}-${index + 1}`}
-                                                src={pageSrc}
+                                                src={page.src}
                                                 alt={`Страница ${index + 1}`}
                                                 className={styles.previewPageImage}
+                                                style={{ width: `${page.width}px`, height: `${page.height}px` }}
                                             />
                                         ))}
                                     </div>
