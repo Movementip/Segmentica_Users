@@ -305,7 +305,7 @@ const loadAuditColumns = async (p: Queryable): Promise<AuditColumns> => {
              WHERE table_schema = 'public' AND table_name = 'audit_logs'`,
             []
         );
-        const cols = new Set((colsRes.rows || []).map((r: any) => String(r.column_name)));
+        const cols = new Set<string>((colsRes.rows || []).map((r: any) => String(r.column_name)));
         const actorCol = cols.has('actor_user_id') ? 'actor_user_id' : cols.has('user_id') ? 'user_id' : null;
         auditColsCache = { cols, actorCol };
         return auditColsCache;
