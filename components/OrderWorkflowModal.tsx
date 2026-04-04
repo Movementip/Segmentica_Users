@@ -2,6 +2,7 @@ import React from 'react';
 import { Badge, Box, Button, Dialog, Flex, Text } from '@radix-ui/themes';
 import styles from './OrderWorkflowModal.module.css';
 import { getOrderExecutionModeLabel, getOrderSupplyModeLabel, type OrderExecutionMode } from '../lib/orderModes';
+import type { OrderWorkflowPositionSummary } from '../lib/orderWorkflow';
 
 export interface OrderWorkflowModalSummary {
     orderId: number;
@@ -37,22 +38,7 @@ export interface OrderWorkflowModalSummary {
     remainingShipmentUnits: number;
     nextAssemblyActionLabel: string | null;
     nextShipmentActionLabel: string | null;
-    positions: Array<{
-        товар_id: number;
-        товар_название: string;
-        товар_артикул?: string;
-        необходимое_количество: number;
-        склад_количество: number;
-        активная_недостача: number;
-        закуплено_количество: number;
-        осталось_закупить: number;
-        покрыто_со_склада: number;
-        собранное_количество: number;
-        отгруженное_количество: number;
-        доставленное_количество: number;
-        осталось_собрать: number;
-        осталось_отгрузить: number;
-    }>;
+    positions: OrderWorkflowPositionSummary[];
     missingProducts: Array<{
         id: number;
         товар_id: number;

@@ -282,7 +282,7 @@ export default async function handler(
             }
 
             const orderIdsToSync = new Set<number>([previousOrderId, Number(заявка_id)]);
-            for (const orderId of orderIdsToSync) {
+            for (const orderId of Array.from(orderIdsToSync)) {
                 await syncOrderStatusWithMissingProducts(orderId);
             }
 

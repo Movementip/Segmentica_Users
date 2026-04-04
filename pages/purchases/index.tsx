@@ -968,7 +968,7 @@ function PurchasesPage(): JSX.Element {
                 ) : error ? (
                     <div className={styles.errorState}>
                         <p className={styles.errorText}>{error}</p>
-                        <button className={`${styles.button} ${styles.primaryButton}`} onClick={fetchPurchases}>
+                        <button className={`${styles.button} ${styles.primaryButton}`} onClick={() => { void fetchPurchases(); }}>
                             Повторить попытку
                         </button>
                     </div>

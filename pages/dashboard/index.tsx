@@ -68,6 +68,13 @@ interface DashboardStats {
     }>;
 }
 
+type ChartTooltipValue = number | string | ReadonlyArray<number | string> | undefined;
+
+const normalizeChartTooltipValue = (value: ChartTooltipValue): number | string => {
+    const scalarValue = Array.isArray(value) ? value[0] : value;
+    return scalarValue ?? 0;
+};
+
 type Period = '6m';
 
 const DASHBOARD_PERIOD: Period = '6m';
@@ -436,10 +443,11 @@ const Home: NextPage = (): JSX.Element => {
                                                 />
                                                 <YAxis tick={{ fontSize: 11 }} width={48} />
                                                 <Tooltip
-                                                    formatter={(v: number | string, name) => {
-                                                        if (name === 'revenue') return [formatCurrency(v), 'Выручка'];
-                                                        if (name === 'orders') return [formatNumber(v), 'Продажи'];
-                                                        return [String(v), String(name)];
+                                                    formatter={(v: ChartTooltipValue, name) => {
+                                                        const normalizedValue = normalizeChartTooltipValue(v);
+                                                        if (name === 'revenue') return [formatCurrency(normalizedValue), 'Выручка'];
+                                                        if (name === 'orders') return [formatNumber(normalizedValue), 'Продажи'];
+                                                        return [String(normalizedValue), String(name ?? '')];
                                                     }}
                                                 />
                                                 <Bar dataKey="revenue" fill={SALES_BAR_COLOR} radius={[8, 8, 0, 0]} />
@@ -472,7 +480,7 @@ const Home: NextPage = (): JSX.Element => {
                                                             <Cell key={idx} fill={PIE_COLORS[idx % PIE_COLORS.length]} />
                                                         ))}
                                                     </Pie>
-                                                    <Tooltip formatter={(v: number | string) => formatNumber(v)} />
+                                                    <Tooltip formatter={(v: ChartTooltipValue) => formatNumber(normalizeChartTooltipValue(v))} />
                                                 </PieChart>
                                             </ResponsiveContainer>
                                         ) : (
@@ -649,7 +657,7 @@ const Home: NextPage = (): JSX.Element => {
                                                         minTickGap={12}
                                                     />
                                                     <YAxis tick={{ fontSize: 11 }} width={54} />
-                                                    <Tooltip formatter={(v: number | string, name) => [formatCurrency(v), String(name)]} />
+                                                    <Tooltip formatter={(v: ChartTooltipValue, name) => [formatCurrency(normalizeChartTooltipValue(v)), String(name ?? '')]} />
                                                     <Legend />
                                                     <Line type="monotone" dataKey="revenue" name="Выручка" stroke="#111827" strokeWidth={2} dot={false} />
                                                     <Line type="monotone" dataKey="expense" name="Расходы" stroke="#ef4444" strokeWidth={2} dot={false} />

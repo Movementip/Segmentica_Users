@@ -310,11 +310,11 @@ const buildRegistryRows = async (
     }
 
     const presentationMaps = new Map<AttachmentEntityType, Map<number, EntityPresentation>>();
-    for (const [entityType, ids] of linkSeedsByType.entries()) {
+    for (const [entityType, ids] of Array.from(linkSeedsByType.entries())) {
         presentationMaps.set(entityType, await fetchEntityPresentationMap(entityType, ids));
     }
 
-    for (const attachment of grouped.values()) {
+    for (const attachment of Array.from(grouped.values())) {
         attachment.links = attachment.links.map((link) => {
             const presentation = presentationMaps.get(link.entity_type)?.get(link.entity_id);
             if (!presentation) return link;

@@ -30,10 +30,10 @@ export default async function handler(
 
         return res.status(200).json({
             message: 'Производные данные пересобраны',
-            ordersProcessed: snapshot.orderIds.length,
-            purchasesProcessed: snapshot.purchaseIds.length,
-            shipmentsProcessed: snapshot.shipmentIds.length,
-            standaloneShipmentsProcessed: snapshot.standaloneShipmentIds.length,
+            ordersProcessed: snapshot.ordersProcessed,
+            purchasesProcessed: snapshot.purchasesProcessed,
+            shipmentsProcessed: snapshot.shipmentsProcessed,
+            standaloneShipmentsProcessed: snapshot.standaloneShipmentsProcessed,
             linkedShipmentFinanceDeleted: snapshot.linkedShipmentFinanceDeleted,
         });
     } catch (error) {

@@ -276,19 +276,22 @@ export const getSupplierAssortmentCatalog = async (
         [normalizedSupplierId]
     );
 
-    return assortmentResult.rows
-        .map((row) => {
-            const productId = normalizeProductId(row.товар_id);
-            if (!productId) return null;
-            return {
-                товар_id: productId,
-                цена: Number(row.цена) || 0,
-                срок_поставки: Math.max(0, Number(row.срок_поставки) || 0),
-                название: String(row.название || '').trim(),
-                артикул: String(row.артикул || '').trim(),
-                единица_измерения: String(row.единица_измерения || 'шт').trim() || 'шт',
-                категория: row.категория == null ? undefined : String(row.категория),
-            };
-        })
-        .filter((item): item is SupplierAssortmentCatalogItem => Boolean(item));
+    const items: SupplierAssortmentCatalogItem[] = [];
+
+    for (const row of assortmentResult.rows) {
+        const productId = normalizeProductId(row.товар_id);
+        if (!productId) continue;
+
+        items.push({
+            товар_id: productId,
+            цена: Number(row.цена) || 0,
+            срок_поставки: Math.max(0, Number(row.срок_поставки) || 0),
+            название: String(row.название || '').trim(),
+            артикул: String(row.артикул || '').trim(),
+            единица_измерения: String(row.единица_измерения || 'шт').trim() || 'шт',
+            категория: row.категория == null ? undefined : String(row.категория),
+        });
+    }
+
+    return items;
 };

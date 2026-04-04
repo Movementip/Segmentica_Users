@@ -122,6 +122,25 @@ type PreviewPageImage = {
     height: number;
 };
 
+type PdfJsModule = {
+    GlobalWorkerOptions: {
+        workerSrc: string;
+    };
+    getDocument: (source: { data: Uint8Array }) => {
+        promise: Promise<{
+            numPages: number;
+            getPage: (pageNumber: number) => Promise<{
+                getViewport: (params: { scale: number }) => { width: number; height: number };
+                render: (params: {
+                    canvasContext: CanvasRenderingContext2D;
+                    viewport: { width: number; height: number };
+                    background: string;
+                }) => { promise: Promise<void> };
+            }>;
+        }>;
+    };
+};
+
 const PREVIEW_ZOOM_MIN = 0.6;
 const PREVIEW_ZOOM_MAX = 2;
 const PREVIEW_ZOOM_STEP = 0.2;
@@ -321,7 +340,8 @@ function AdminFinancePage(): JSX.Element {
                 setPreviewError(null);
                 setPreviewPages([]);
 
-                const pdfjs = await import(/* webpackIgnore: true */ '/pdfjs/pdf.mjs');
+                const loadPdfJs = Function('return import("/pdfjs/pdf.mjs")') as () => Promise<PdfJsModule>;
+                const pdfjs = await loadPdfJs();
                 pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/pdf.worker.min.mjs';
                 let fileBytes = previewPdfBytesRef.current;
 
@@ -336,7 +356,11 @@ function AdminFinancePage(): JSX.Element {
                     previewPdfBytesRef.current = fileBytes;
                     previewPdfSourceUrlRef.current = statementPreview.previewUrl;
 
-                    const pdfObjectUrl = window.URL.createObjectURL(new Blob([fileBytes], { type: 'application/pdf' }));
+                    const pdfBuffer = fileBytes.buffer.slice(
+                        fileBytes.byteOffset,
+                        fileBytes.byteOffset + fileBytes.byteLength
+                    ) as ArrayBuffer;
+                    const pdfObjectUrl = window.URL.createObjectURL(new Blob([pdfBuffer], { type: 'application/pdf' }));
                     setPreviewPdfObjectUrl((current) => {
                         if (current) {
                             window.URL.revokeObjectURL(current);

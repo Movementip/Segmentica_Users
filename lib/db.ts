@@ -91,7 +91,7 @@ const diffRows = (beforeRow: any, afterRow: any): { field: string; from: any; to
 
     const keys = new Set<string>([...Object.keys(b), ...Object.keys(a)]);
     const changes: { field: string; from: any; to: any }[] = [];
-    for (const k of keys) {
+    for (const k of Array.from(keys)) {
         if (ignore.has(k)) continue;
         const from = (b as any)[k];
         const to = (a as any)[k];

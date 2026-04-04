@@ -146,8 +146,7 @@ export async function syncOrderPositionsFromLinkedPurchases(db: DbLike, orderId:
         const supplyMode = String(existing.supply_mode || '').trim().toLowerCase() || 'purchase';
         const isDirectPurchaseDriven = executionMode === 'direct'
             && (supplyMode === '' || supplyMode === 'auto' || supplyMode === 'purchase');
-        const canPromoteLegacyAutoPosition = executionMode === 'warehouse'
-            && (supplyMode === '' || supplyMode === 'auto')
+        const canPromoteLegacyAutoPosition = (supplyMode === '' || supplyMode === 'auto')
             && aggregatedProductIds.has(productId)
             && !protectedLegacyAutoProductIds.has(productId);
         const isPurchaseDriven = executionMode === 'direct'
@@ -198,8 +197,7 @@ export async function syncOrderPositionsFromLinkedPurchases(db: DbLike, orderId:
         const existingSupplyMode = String(existing.supply_mode || '').trim().toLowerCase();
         const isDirectPurchaseDriven = executionMode === 'direct'
             && (existingSupplyMode === '' || existingSupplyMode === 'auto' || existingSupplyMode === 'purchase');
-        const canPromoteLegacyAutoPosition = executionMode === 'warehouse'
-            && (existingSupplyMode === '' || existingSupplyMode === 'auto')
+        const canPromoteLegacyAutoPosition = (existingSupplyMode === '' || existingSupplyMode === 'auto')
             && !protectedLegacyAutoProductIds.has(productId);
         const shouldTreatAsPurchaseDriven = executionMode === 'direct'
             ? (existingSupplyMode === '' || existingSupplyMode === 'auto' || existingSupplyMode === 'purchase')

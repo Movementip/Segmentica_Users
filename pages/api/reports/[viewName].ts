@@ -30,7 +30,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     try {
         // Используем параметризованный запрос с экранированием имени представления
         // Execute the query
-        const result = await query<ReportData[]>(`SELECT * FROM "${viewName}"`);
+        const result = await query(`SELECT * FROM "${viewName}"`);
         res.status(200).json({ data: result.rows });
     } catch (error) {
         console.error('Ошибка при получении данных:', error);

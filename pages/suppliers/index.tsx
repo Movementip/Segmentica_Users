@@ -300,7 +300,8 @@ function SuppliersPage(): JSX.Element {
         );
     };
 
-    const formatDate = (dateString: string) => {
+    const formatDate = (dateString?: string | null) => {
+        if (!dateString) return '—';
         return new Date(dateString).toLocaleDateString('ru-RU', {
             year: 'numeric',
             month: '2-digit',

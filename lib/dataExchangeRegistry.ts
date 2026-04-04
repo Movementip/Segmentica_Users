@@ -1,5 +1,4 @@
 import * as XLSX from 'xlsx';
-import type { PoolClient } from 'pg';
 import { withTransaction, query } from './db';
 import {
     DATA_EXCHANGE_CATALOGS,
@@ -8,7 +7,9 @@ import {
     type DataExchangeFormat,
 } from './dataExchangeConfig';
 
-type Queryable = Pick<PoolClient, 'query'>;
+type Queryable = {
+    query: (text: string, params?: any[]) => Promise<any>;
+};
 
 type DataExchangeSummary = {
     created: number;

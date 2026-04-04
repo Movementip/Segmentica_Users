@@ -301,8 +301,8 @@ const getVacationSummaryForMonth = async (employeeId: number, periodFrom: Date, 
         if (rangeFrom > rangeTo) continue;
         const days = Math.floor((rangeTo.getTime() - rangeFrom.getTime()) / (24 * 60 * 60 * 1000)) + 1;
         count += days;
-        minDate = !minDate || rangeFrom < minDate ? rangeFrom : minDate;
-        maxDate = !maxDate || rangeTo > maxDate ? rangeTo : maxDate;
+        minDate = !minDate || rangeFrom.getTime() < minDate.getTime() ? rangeFrom : minDate;
+        maxDate = !maxDate || rangeTo.getTime() > maxDate.getTime() ? rangeTo : maxDate;
     }
 
     return { count, dateFrom: minDate, dateTo: maxDate };
@@ -633,7 +633,8 @@ export const buildFinancePayslipBatchTemplatePayload = async (
     const sheetPageSetup: FinanceStatementTemplatePayload['sheetPageSetup'] = [];
     const sheetCopies: Array<{ sourceSheetName: string; targetSheetName: string }> = [];
 
-    for (const [index, entry] of entries.entries()) {
+    for (let index = 0; index < entries.length; index += 1) {
+        const entry = entries[index];
         const sheetName = index === 0 ? 'Лист1' : `Лист${index + 1}`;
         if (index > 0) {
             sheetCopies.push({ sourceSheetName: 'Лист1', targetSheetName: sheetName });

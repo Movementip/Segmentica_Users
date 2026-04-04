@@ -122,7 +122,7 @@ export function ReferenceDataActions({
             <Flex align="center" gap="2" wrap="wrap" className={styles.actions}>
                 {canExport ? (
                     <DropdownMenu.Root>
-                        <DropdownMenu.Trigger asChild>
+                        <DropdownMenu.Trigger>
                             <Button
                                 type="button"
                                 variant="surface"
@@ -152,7 +152,7 @@ export function ReferenceDataActions({
 
                 {canImport ? (
                     <DropdownMenu.Root>
-                        <DropdownMenu.Trigger asChild>
+                        <DropdownMenu.Trigger>
                             <Button
                                 type="button"
                                 variant="surface"

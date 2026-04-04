@@ -43,7 +43,7 @@ type RolePermissionLink = {
 type UserPermissionLink = {
     user_id: number;
     permission_id: number;
-    allowed: boolean;
+    effect: 'allow' | 'deny';
 };
 
 type EmployeeCandidate = {

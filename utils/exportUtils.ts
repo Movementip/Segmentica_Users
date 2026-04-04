@@ -36,15 +36,6 @@ declare global {
     }
 }
 
-import { robotoRegularBase64 } from './robotoFont';
-
-declare module 'jspdf' {
-    interface jsPDF {
-        addFileToVFS: (filename: string, filecontent: string) => jsPDF;
-        addFont: (postScriptName: string, id: string, fontStyle: string, fontWeight?: string | number, encoding?: 'StandardEncoding' | 'MacRomanEncoding' | 'Identity-H' | 'WinAnsiEncoding', isStandardFont?: boolean) => string;
-    }
-}
-
 
 
 
