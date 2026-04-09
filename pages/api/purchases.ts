@@ -240,9 +240,15 @@ export default async function handler(
           SELECT 
             пз.*,
             т."название" as товар_название,
-            т."артикул" as товар_артикул
+            т."артикул" as товар_артикул,
+            т."категория" as товар_категория,
+            т."тип_номенклатуры" as товар_тип_номенклатуры,
+            т."единица_измерения" as товар_единица_измерения,
+            ндс."название" as ндс_название,
+            COALESCE(ндс."ставка", 0)::numeric as ндс_ставка
           FROM "Позиции_закупки" пз
           LEFT JOIN "Товары" т ON пз."товар_id" = т.id
+          LEFT JOIN "Ставки_НДС" ндс ON ндс.id = пз."ндс_id"
           WHERE пз."закупка_id" = $1
         `, [id]);
 
@@ -250,6 +256,7 @@ export default async function handler(
                 const positions = positionsResult.rows.map(position => ({
                     ...position,
                     ндс_id: position.ндс_id == null ? null : Number(position.ндс_id),
+                    ндс_ставка: Number(position.ндс_ставка) || 0,
                     сумма: position.количество * position.цена
                 }));
 

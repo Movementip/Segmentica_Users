@@ -6,14 +6,36 @@ import { withLayout } from '../../layout/Layout';
 import styles from './ShipmentDetail.module.css';
 import shipmentEditorStyles from './Shipments.module.css';
 import deleteConfirmationStyles from '../../components/DeleteConfirmation.module.css';
+import { BsFillFileEarmarkPdfFill } from 'react-icons/bs';
 import { Badge, Box, Button, Card, Dialog, DropdownMenu, Flex, Grid, Select, Separator, Table, Text, TextField } from '@radix-ui/themes';
-import { FiTruck, FiEye, FiArrowLeft, FiDownload, FiEdit2, FiFile, FiFileText, FiPaperclip, FiPrinter, FiRefreshCw, FiTrash2, FiUploadCloud } from 'react-icons/fi';
+import {
+    FiTruck,
+    FiEye,
+    FiArrowLeft,
+    FiChevronDown,
+    FiDownload,
+    FiEdit2,
+    FiExternalLink,
+    FiFile,
+    FiMinus,
+    FiPaperclip,
+    FiPlus,
+    FiPrinter,
+    FiTrash2,
+    FiUploadCloud,
+    FiX,
+} from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
 import { calculateVatAmountsFromLine, DEFAULT_VAT_RATE_ID, getVatRateOption, VAT_RATE_OPTIONS } from '../../lib/vat';
 import modalStyles from '../../components/Modal.module.css';
 import { getShipmentDeliveryLabel } from '../../lib/logisticsDeliveryLabels';
 import OrderSearchSelect from '../../components/OrderSearchSelect';
+import {
+    getAvailableShipmentDocumentDefinitions,
+    type ShipmentDocumentDefinition,
+    type ShipmentDocumentKey,
+} from '../../lib/shipmentDocumentDefinitions';
 
 interface ShipmentDetail {
     id: number;
@@ -67,6 +89,7 @@ interface OrderPosition {
     товар_название: string;
     товар_артикул: string;
     товар_категория?: string;
+    товар_тип_номенклатуры?: string;
     товар_единица_измерения: string;
 }
 
@@ -85,6 +108,43 @@ interface ManualShipmentPosition {
     цена: number;
     ндс_id: number;
 }
+
+type ShipmentDocumentPreviewState = {
+    key: ShipmentDocumentKey;
+    title: string;
+    description: string;
+    previewUrl: string;
+    excelUrl: string;
+};
+
+type PreviewPageImage = {
+    src: string;
+    width: number;
+    height: number;
+};
+
+type PdfJsModule = {
+    GlobalWorkerOptions: {
+        workerSrc: string;
+    };
+    getDocument: (source: { data: Uint8Array }) => {
+        promise: Promise<{
+            numPages: number;
+            getPage: (pageNumber: number) => Promise<{
+                getViewport: (params: { scale: number }) => { width: number; height: number };
+                render: (params: {
+                    canvasContext: CanvasRenderingContext2D;
+                    viewport: { width: number; height: number };
+                    background: string;
+                }) => { promise: Promise<void> };
+            }>;
+        }>;
+    };
+};
+
+const PREVIEW_ZOOM_MIN = 0.6;
+const PREVIEW_ZOOM_MAX = 2;
+const PREVIEW_ZOOM_STEP = 0.2;
 
 const createEmptyManualShipmentPosition = (): ManualShipmentPosition => ({
     товар_id: 0,
@@ -118,6 +178,17 @@ function ShipmentDetailPage(): JSX.Element {
     const fileInputRef = useRef<HTMLInputElement | null>(null);
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
     const [previewAttachment, setPreviewAttachment] = useState<AttachmentItem | null>(null);
+    const [documentPreview, setDocumentPreview] = useState<ShipmentDocumentPreviewState | null>(null);
+    const [documentPreviewPages, setDocumentPreviewPages] = useState<PreviewPageImage[]>([]);
+    const [documentPreviewLoading, setDocumentPreviewLoading] = useState(false);
+    const [documentPreviewError, setDocumentPreviewError] = useState<string | null>(null);
+    const [documentPreviewPdfObjectUrl, setDocumentPreviewPdfObjectUrl] = useState<string | null>(null);
+    const [documentPreviewZoom, setDocumentPreviewZoom] = useState(1);
+    const [isShipmentPrintMenuOpen, setIsShipmentPrintMenuOpen] = useState(false);
+    const documentPreviewPrintFrameRef = useRef<HTMLIFrameElement | null>(null);
+    const documentPreviewStageRef = useRef<HTMLDivElement | null>(null);
+    const documentPreviewPdfBytesRef = useRef<Uint8Array | null>(null);
+    const documentPreviewPdfSourceUrlRef = useRef<string | null>(null);
     const [formData, setFormData] = useState({
         заявка_id: 0,
         использовать_доставку: true,
@@ -142,6 +213,8 @@ function ShipmentDetailPage(): JSX.Element {
     const canShipmentOrderView = Boolean(user?.permissions?.includes('shipments.order.view'));
     const canShipmentTrack = Boolean(user?.permissions?.includes('shipments.track'));
     const canShipmentPrint = Boolean(user?.permissions?.includes('shipments.print'));
+    const canShipmentExportPdf = Boolean(user?.permissions?.includes('shipments.export.pdf'));
+    const canShipmentExportExcel = Boolean(user?.permissions?.includes('shipments.export.excel'));
 
     const canShipmentsAttachmentsView = Boolean(user?.permissions?.includes('shipments.attachments.view'));
     const canShipmentsAttachmentsUpload = Boolean(user?.permissions?.includes('shipments.attachments.upload'));
@@ -150,6 +223,26 @@ function ShipmentDetailPage(): JSX.Element {
     const canShipmentsPositionsView = Boolean(user?.permissions?.includes('shipments.positions.view'));
 
     const canGoToOrder = canOrdersView && canShipmentOrderView;
+    const canPreviewShipmentDocuments = canShipmentPrint || canShipmentExportPdf;
+    const canUseShipmentDocumentCenter = canPreviewShipmentDocuments || canShipmentExportExcel;
+
+    const availableShipmentDocuments = useMemo<ShipmentDocumentDefinition[]>(() => {
+        if (!shipment) return [];
+        return getAvailableShipmentDocumentDefinitions({
+            nomenclatureTypes: (positions || []).map((position) => position.товар_тип_номенклатуры || ''),
+            usesDelivery: shipment.использовать_доставку !== false,
+        });
+    }, [positions, shipment]);
+
+    const buildShipmentDocumentUrl = useCallback(
+        (documentKey: ShipmentDocumentKey, format: 'pdf' | 'excel', disposition: 'inline' | 'attachment') => {
+            const shipmentId = Number(shipment?.id);
+            if (!Number.isInteger(shipmentId) || shipmentId <= 0) return '';
+            const params = new URLSearchParams({ format, disposition });
+            return `/api/shipments/${shipmentId}/documents/${documentKey}?${params.toString()}`;
+        },
+        [shipment?.id]
+    );
 
     const formatDateTime = (dateString: string) => {
         if (!dateString) return '-';
@@ -608,88 +701,126 @@ function ShipmentDetailPage(): JSX.Element {
         return null;
     }, []);
 
-    const handlePrintDocumentsWord = useCallback(async (s: ShipmentDetail) => {
-        const shipDate = s.дата_отгрузки ? new Date(s.дата_отгрузки).toLocaleDateString('ru-RU') : '-';
-        const shipTime = s.дата_отгрузки ? new Date(s.дата_отгрузки).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }) : '';
-        const costText = getCostText(s);
-        const statusText = getStatusText((s.статус || '').toLowerCase());
-        const orderText = s.заявка_id
-            ? (s.заявка_номер ? `№${s.заявка_номер}` : `#${s.заявка_id}`)
-            : 'Без заявки';
-        const transportText = getTransportText(s);
-        const trackText = s.использовать_доставку === false ? 'Не используется' : (s.номер_отслеживания || 'Не указан');
+    const openShipmentDocumentPreview = (documentDefinition: ShipmentDocumentDefinition) => {
+        if (!canPreviewShipmentDocuments) {
+            if (canShipmentExportExcel) {
+                const excelUrl = buildShipmentDocumentUrl(documentDefinition.key, 'excel', 'attachment');
+                if (excelUrl) {
+                    window.open(excelUrl, '_blank', 'noopener,noreferrer');
+                }
+                return;
+            }
+            setError('Нет доступа');
+            return;
+        }
 
-        const htmlContent = `
-    <html xmlns:o='urn:schemas-microsoft-com:office:office'
-          xmlns:w='urn:schemas-microsoft-com:office:word'
-          xmlns='http://www.w3.org/TR/REC-html40'>
-    <head>
-      <meta charset='utf-8'>
-      <title>Отгрузка №${s.id}</title>
-      <style>
-        body { font-family: Arial, sans-serif; margin: 40px; line-height: 1.6; color: #111; }
-        h1 { text-align: center; margin: 0 0 20px; }
-        .meta { margin: 16px 0 24px; }
-        .meta-row { display: flex; gap: 16px; margin: 6px 0; }
-        .label { width: 180px; color: #555; }
-        .value { flex: 1; }
-        table { width: 100%; border-collapse: collapse; margin: 18px 0; }
-        th { background-color: #f3f3f3; padding: 10px; text-align: left; border: 1px solid #ddd; }
-        td { padding: 10px; border: 1px solid #ddd; }
-        .signature { margin-top: 80px; }
-        .signature-line { display: inline-block; width: 220px; border-top: 1px solid #000; margin: 5px 20px 0 0; position: relative; top: -5px; }
-        .signature-label { display: inline-block; width: 220px; margin-right: 20px; }
-      </style>
-    </head>
-    <body>
-      <h1>Отгрузка №${s.id}</h1>
-      <div class='meta'>
-        <div class='meta-row'><div class='label'>Заявка</div><div class='value'>${orderText}</div></div>
-        <div class='meta-row'><div class='label'>Транспортная компания</div><div class='value'>${transportText}</div></div>
-        <div class='meta-row'><div class='label'>Номер отслеживания</div><div class='value'>${trackText}</div></div>
-        <div class='meta-row'><div class='label'>Дата отгрузки</div><div class='value'>${shipDate}${shipTime ? ` ${shipTime}` : ''}</div></div>
-        <div class='meta-row'><div class='label'>Стоимость доставки</div><div class='value'>${costText}</div></div>
-        <div class='meta-row'><div class='label'>Статус</div><div class='value'>${statusText}</div></div>
-      </div>
+        const previewUrl = buildShipmentDocumentUrl(documentDefinition.key, 'pdf', 'inline');
+        const excelUrl = buildShipmentDocumentUrl(documentDefinition.key, 'excel', 'attachment');
+        if (!previewUrl || !excelUrl) return;
 
-      <table>
-        <thead>
-          <tr>
-            <th>Параметр</th>
-            <th>Значение</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr><td>ID отгрузки</td><td>${s.id}</td></tr>
-          <tr><td>ID заявки</td><td>${s.заявка_id || '—'}</td></tr>
-          <tr><td>ID ТК</td><td>${s.транспорт_id}</td></tr>
-        </tbody>
-      </table>
-
-      <div class='signature'>
-        <div>
-          <span class='signature-label'>Ответственный</span>
-          <span class='signature-line'></span>
-          <span>(______________)</span>
-        </div>
-      </div>
-    </body>
-    </html>
-  `;
-
-        const blob = new Blob(['\ufeff', htmlContent], {
-            type: 'application/msword;charset=utf-8',
+        setDocumentPreviewZoom(1);
+        setDocumentPreview({
+            key: documentDefinition.key,
+            title: 'Предпросмотр документа',
+            description: documentDefinition.title,
+            previewUrl,
+            excelUrl,
         });
+    };
 
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `Отгрузка_${s.id}_${shipDate.replace(/\./g, '-')}.doc`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    }, [getCostText, getTransportText]);
+    const updateDocumentPreviewZoom = (nextZoom: number) => {
+        const normalizedZoom = Math.min(PREVIEW_ZOOM_MAX, Math.max(PREVIEW_ZOOM_MIN, Number(nextZoom.toFixed(2))));
+        setDocumentPreviewZoom(normalizedZoom);
+    };
+
+    const downloadDocumentFile = async (url: string, fileName?: string) => {
+        const response = await fetch(url, { credentials: 'include' });
+        if (!response.ok) {
+            const errorText = await response.text().catch(() => '');
+            throw new Error(errorText || 'Не удалось скачать документ');
+        }
+
+        const disposition = response.headers.get('content-disposition') || '';
+        const filenameMatch = disposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)/i);
+        const resolvedFileName = fileName || (filenameMatch?.[1]
+            ? decodeURIComponent(filenameMatch[1].replace(/"/g, ''))
+            : '');
+
+        const blob = await response.blob();
+        const objectUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        if (resolvedFileName) {
+            link.download = resolvedFileName;
+        }
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(objectUrl);
+    };
+
+    const handlePrintDocumentPreview = () => {
+        if (!documentPreview || !documentPreviewPdfObjectUrl) return;
+
+        if (documentPreviewPrintFrameRef.current) {
+            const frame = documentPreviewPrintFrameRef.current;
+            const printFrame = () => {
+                frame.contentWindow?.focus();
+                frame.contentWindow?.print();
+            };
+
+            if (frame.src !== documentPreviewPdfObjectUrl) {
+                frame.onload = () => {
+                    frame.onload = null;
+                    printFrame();
+                };
+                frame.src = documentPreviewPdfObjectUrl;
+                return;
+            }
+
+            printFrame();
+            return;
+        }
+
+        window.open(documentPreviewPdfObjectUrl, '_blank', 'noopener,noreferrer');
+    };
+
+    const handleDocumentPreviewDownload = (format: 'pdf' | 'excel') => {
+        if (!documentPreview) return;
+
+        if (format === 'pdf') {
+            if (!canShipmentPrint && !canShipmentExportPdf) {
+                setDocumentPreviewError('Нет доступа');
+                return;
+            }
+
+            if (documentPreviewPdfObjectUrl) {
+                const link = document.createElement('a');
+                link.href = documentPreviewPdfObjectUrl;
+                link.download = `${documentPreview.description}.pdf`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                return;
+            }
+
+            void downloadDocumentFile(buildShipmentDocumentUrl(documentPreview.key, 'pdf', 'attachment'))
+                .catch((downloadError) => {
+                    setDocumentPreviewError(downloadError instanceof Error ? downloadError.message : 'Не удалось скачать PDF');
+                });
+            return;
+        }
+
+        if (!canShipmentExportExcel) {
+            setDocumentPreviewError('Нет доступа');
+            return;
+        }
+
+        void downloadDocumentFile(documentPreview.excelUrl)
+            .catch((downloadError) => {
+                setDocumentPreviewError(downloadError instanceof Error ? downloadError.message : 'Не удалось скачать Excel-документ');
+            });
+    };
 
     const fetchShipment = useCallback(async () => {
         if (!id) return;
@@ -749,6 +880,138 @@ function ShipmentDetailPage(): JSX.Element {
     useEffect(() => {
         fetchOrdersAndTransports();
     }, [fetchOrdersAndTransports]);
+
+    useEffect(() => {
+        if (!documentPreview) return undefined;
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.body.style.overflow = previousOverflow;
+        };
+    }, [documentPreview]);
+
+    useEffect(() => {
+        if (!documentPreview) {
+            setDocumentPreviewPages([]);
+            setDocumentPreviewLoading(false);
+            setDocumentPreviewError(null);
+            setDocumentPreviewZoom(1);
+            if (documentPreviewPrintFrameRef.current) {
+                documentPreviewPrintFrameRef.current.removeAttribute('src');
+            }
+            documentPreviewPdfBytesRef.current = null;
+            documentPreviewPdfSourceUrlRef.current = null;
+            setDocumentPreviewPdfObjectUrl((current) => {
+                if (current) {
+                    window.URL.revokeObjectURL(current);
+                }
+                return null;
+            });
+            return undefined;
+        }
+
+        let cancelled = false;
+
+        const renderPreview = async () => {
+            try {
+                setDocumentPreviewLoading(true);
+                setDocumentPreviewError(null);
+                setDocumentPreviewPages([]);
+
+                const loadPdfJs = Function('return import("/pdfjs/pdf.mjs")') as () => Promise<PdfJsModule>;
+                const pdfjs = await loadPdfJs();
+                pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/pdf.worker.min.mjs';
+                let fileBytes = documentPreviewPdfBytesRef.current;
+
+                if (!fileBytes || documentPreviewPdfSourceUrlRef.current !== documentPreview.previewUrl) {
+                    const response = await fetch(documentPreview.previewUrl, { credentials: 'include' });
+                    if (!response.ok) {
+                        const errorText = await response.text().catch(() => '');
+                        throw new Error(errorText || 'Не удалось загрузить PDF для предпросмотра');
+                    }
+
+                    fileBytes = new Uint8Array(await response.arrayBuffer());
+                    documentPreviewPdfBytesRef.current = fileBytes;
+                    documentPreviewPdfSourceUrlRef.current = documentPreview.previewUrl;
+
+                    const pdfBuffer = fileBytes.buffer.slice(
+                        fileBytes.byteOffset,
+                        fileBytes.byteOffset + fileBytes.byteLength
+                    ) as ArrayBuffer;
+                    const pdfObjectUrl = window.URL.createObjectURL(new Blob([pdfBuffer], { type: 'application/pdf' }));
+                    setDocumentPreviewPdfObjectUrl((current) => {
+                        if (current) {
+                            window.URL.revokeObjectURL(current);
+                        }
+                        return pdfObjectUrl;
+                    });
+                }
+
+                const loadingTask = pdfjs.getDocument({ data: fileBytes.slice() });
+                const pdf = await loadingTask.promise;
+
+                const availableWidth = Math.max((documentPreviewStageRef.current?.clientWidth ?? 1200) - 8, 320);
+                const pages: PreviewPageImage[] = [];
+
+                for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+                    const page = await pdf.getPage(pageNumber);
+                    const baseViewport = page.getViewport({ scale: 1 });
+                    const scale = (availableWidth / baseViewport.width) * documentPreviewZoom;
+                    const viewport = page.getViewport({ scale });
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d', { alpha: false });
+
+                    if (!context) {
+                        throw new Error('Не удалось подготовить canvas для предпросмотра PDF');
+                    }
+
+                    const outputScale = typeof window !== 'undefined'
+                        ? Math.min(window.devicePixelRatio || 1, 2)
+                        : 1;
+
+                    canvas.width = Math.floor(viewport.width * outputScale);
+                    canvas.height = Math.floor(viewport.height * outputScale);
+
+                    context.fillStyle = '#ffffff';
+                    context.fillRect(0, 0, canvas.width, canvas.height);
+
+                    if (outputScale !== 1) {
+                        context.setTransform(outputScale, 0, 0, outputScale, 0, 0);
+                    }
+
+                    await page.render({
+                        canvasContext: context,
+                        viewport,
+                        background: 'rgb(255,255,255)',
+                    }).promise;
+
+                    pages.push({
+                        src: canvas.toDataURL('image/png'),
+                        width: viewport.width,
+                        height: viewport.height,
+                    });
+                }
+
+                if (!cancelled) {
+                    setDocumentPreviewPages(pages);
+                }
+            } catch (previewError) {
+                if (!cancelled) {
+                    setDocumentPreviewError(previewError instanceof Error ? previewError.message : 'Не удалось открыть предпросмотр PDF');
+                }
+            } finally {
+                if (!cancelled) {
+                    setDocumentPreviewLoading(false);
+                }
+            }
+        };
+
+        void renderPreview();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [documentPreview, documentPreviewZoom]);
 
     const handleSubmitEdit = useCallback(async (e: React.FormEvent) => {
         e.preventDefault();
@@ -913,37 +1176,34 @@ function ShipmentDetailPage(): JSX.Element {
                             </Button>
                         </Link>
 
-                        {canShipmentPrint ? (
-                            <Button
-                                onClick={() => window.print()}
-                                variant="surface"
-                                color="gray"
-                                highContrast
-                                className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton} ${styles.noPrint}`}
-                            >
-                                <FiPrinter className={styles.icon} />
-                                Печать
-                            </Button>
-                        ) : null}
-
-                        {canShipmentPrint ? (
-                            <Button
-                                onClick={async () => {
-                                    try {
-                                        await handlePrintDocumentsWord(shipment);
-                                    } catch (err) {
-                                        console.error(err);
-                                        setError(err instanceof Error ? err.message : 'Ошибка печати документов');
-                                    }
-                                }}
-                                variant="surface"
-                                color="gray"
-                                highContrast
-                                className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton} ${styles.noPrint}`}
-                            >
-                                <FiFileText className={styles.icon} />
-                                Word
-                            </Button>
+                        {canUseShipmentDocumentCenter && availableShipmentDocuments.length ? (
+                            <DropdownMenu.Root open={isShipmentPrintMenuOpen} onOpenChange={setIsShipmentPrintMenuOpen}>
+                                <DropdownMenu.Trigger>
+                                    <Button
+                                        variant="surface"
+                                        color="gray"
+                                        highContrast
+                                        className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton} ${styles.noPrint}`}
+                                    >
+                                        <FiPrinter className={styles.icon} />
+                                        Печать
+                                        <FiChevronDown className={styles.icon} />
+                                    </Button>
+                                </DropdownMenu.Trigger>
+                                <DropdownMenu.Content align="end" sideOffset={8}>
+                                    {availableShipmentDocuments.map((documentDefinition) => (
+                                        <DropdownMenu.Item
+                                            key={documentDefinition.key}
+                                            onSelect={() => {
+                                                setIsShipmentPrintMenuOpen(false);
+                                                openShipmentDocumentPreview(documentDefinition);
+                                            }}
+                                        >
+                                            {documentDefinition.title}
+                                        </DropdownMenu.Item>
+                                    ))}
+                                </DropdownMenu.Content>
+                            </DropdownMenu.Root>
                         ) : null}
 
                         {canGoToOrder ? (
@@ -1267,6 +1527,136 @@ function ShipmentDetailPage(): JSX.Element {
                     </Flex>
                 </Dialog.Content>
             </Dialog.Root>
+
+            {documentPreview ? (
+                <div className={styles.previewScreen}>
+                    <div className={styles.previewBackdrop} />
+                    <div className={styles.previewPanel} role="dialog" aria-modal="true" aria-label={documentPreview.title}>
+                        <div className={styles.previewPanelHeader}>
+                            <div className={styles.previewPanelTitleBlock}>
+                                <h2 className={styles.previewPanelTitle}>{documentPreview.title}</h2>
+                                <Text as="div" size="3" color="gray">
+                                    {documentPreview.description}
+                                </Text>
+                            </div>
+                            <button
+                                type="button"
+                                className={styles.previewCloseButton}
+                                onClick={() => setDocumentPreview(null)}
+                                aria-label="Закрыть предпросмотр"
+                            >
+                                <FiX />
+                            </button>
+                        </div>
+
+                        <div className={styles.previewToolbar}>
+                            {canShipmentPrint ? (
+                                <Button
+                                    variant="surface"
+                                    color="gray"
+                                    highContrast
+                                    className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
+                                    onClick={handlePrintDocumentPreview}
+                                    disabled={!documentPreviewPdfObjectUrl}
+                                >
+                                    <FiPrinter className={styles.icon} />
+                                    Напечатать
+                                </Button>
+                            ) : null}
+                            {canShipmentExportPdf ? (
+                                <Button
+                                    variant="surface"
+                                    color="gray"
+                                    highContrast
+                                    className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
+                                    onClick={() => handleDocumentPreviewDownload('pdf')}
+                                >
+                                    <BsFillFileEarmarkPdfFill className={`${styles.icon} ${styles.pdfIcon}`} />
+                                    PDF
+                                </Button>
+                            ) : null}
+                            {canShipmentExportExcel ? (
+                                <Button
+                                    variant="surface"
+                                    color="gray"
+                                    highContrast
+                                    className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
+                                    onClick={() => handleDocumentPreviewDownload('excel')}
+                                >
+                                    <FiFile className={`${styles.icon} ${styles.excelIcon}`} />
+                                    Excel
+                                </Button>
+                            ) : null}
+                            <Button
+                                variant="surface"
+                                color="gray"
+                                highContrast
+                                className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
+                                onClick={() => window.open(documentPreviewPdfObjectUrl || documentPreview.previewUrl, '_blank', 'noopener,noreferrer')}
+                                disabled={!documentPreview.previewUrl}
+                            >
+                                <FiExternalLink className={styles.icon} />
+                                Открыть
+                            </Button>
+                            <div className={styles.previewZoomControls}>
+                                <button
+                                    type="button"
+                                    className={styles.previewZoomButton}
+                                    onClick={() => updateDocumentPreviewZoom(documentPreviewZoom - PREVIEW_ZOOM_STEP)}
+                                    disabled={documentPreviewLoading || documentPreviewZoom <= PREVIEW_ZOOM_MIN}
+                                    aria-label="Уменьшить масштаб"
+                                >
+                                    <FiMinus />
+                                </button>
+                                <button
+                                    type="button"
+                                    className={styles.previewZoomValue}
+                                    onClick={() => updateDocumentPreviewZoom(1)}
+                                    disabled={documentPreviewLoading || documentPreviewZoom === 1}
+                                    aria-label="Сбросить масштаб"
+                                >
+                                    {Math.round(documentPreviewZoom * 100)}%
+                                </button>
+                                <button
+                                    type="button"
+                                    className={styles.previewZoomButton}
+                                    onClick={() => updateDocumentPreviewZoom(documentPreviewZoom + PREVIEW_ZOOM_STEP)}
+                                    disabled={documentPreviewLoading || documentPreviewZoom >= PREVIEW_ZOOM_MAX}
+                                    aria-label="Увеличить масштаб"
+                                >
+                                    <FiPlus />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className={styles.previewCanvas}>
+                            <div className={styles.previewStage} ref={documentPreviewStageRef}>
+                                {documentPreviewLoading ? (
+                                    <div className={styles.previewLoading}>Готовим предпросмотр PDF...</div>
+                                ) : documentPreviewError ? (
+                                    <div className={styles.previewLoading}>{documentPreviewError}</div>
+                                ) : (
+                                    <div className={styles.previewPages}>
+                                        {documentPreviewPages.map((page, index) => (
+                                            <Image
+                                                key={`${documentPreview.previewUrl}-${index + 1}`}
+                                                src={page.src}
+                                                alt={`${documentPreview.description}, страница ${index + 1}`}
+                                                width={Math.max(1, Math.round(page.width))}
+                                                height={Math.max(1, Math.round(page.height))}
+                                                unoptimized
+                                                sizes={`${Math.max(1, Math.round(page.width))}px`}
+                                                className={styles.previewPageImage}
+                                            />
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                    <iframe ref={documentPreviewPrintFrameRef} title="Печать документа" className={styles.hiddenPrintFrame} />
+                </div>
+            ) : null}
 
             {canShipmentsPositionsView ? (
                 <div className={styles.sectionBlock}>

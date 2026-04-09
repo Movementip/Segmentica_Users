@@ -1,15 +1,29 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import Link from 'next/link';
+import Image from 'next/image';
 import { withLayout } from '../../layout/Layout';
 import { Htag } from '../../components';
 import EditPurchaseModal from '../../components/EditPurchaseModal';
 import deleteConfirmationStyles from '../../components/DeleteConfirmation.module.css';
-import { exportToExcel, exportToWord } from '../../utils/exportUtils';
 import styles from './PurchaseDetail.module.css';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
-import { FiArrowLeft, FiDownload, FiEdit2, FiEye, FiFile, FiFileText, FiPaperclip, FiPrinter, FiTrash2, FiUploadCloud } from 'react-icons/fi';
+import { BsFillFileEarmarkPdfFill } from 'react-icons/bs';
+import {
+    FiArrowLeft,
+    FiChevronDown,
+    FiDownload,
+    FiEdit2,
+    FiExternalLink,
+    FiEye,
+    FiFile,
+    FiMinus,
+    FiPaperclip,
+    FiPlus,
+    FiPrinter,
+    FiTrash2,
+    FiUploadCloud,
+    FiX,
+} from 'react-icons/fi';
 import { Badge, Box, Button, Card, Dialog, DropdownMenu, Flex, Grid, Separator, Table, Text } from '@radix-ui/themes';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
@@ -17,12 +31,18 @@ import { calculateVatAmountsFromLine, getVatRateOption } from '../../lib/vat';
 import { getClientContragentTypeLabel, normalizeClientContragentType } from '../../lib/clientContragents';
 import { getSupplierContragentTypeLabel, normalizeSupplierContragentType } from '../../lib/supplierContragents';
 import { getPurchaseDeliveryLabel } from '../../lib/logisticsDeliveryLabels';
+import {
+    getAvailablePurchaseDocumentDefinitions,
+    type PurchaseDocumentDefinition,
+    type PurchaseDocumentKey,
+} from '../../lib/purchaseDocumentDefinitions';
 
 interface PurchasePosition {
     id: number;
     товар_id: number;
     товар_название: string;
-    товар_артикул: string;
+    товар_артикул: string | null;
+    товар_тип_номенклатуры?: string;
     товар_единица_измерения: string;
     количество: number;
     цена: number;
@@ -100,6 +120,43 @@ interface AttachmentItem {
     created_at: string;
 }
 
+type PurchaseDocumentPreviewState = {
+    key: PurchaseDocumentKey;
+    title: string;
+    description: string;
+    previewUrl: string;
+    excelUrl: string;
+};
+
+type PreviewPageImage = {
+    src: string;
+    width: number;
+    height: number;
+};
+
+type PdfJsModule = {
+    GlobalWorkerOptions: {
+        workerSrc: string;
+    };
+    getDocument: (source: { data: Uint8Array }) => {
+        promise: Promise<{
+            numPages: number;
+            getPage: (pageNumber: number) => Promise<{
+                getViewport: (params: { scale: number }) => { width: number; height: number };
+                render: (params: {
+                    canvasContext: CanvasRenderingContext2D;
+                    viewport: { width: number; height: number };
+                    background: string;
+                }) => { promise: Promise<void> };
+            }>;
+        }>;
+    };
+};
+
+const PREVIEW_ZOOM_MIN = 0.6;
+const PREVIEW_ZOOM_MAX = 2;
+const PREVIEW_ZOOM_STEP = 0.2;
+
 function PurchaseDetailPage(): JSX.Element {
     const router = useRouter();
     const { user, loading: authLoading } = useAuth();
@@ -120,6 +177,17 @@ function PurchaseDetailPage(): JSX.Element {
 
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
     const [previewAttachment, setPreviewAttachment] = useState<AttachmentItem | null>(null);
+    const [documentPreview, setDocumentPreview] = useState<PurchaseDocumentPreviewState | null>(null);
+    const [documentPreviewPages, setDocumentPreviewPages] = useState<PreviewPageImage[]>([]);
+    const [documentPreviewLoading, setDocumentPreviewLoading] = useState(false);
+    const [documentPreviewError, setDocumentPreviewError] = useState<string | null>(null);
+    const [documentPreviewPdfObjectUrl, setDocumentPreviewPdfObjectUrl] = useState<string | null>(null);
+    const [documentPreviewZoom, setDocumentPreviewZoom] = useState(1);
+    const [isPurchasePrintMenuOpen, setIsPurchasePrintMenuOpen] = useState(false);
+    const documentPreviewPrintFrameRef = useRef<HTMLIFrameElement | null>(null);
+    const documentPreviewStageRef = useRef<HTMLDivElement | null>(null);
+    const documentPreviewPdfBytesRef = useRef<Uint8Array | null>(null);
+    const documentPreviewPdfSourceUrlRef = useRef<string | null>(null);
 
     const canView = Boolean(user?.permissions?.includes('purchases.view'));
     const canEdit = Boolean(user?.permissions?.includes('purchases.edit'));
@@ -129,12 +197,31 @@ function PurchaseDetailPage(): JSX.Element {
     const canPrint = Boolean(user?.permissions?.includes('purchases.print'));
     const canExportPdf = Boolean(user?.permissions?.includes('purchases.export.pdf'));
     const canExportExcel = Boolean(user?.permissions?.includes('purchases.export.excel'));
-    const canExportWord = Boolean(user?.permissions?.includes('purchases.export.word'));
     const canAttachmentsView = Boolean(user?.permissions?.includes('purchases.attachments.view'));
     const canAttachmentsUpload = Boolean(user?.permissions?.includes('purchases.attachments.upload'));
     const canAttachmentsDelete = Boolean(user?.permissions?.includes('purchases.attachments.delete'));
+    const canPreviewPurchaseDocuments = canPrint || canExportPdf;
+    const canUsePurchaseDocumentCenter = canPreviewPurchaseDocuments || canExportExcel;
 
+    const availablePurchaseDocuments = useMemo<PurchaseDocumentDefinition[]>(() => {
+        if (!purchase) return [];
+        return getAvailablePurchaseDocumentDefinitions({
+            nomenclatureTypes: (purchase.позиции || []).map((position) => position.товар_тип_номенклатуры || ''),
+        });
+    }, [purchase]);
 
+    const buildPurchaseDocumentUrl = useCallback(
+        (documentKey: PurchaseDocumentKey, format: 'pdf' | 'excel', disposition: 'inline' | 'attachment') => {
+            const purchaseId = Number(purchase?.id);
+            if (!Number.isInteger(purchaseId) || purchaseId <= 0) return '';
+            const params = new URLSearchParams({
+                format,
+                disposition,
+            });
+            return `/api/purchases/${purchaseId}/documents/${documentKey}?${params.toString()}`;
+        },
+        [purchase?.id]
+    );
 
     const fetchPurchase = useCallback(async () => {
         try {
@@ -163,6 +250,138 @@ function PurchaseDetailPage(): JSX.Element {
             fetchPurchase();
         }
     }, [authLoading, canView, fetchPurchase, id]);
+
+    useEffect(() => {
+        if (!documentPreview) return undefined;
+        const previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+        return () => {
+            document.body.style.overflow = previousOverflow;
+        };
+    }, [documentPreview]);
+
+    useEffect(() => {
+        if (!documentPreview) {
+            setDocumentPreviewPages([]);
+            setDocumentPreviewLoading(false);
+            setDocumentPreviewError(null);
+            setDocumentPreviewZoom(1);
+            if (documentPreviewPrintFrameRef.current) {
+                documentPreviewPrintFrameRef.current.removeAttribute('src');
+            }
+            documentPreviewPdfBytesRef.current = null;
+            documentPreviewPdfSourceUrlRef.current = null;
+            setDocumentPreviewPdfObjectUrl((current) => {
+                if (current) {
+                    window.URL.revokeObjectURL(current);
+                }
+                return null;
+            });
+            return undefined;
+        }
+
+        let cancelled = false;
+
+        const renderPreview = async () => {
+            try {
+                setDocumentPreviewLoading(true);
+                setDocumentPreviewError(null);
+                setDocumentPreviewPages([]);
+
+                const loadPdfJs = Function('return import("/pdfjs/pdf.mjs")') as () => Promise<PdfJsModule>;
+                const pdfjs = await loadPdfJs();
+                pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/pdf.worker.min.mjs';
+                let fileBytes = documentPreviewPdfBytesRef.current;
+
+                if (!fileBytes || documentPreviewPdfSourceUrlRef.current !== documentPreview.previewUrl) {
+                    const response = await fetch(documentPreview.previewUrl, { credentials: 'include' });
+                    if (!response.ok) {
+                        const errorText = await response.text().catch(() => '');
+                        throw new Error(errorText || 'Не удалось загрузить PDF для предпросмотра');
+                    }
+
+                    fileBytes = new Uint8Array(await response.arrayBuffer());
+                    documentPreviewPdfBytesRef.current = fileBytes;
+                    documentPreviewPdfSourceUrlRef.current = documentPreview.previewUrl;
+
+                    const pdfBuffer = fileBytes.buffer.slice(
+                        fileBytes.byteOffset,
+                        fileBytes.byteOffset + fileBytes.byteLength
+                    ) as ArrayBuffer;
+                    const pdfObjectUrl = window.URL.createObjectURL(new Blob([pdfBuffer], { type: 'application/pdf' }));
+                    setDocumentPreviewPdfObjectUrl((current) => {
+                        if (current) {
+                            window.URL.revokeObjectURL(current);
+                        }
+                        return pdfObjectUrl;
+                    });
+                }
+
+                const loadingTask = pdfjs.getDocument({ data: fileBytes.slice() });
+                const pdf = await loadingTask.promise;
+
+                const availableWidth = Math.max((documentPreviewStageRef.current?.clientWidth ?? 1200) - 8, 320);
+                const pages: PreviewPageImage[] = [];
+
+                for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+                    const page = await pdf.getPage(pageNumber);
+                    const baseViewport = page.getViewport({ scale: 1 });
+                    const scale = (availableWidth / baseViewport.width) * documentPreviewZoom;
+                    const viewport = page.getViewport({ scale });
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d', { alpha: false });
+
+                    if (!context) {
+                        throw new Error('Не удалось подготовить canvas для предпросмотра PDF');
+                    }
+
+                    const outputScale = typeof window !== 'undefined'
+                        ? Math.min(window.devicePixelRatio || 1, 2)
+                        : 1;
+
+                    canvas.width = Math.floor(viewport.width * outputScale);
+                    canvas.height = Math.floor(viewport.height * outputScale);
+
+                    context.fillStyle = '#ffffff';
+                    context.fillRect(0, 0, canvas.width, canvas.height);
+
+                    if (outputScale !== 1) {
+                        context.setTransform(outputScale, 0, 0, outputScale, 0, 0);
+                    }
+
+                    await page.render({
+                        canvasContext: context,
+                        viewport,
+                        background: 'rgb(255,255,255)',
+                    }).promise;
+
+                    pages.push({
+                        src: canvas.toDataURL('image/png'),
+                        width: viewport.width,
+                        height: viewport.height,
+                    });
+                }
+
+                if (!cancelled) {
+                    setDocumentPreviewPages(pages);
+                }
+            } catch (previewError) {
+                if (!cancelled) {
+                    setDocumentPreviewError(previewError instanceof Error ? previewError.message : 'Не удалось открыть предпросмотр PDF');
+                }
+            } finally {
+                if (!cancelled) {
+                    setDocumentPreviewLoading(false);
+                }
+            }
+        };
+
+        void renderPreview();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [documentPreview, documentPreviewZoom]);
     if (authLoading) {
         return (
             <Box p="5">
@@ -282,25 +501,6 @@ function PurchaseDetailPage(): JSX.Element {
         }
     };
 
-    const handleExportExcel = () => {
-        if (!canExportExcel) return;
-        if (purchase) {
-            exportToExcel(purchase as any);
-        }
-    };
-
-    const handleExportWord = () => {
-        if (!canExportWord) return;
-        if (purchase) {
-            exportToWord(purchase as any);
-        }
-    };
-
-    const handlePrint = () => {
-        if (!canPrint) return;
-        window.print();
-    };
-
     const formatDate = (dateString: string) => {
         return new Date(dateString).toLocaleDateString('ru-RU', {
             year: 'numeric',
@@ -379,16 +579,6 @@ function PurchaseDetailPage(): JSX.Element {
         };
     };
 
-    const getStatusColor = (status: string) => {
-        switch (status) {
-            case 'новая': return '#2196F3';
-            case 'в обработке': return '#ff9800';
-            case 'получено': return '#4CAF50';
-            case 'отменено': return '#f44336';
-            default: return '#9e9e9e';
-        }
-    };
-
     const getStatusText = (status: string) => {
         switch (status) {
             case 'новая': return 'НОВАЯ';
@@ -399,47 +589,125 @@ function PurchaseDetailPage(): JSX.Element {
         }
     };
 
-    const handleExportPdf = () => {
-        if (!canExportPdf) return;
-        if (!purchase) return;
+    const openPurchaseDocumentPreview = (documentDefinition: PurchaseDocumentDefinition) => {
+        if (!canPreviewPurchaseDocuments) {
+            if (canExportExcel) {
+                const excelUrl = buildPurchaseDocumentUrl(documentDefinition.key, 'excel', 'attachment');
+                if (excelUrl) {
+                    window.open(excelUrl, '_blank', 'noopener,noreferrer');
+                }
+                return;
+            }
+            setError('Нет доступа');
+            return;
+        }
 
-        const doc = new jsPDF({
-            orientation: 'p',
-            unit: 'pt',
-            format: 'a4',
+        const previewUrl = buildPurchaseDocumentUrl(documentDefinition.key, 'pdf', 'inline');
+        const excelUrl = buildPurchaseDocumentUrl(documentDefinition.key, 'excel', 'attachment');
+        if (!previewUrl || !excelUrl) return;
+
+        setDocumentPreviewZoom(1);
+        setDocumentPreview({
+            key: documentDefinition.key,
+            title: 'Предпросмотр документа',
+            description: documentDefinition.title,
+            previewUrl,
+            excelUrl,
         });
+    };
 
-        const title = `Закупка #${purchase.id}`;
-        doc.setFontSize(16);
-        doc.text(title, 40, 60);
+    const updateDocumentPreviewZoom = (nextZoom: number) => {
+        const normalizedZoom = Math.min(PREVIEW_ZOOM_MAX, Math.max(PREVIEW_ZOOM_MIN, Number(nextZoom.toFixed(2))));
+        setDocumentPreviewZoom(normalizedZoom);
+    };
 
-        doc.setFontSize(10);
-        doc.text(`Дата заказа: ${formatDate(purchase.дата_заказа)}`, 40, 84);
-        doc.text(`Статус: ${purchase.статус}`, 40, 100);
-        doc.text(`Поставщик: ${purchase.поставщик_название || 'Не указан'}`, 40, 116);
-        doc.text(`Заявка: ${purchase.заявка_id ? `#${purchase.заявка_id}` : 'Не указана'}`, 40, 132);
+    const downloadDocumentFile = async (url: string, fileName?: string) => {
+        const response = await fetch(url, { credentials: 'include' });
+        if (!response.ok) {
+            const errorText = await response.text().catch(() => '');
+            throw new Error(errorText || 'Не удалось скачать документ');
+        }
 
-        autoTable(doc, {
-            startY: 156,
-            head: [["Товар", "Кол-во", "Цена", "Сумма"]],
-            body: purchase.позиции.map((p) => [
-                p.товар_название,
-                String(p.количество),
-                formatCurrency(p.цена),
-                formatCurrency(p.сумма),
-            ]),
-            styles: { fontSize: 9 },
-            columnStyles: {
-                1: { halign: 'right' },
-                2: { halign: 'right' },
-                3: { halign: 'right' },
-            },
-        });
+        const disposition = response.headers.get('content-disposition') || '';
+        const filenameMatch = disposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)/i);
+        const resolvedFileName = fileName || (filenameMatch?.[1]
+            ? decodeURIComponent(filenameMatch[1].replace(/"/g, ''))
+            : '');
 
-        const finalY = (doc as any).lastAutoTable?.finalY ?? 156;
-        doc.setFontSize(12);
-        doc.text(`Итого: ${formatCurrency(purchase.общая_сумма)}`, 40, finalY + 24);
-        doc.save(`purchase-${purchase.id}.pdf`);
+        const blob = await response.blob();
+        const objectUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        if (resolvedFileName) {
+            link.download = resolvedFileName;
+        }
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(objectUrl);
+    };
+
+    const handlePrintDocumentPreview = () => {
+        if (!documentPreview || !documentPreviewPdfObjectUrl) return;
+
+        if (documentPreviewPrintFrameRef.current) {
+            const frame = documentPreviewPrintFrameRef.current;
+            const printFrame = () => {
+                frame.contentWindow?.focus();
+                frame.contentWindow?.print();
+            };
+
+            if (frame.src !== documentPreviewPdfObjectUrl) {
+                frame.onload = () => {
+                    frame.onload = null;
+                    printFrame();
+                };
+                frame.src = documentPreviewPdfObjectUrl;
+                return;
+            }
+
+            printFrame();
+            return;
+        }
+
+        window.open(documentPreviewPdfObjectUrl, '_blank', 'noopener,noreferrer');
+    };
+
+    const handleDocumentPreviewDownload = (format: 'pdf' | 'excel') => {
+        if (!documentPreview) return;
+
+        if (format === 'pdf') {
+            if (!canPrint && !canExportPdf) {
+                setDocumentPreviewError('Нет доступа');
+                return;
+            }
+
+            if (documentPreviewPdfObjectUrl) {
+                const link = document.createElement('a');
+                link.href = documentPreviewPdfObjectUrl;
+                link.download = `${documentPreview.description}.pdf`;
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                return;
+            }
+
+            void downloadDocumentFile(buildPurchaseDocumentUrl(documentPreview.key, 'pdf', 'attachment'))
+                .catch((downloadError) => {
+                    setDocumentPreviewError(downloadError instanceof Error ? downloadError.message : 'Не удалось скачать PDF');
+                });
+            return;
+        }
+
+        if (!canExportExcel) {
+            setDocumentPreviewError('Нет доступа');
+            return;
+        }
+
+        void downloadDocumentFile(documentPreview.excelUrl)
+            .catch((downloadError) => {
+                setDocumentPreviewError(downloadError instanceof Error ? downloadError.message : 'Не удалось скачать Excel-документ');
+            });
     };
     const handleEditPurchase = async (purchaseData: any) => {
         if (!canEdit) return;
@@ -575,56 +843,34 @@ function PurchaseDetailPage(): JSX.Element {
                             </Link>
                         ) : null}
 
-                        {canPrint ? (
-                            <Button
-                                onClick={handlePrint}
-                                variant="surface"
-                                color="gray"
-                                highContrast
-                                className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton} noPrint`}
-                            >
-                                <FiPrinter className={styles.icon} />
-                                Печать
-                            </Button>
-                        ) : null}
-
-                        {canExportPdf ? (
-                            <Button
-                                onClick={handleExportPdf}
-                                variant="surface"
-                                color="gray"
-                                highContrast
-                                className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton} noPrint`}
-                            >
-                                <FiDownload className={styles.icon} />
-                                PDF
-                            </Button>
-                        ) : null}
-
-                        {canExportExcel ? (
-                            <Button
-                                onClick={handleExportExcel}
-                                variant="surface"
-                                color="gray"
-                                highContrast
-                                className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton} noPrint`}
-                            >
-                                <FiFile className={styles.icon} />
-                                Excel
-                            </Button>
-                        ) : null}
-
-                        {canExportWord ? (
-                            <Button
-                                onClick={handleExportWord}
-                                variant="surface"
-                                color="gray"
-                                highContrast
-                                className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton} noPrint`}
-                            >
-                                <FiFileText className={styles.icon} />
-                                Word
-                            </Button>
+                        {canUsePurchaseDocumentCenter && availablePurchaseDocuments.length ? (
+                            <DropdownMenu.Root open={isPurchasePrintMenuOpen} onOpenChange={setIsPurchasePrintMenuOpen}>
+                                <DropdownMenu.Trigger>
+                                    <Button
+                                        variant="surface"
+                                        color="gray"
+                                        highContrast
+                                        className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton} noPrint`}
+                                    >
+                                        <FiPrinter className={styles.icon} />
+                                        Печать
+                                        <FiChevronDown className={styles.icon} />
+                                    </Button>
+                                </DropdownMenu.Trigger>
+                                <DropdownMenu.Content align="end" sideOffset={8}>
+                                    {availablePurchaseDocuments.map((documentDefinition) => (
+                                        <DropdownMenu.Item
+                                            key={documentDefinition.key}
+                                            onSelect={() => {
+                                                setIsPurchasePrintMenuOpen(false);
+                                                openPurchaseDocumentPreview(documentDefinition);
+                                            }}
+                                        >
+                                            {documentDefinition.title}
+                                        </DropdownMenu.Item>
+                                    ))}
+                                </DropdownMenu.Content>
+                            </DropdownMenu.Root>
                         ) : null}
 
                         {canEdit ? (
@@ -1141,6 +1387,136 @@ function PurchaseDetailPage(): JSX.Element {
                     </div>
                 </div>
             </div>
+
+            {documentPreview ? (
+                <div className={styles.previewScreen}>
+                    <div className={styles.previewBackdrop} />
+                    <div className={styles.previewPanel} role="dialog" aria-modal="true" aria-label={documentPreview.title}>
+                        <div className={styles.previewPanelHeader}>
+                            <div className={styles.previewPanelTitleBlock}>
+                                <h2 className={styles.previewPanelTitle}>{documentPreview.title}</h2>
+                                <Text as="div" size="3" color="gray">
+                                    {documentPreview.description}
+                                </Text>
+                            </div>
+                            <button
+                                type="button"
+                                className={styles.previewCloseButton}
+                                onClick={() => setDocumentPreview(null)}
+                                aria-label="Закрыть предпросмотр"
+                            >
+                                <FiX />
+                            </button>
+                        </div>
+
+                        <div className={styles.previewToolbar}>
+                            {canPrint ? (
+                                <Button
+                                    variant="surface"
+                                    color="gray"
+                                    highContrast
+                                    className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
+                                    onClick={handlePrintDocumentPreview}
+                                    disabled={!documentPreviewPdfObjectUrl}
+                                >
+                                    <FiPrinter className={styles.icon} />
+                                    Напечатать
+                                </Button>
+                            ) : null}
+                            {canExportPdf ? (
+                                <Button
+                                    variant="surface"
+                                    color="gray"
+                                    highContrast
+                                    className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
+                                    onClick={() => handleDocumentPreviewDownload('pdf')}
+                                >
+                                    <BsFillFileEarmarkPdfFill className={`${styles.icon} ${styles.pdfIcon}`} />
+                                    PDF
+                                </Button>
+                            ) : null}
+                            {canExportExcel ? (
+                                <Button
+                                    variant="surface"
+                                    color="gray"
+                                    highContrast
+                                    className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
+                                    onClick={() => handleDocumentPreviewDownload('excel')}
+                                >
+                                    <FiFile className={`${styles.icon} ${styles.excelIcon}`} />
+                                    Excel
+                                </Button>
+                            ) : null}
+                            <Button
+                                variant="surface"
+                                color="gray"
+                                highContrast
+                                className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
+                                onClick={() => window.open(documentPreviewPdfObjectUrl || documentPreview.previewUrl, '_blank', 'noopener,noreferrer')}
+                                disabled={!documentPreview.previewUrl}
+                            >
+                                <FiExternalLink className={styles.icon} />
+                                Открыть
+                            </Button>
+                            <div className={styles.previewZoomControls}>
+                                <button
+                                    type="button"
+                                    className={styles.previewZoomButton}
+                                    onClick={() => updateDocumentPreviewZoom(documentPreviewZoom - PREVIEW_ZOOM_STEP)}
+                                    disabled={documentPreviewLoading || documentPreviewZoom <= PREVIEW_ZOOM_MIN}
+                                    aria-label="Уменьшить масштаб"
+                                >
+                                    <FiMinus />
+                                </button>
+                                <button
+                                    type="button"
+                                    className={styles.previewZoomValue}
+                                    onClick={() => updateDocumentPreviewZoom(1)}
+                                    disabled={documentPreviewLoading || documentPreviewZoom === 1}
+                                    aria-label="Сбросить масштаб"
+                                >
+                                    {Math.round(documentPreviewZoom * 100)}%
+                                </button>
+                                <button
+                                    type="button"
+                                    className={styles.previewZoomButton}
+                                    onClick={() => updateDocumentPreviewZoom(documentPreviewZoom + PREVIEW_ZOOM_STEP)}
+                                    disabled={documentPreviewLoading || documentPreviewZoom >= PREVIEW_ZOOM_MAX}
+                                    aria-label="Увеличить масштаб"
+                                >
+                                    <FiPlus />
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className={styles.previewCanvas}>
+                            <div className={styles.previewStage} ref={documentPreviewStageRef}>
+                                {documentPreviewLoading ? (
+                                    <div className={styles.previewLoading}>Готовим предпросмотр PDF...</div>
+                                ) : documentPreviewError ? (
+                                    <div className={styles.previewLoading}>{documentPreviewError}</div>
+                                ) : (
+                                    <div className={styles.previewPages}>
+                                        {documentPreviewPages.map((page, index) => (
+                                            <Image
+                                                key={`${documentPreview.previewUrl}-${index + 1}`}
+                                                src={page.src}
+                                                alt={`${documentPreview.description}, страница ${index + 1}`}
+                                                width={Math.max(1, Math.round(page.width))}
+                                                height={Math.max(1, Math.round(page.height))}
+                                                unoptimized
+                                                sizes={`${Math.max(1, Math.round(page.width))}px`}
+                                                className={styles.previewPageImage}
+                                            />
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                    <iframe ref={documentPreviewPrintFrameRef} title="Печать документа" className={styles.hiddenPrintFrame} />
+                </div>
+            ) : null}
 
             <EditPurchaseModal
                 isOpen={isEditModalOpen}

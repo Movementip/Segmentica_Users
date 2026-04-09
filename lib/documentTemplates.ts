@@ -7,10 +7,19 @@ export type DocumentTemplateKey =
     | 'finance_payslip'
     | 'finance_timesheet_t13'
     | 'order_invoice'
+    | 'order_invoice_alt'
     | 'order_supply_contract'
+    | 'order_supply_specification'
     | 'order_service_contract'
     | 'order_work_contract'
-    | 'order_outgoing_act';
+    | 'order_outgoing_act'
+    | 'purchase_upd_status_1'
+    | 'purchase_upd_status_2'
+    | 'purchase_torg_12'
+    | 'shipment_upd_status_1'
+    | 'shipment_upd_status_2'
+    | 'shipment_torg_12'
+    | 'shipment_transport_waybill';
 
 export type DocumentTemplateSourceFormat = 'xls' | 'xlsx' | 'doc' | 'docx';
 export type DocumentTemplateRendererKey = 'libreoffice';
@@ -21,10 +30,19 @@ export type DocumentTemplateFillStrategyKey =
     | 'finance_payslip'
     | 'finance_timesheet_t13'
     | 'order_invoice'
+    | 'order_invoice_alt'
     | 'order_supply_contract'
+    | 'order_supply_specification'
     | 'order_service_contract'
     | 'order_work_contract'
-    | 'order_outgoing_act';
+    | 'order_outgoing_act'
+    | 'purchase_upd_status_1'
+    | 'purchase_upd_status_2'
+    | 'purchase_torg_12'
+    | 'shipment_upd_status_1'
+    | 'shipment_upd_status_2'
+    | 'shipment_torg_12'
+    | 'shipment_transport_waybill';
 
 export type DocumentTemplateDefinition = {
     key: DocumentTemplateKey;
@@ -140,6 +158,21 @@ const STATIC_TEMPLATES: Record<DocumentTemplateKey, DocumentTemplateDefinition> 
         versionNo: 1,
         isActive: true,
     },
+    order_invoice_alt: {
+        key: 'order_invoice_alt',
+        name: 'Счет на оплату (вариант 2)',
+        description: 'Альтернативный исходящий счет на оплату по заявке.',
+        sourceFormat: 'docx',
+        rendererKey: 'libreoffice',
+        fillStrategyKey: 'order_invoice_alt',
+        previewMode: 'pdf',
+        pdfPostprocess: 'none',
+        outputFormats: ['word', 'pdf'],
+        templateName: 'Счет_образец.docx',
+        templatePath: path.join(TEMPLATE_DIR, 'Счет_образец.docx'),
+        versionNo: 1,
+        isActive: true,
+    },
     order_supply_contract: {
         key: 'order_supply_contract',
         name: 'Договор поставки',
@@ -152,6 +185,21 @@ const STATIC_TEMPLATES: Record<DocumentTemplateKey, DocumentTemplateDefinition> 
         outputFormats: ['word', 'pdf'],
         templateName: 'Договор_поставки.docx',
         templatePath: path.join(TEMPLATE_DIR, 'Договор_поставки.docx'),
+        versionNo: 1,
+        isActive: true,
+    },
+    order_supply_specification: {
+        key: 'order_supply_specification',
+        name: 'Спецификация к договору поставки',
+        description: 'Спецификация к договору поставки по заявке.',
+        sourceFormat: 'doc',
+        rendererKey: 'libreoffice',
+        fillStrategyKey: 'order_supply_specification',
+        previewMode: 'pdf',
+        pdfPostprocess: 'none',
+        outputFormats: ['word', 'pdf'],
+        templateName: 'Specifikacia_k_dogovoru_postavki.doc',
+        templatePath: path.join(TEMPLATE_DIR, 'Specifikacia_k_dogovoru_postavki.doc'),
         versionNo: 1,
         isActive: true,
     },
@@ -200,6 +248,111 @@ const STATIC_TEMPLATES: Record<DocumentTemplateKey, DocumentTemplateDefinition> 
         versionNo: 1,
         isActive: true,
     },
+    purchase_upd_status_1: {
+        key: 'purchase_upd_status_1',
+        name: 'Входящий УПД статус 1',
+        description: 'Входящий УПД со статусом 1 по закупке.',
+        sourceFormat: 'xlsx',
+        rendererKey: 'libreoffice',
+        fillStrategyKey: 'purchase_upd_status_1',
+        previewMode: 'pdf',
+        pdfPostprocess: 'none',
+        outputFormats: ['excel', 'pdf'],
+        templateName: 'Форма_ УПД со статусом  1  при реализации товаров до 31 март.xlsx',
+        templatePath: path.join(TEMPLATE_DIR, 'Форма_ УПД со статусом  1  при реализации товаров до 31 март.xlsx'),
+        versionNo: 1,
+        isActive: true,
+    },
+    purchase_upd_status_2: {
+        key: 'purchase_upd_status_2',
+        name: 'Входящий УПД статус 2',
+        description: 'Входящий УПД со статусом 2 по закупке.',
+        sourceFormat: 'xlsx',
+        rendererKey: 'libreoffice',
+        fillStrategyKey: 'purchase_upd_status_2',
+        previewMode: 'pdf',
+        pdfPostprocess: 'none',
+        outputFormats: ['excel', 'pdf'],
+        templateName: 'Форма_ УПД со статусом  2  до 31 марта 2026 г. включительно.xlsx',
+        templatePath: path.join(TEMPLATE_DIR, 'Форма_ УПД со статусом  2  до 31 марта 2026 г. включительно.xlsx'),
+        versionNo: 1,
+        isActive: true,
+    },
+    purchase_torg_12: {
+        key: 'purchase_torg_12',
+        name: 'Входящая ТОРГ-12',
+        description: 'Входящая товарная накладная по закупке.',
+        sourceFormat: 'xlsx',
+        rendererKey: 'libreoffice',
+        fillStrategyKey: 'purchase_torg_12',
+        previewMode: 'pdf',
+        pdfPostprocess: 'none',
+        outputFormats: ['excel', 'pdf'],
+        templateName: 'ТОРГ-12.xlsx',
+        templatePath: path.join(TEMPLATE_DIR, 'ТОРГ-12.xlsx'),
+        versionNo: 1,
+        isActive: true,
+    },
+    shipment_upd_status_1: {
+        key: 'shipment_upd_status_1',
+        name: 'Исходящий УПД статус 1',
+        description: 'Исходящий УПД со статусом 1 по отгрузке.',
+        sourceFormat: 'xlsx',
+        rendererKey: 'libreoffice',
+        fillStrategyKey: 'shipment_upd_status_1',
+        previewMode: 'pdf',
+        pdfPostprocess: 'none',
+        outputFormats: ['excel', 'pdf'],
+        templateName: 'Форма_ УПД со статусом  1  при реализации товаров до 31 март.xlsx',
+        templatePath: path.join(TEMPLATE_DIR, 'Форма_ УПД со статусом  1  при реализации товаров до 31 март.xlsx'),
+        versionNo: 1,
+        isActive: true,
+    },
+    shipment_upd_status_2: {
+        key: 'shipment_upd_status_2',
+        name: 'Исходящий УПД статус 2',
+        description: 'Исходящий УПД со статусом 2 по отгрузке.',
+        sourceFormat: 'xlsx',
+        rendererKey: 'libreoffice',
+        fillStrategyKey: 'shipment_upd_status_2',
+        previewMode: 'pdf',
+        pdfPostprocess: 'none',
+        outputFormats: ['excel', 'pdf'],
+        templateName: 'Форма_ УПД со статусом  2  до 31 марта 2026 г. включительно.xlsx',
+        templatePath: path.join(TEMPLATE_DIR, 'Форма_ УПД со статусом  2  до 31 марта 2026 г. включительно.xlsx'),
+        versionNo: 1,
+        isActive: true,
+    },
+    shipment_torg_12: {
+        key: 'shipment_torg_12',
+        name: 'ТОРГ-12',
+        description: 'Исходящая товарная накладная по отгрузке.',
+        sourceFormat: 'xlsx',
+        rendererKey: 'libreoffice',
+        fillStrategyKey: 'shipment_torg_12',
+        previewMode: 'pdf',
+        pdfPostprocess: 'none',
+        outputFormats: ['excel', 'pdf'],
+        templateName: 'ТОРГ-12.xlsx',
+        templatePath: path.join(TEMPLATE_DIR, 'ТОРГ-12.xlsx'),
+        versionNo: 1,
+        isActive: true,
+    },
+    shipment_transport_waybill: {
+        key: 'shipment_transport_waybill',
+        name: 'Транспортная накладная',
+        description: 'Транспортная накладная по отгрузке.',
+        sourceFormat: 'xlsx',
+        rendererKey: 'libreoffice',
+        fillStrategyKey: 'shipment_transport_waybill',
+        previewMode: 'pdf',
+        pdfPostprocess: 'none',
+        outputFormats: ['excel', 'pdf'],
+        templateName: 'Транспортная накладная.xlsx',
+        templatePath: path.join(TEMPLATE_DIR, 'Транспортная накладная.xlsx'),
+        versionNo: 1,
+        isActive: true,
+    },
 };
 
 const normalizeOutputFormats = (value: unknown): Array<'excel' | 'pdf' | 'word'> => {
@@ -244,10 +397,19 @@ const normalizeFillStrategyKey = (
     if (strategy === 'finance_payslip') return 'finance_payslip';
     if (strategy === 'finance_timesheet_t13') return 'finance_timesheet_t13';
     if (strategy === 'order_invoice') return 'order_invoice';
+    if (strategy === 'order_invoice_alt') return 'order_invoice_alt';
     if (strategy === 'order_supply_contract') return 'order_supply_contract';
+    if (strategy === 'order_supply_specification') return 'order_supply_specification';
     if (strategy === 'order_service_contract') return 'order_service_contract';
     if (strategy === 'order_work_contract') return 'order_work_contract';
     if (strategy === 'order_outgoing_act') return 'order_outgoing_act';
+    if (strategy === 'purchase_upd_status_1') return 'purchase_upd_status_1';
+    if (strategy === 'purchase_upd_status_2') return 'purchase_upd_status_2';
+    if (strategy === 'purchase_torg_12') return 'purchase_torg_12';
+    if (strategy === 'shipment_upd_status_1') return 'shipment_upd_status_1';
+    if (strategy === 'shipment_upd_status_2') return 'shipment_upd_status_2';
+    if (strategy === 'shipment_torg_12') return 'shipment_torg_12';
+    if (strategy === 'shipment_transport_waybill') return 'shipment_transport_waybill';
     return fallback;
 };
 

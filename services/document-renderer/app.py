@@ -469,6 +469,54 @@ def convert_to_pdf(input_path: Path, output_dir: Path) -> Path:
     return pdf_path
 
 
+def convert_word_template_to_docx(input_path: Path, output_dir: Path) -> Path:
+    if input_path.suffix.lower() == ".docx":
+        return input_path
+
+    user_installation_dir = output_dir / "lo-profile-word-normalize"
+    user_installation_dir.mkdir(parents=True, exist_ok=True)
+
+    proc = subprocess.run(
+        [
+            LIBREOFFICE_BIN,
+            "--headless",
+            "--nologo",
+            "--nolockcheck",
+            "--nodefault",
+            "--norestore",
+            f"-env:UserInstallation=file://{user_installation_dir}",
+            "--convert-to",
+            "docx",
+            "--outdir",
+            str(output_dir),
+            str(input_path),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=LIBREOFFICE_TIMEOUT_MS / 1000,
+        check=False,
+    )
+
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"LibreOffice Word normalize failed with code {proc.returncode}: {proc.stderr.strip() or proc.stdout.strip() or 'no output'}"
+        )
+
+    normalized_path = output_dir / f"{input_path.stem}.docx"
+    if not normalized_path.exists():
+        candidates = sorted(
+            [path for path in output_dir.glob("*.docx") if path.is_file()],
+            key=lambda path: path.stat().st_mtime,
+            reverse=True,
+        )
+        normalized_path = candidates[0] if candidates else None
+
+    if normalized_path is None or not normalized_path.exists():
+        raise RuntimeError("LibreOffice did not produce a normalized DOCX file")
+
+    return normalized_path
+
+
 def _build_parent_map(root):
     return {child: parent for parent in root.iter() for child in parent}
 
@@ -807,9 +855,10 @@ def render_docx_template():
     temp_dir = Path(tempfile.mkdtemp(prefix="segmentica-render-"))
     try:
         template_path = ensure_template_path(template_name)
+        normalized_template_path = convert_word_template_to_docx(template_path, temp_dir)
         generated_docx = temp_dir / f"{file_base_name}.docx"
         apply_replacements_to_docx(
-            template_path,
+            normalized_template_path,
             generated_docx,
             {str(key): "" if value is None else str(value) for key, value in replacements.items()},
             replace_first_image_bytes,

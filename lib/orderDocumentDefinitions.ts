@@ -2,7 +2,13 @@ import type { DocumentTemplateKey } from './documentTemplates';
 
 export type OrderDocumentKey = Extract<
     DocumentTemplateKey,
-    'order_invoice' | 'order_supply_contract' | 'order_service_contract' | 'order_work_contract' | 'order_outgoing_act'
+    | 'order_invoice'
+    | 'order_invoice_alt'
+    | 'order_supply_contract'
+    | 'order_supply_specification'
+    | 'order_service_contract'
+    | 'order_work_contract'
+    | 'order_outgoing_act'
 >;
 
 export type OrderDocumentOutputFormat = 'pdf' | 'word';
@@ -30,9 +36,19 @@ export const ORDER_DOCUMENT_DEFINITIONS: Record<OrderDocumentKey, OrderDocumentD
         title: 'Счет на оплату',
         outputFormats: ['pdf', 'word'],
     },
+    order_invoice_alt: {
+        key: 'order_invoice_alt',
+        title: 'Счет на оплату (вариант 2)',
+        outputFormats: ['pdf', 'word'],
+    },
     order_supply_contract: {
         key: 'order_supply_contract',
         title: 'Договор поставки',
+        outputFormats: ['pdf', 'word'],
+    },
+    order_supply_specification: {
+        key: 'order_supply_specification',
+        title: 'Спецификация к договору поставки',
         outputFormats: ['pdf', 'word'],
     },
     order_service_contract: {
@@ -55,7 +71,9 @@ export const ORDER_DOCUMENT_DEFINITIONS: Record<OrderDocumentKey, OrderDocumentD
 export const normalizeOrderDocumentKey = (value: string | null | undefined): OrderDocumentKey | null => {
     const normalized = String(value || '').trim().toLowerCase();
     if (normalized === 'order_invoice') return 'order_invoice';
+    if (normalized === 'order_invoice_alt') return 'order_invoice_alt';
     if (normalized === 'order_supply_contract') return 'order_supply_contract';
+    if (normalized === 'order_supply_specification') return 'order_supply_specification';
     if (normalized === 'order_service_contract') return 'order_service_contract';
     if (normalized === 'order_work_contract') return 'order_work_contract';
     if (normalized === 'order_outgoing_act') return 'order_outgoing_act';
@@ -81,10 +99,14 @@ export const getAvailableOrderDocumentDefinitions = (
 
     const definitions: OrderDocumentDefinition[] = [
         ORDER_DOCUMENT_DEFINITIONS.order_invoice,
+        ORDER_DOCUMENT_DEFINITIONS.order_invoice_alt,
     ];
 
     if (hasGoods) {
-        definitions.push(ORDER_DOCUMENT_DEFINITIONS.order_supply_contract);
+        definitions.push(
+            ORDER_DOCUMENT_DEFINITIONS.order_supply_contract,
+            ORDER_DOCUMENT_DEFINITIONS.order_supply_specification,
+        );
     }
 
     if (hasOutgoingServices) {

@@ -1,8 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { hasPermission, requireAuth } from '../../../../../lib/auth';
-import { hasDocumentRenderer, renderDocxTemplateDocument } from '../../../../../lib/documentRendererClient';
-import { buildOrderDocumentPayload } from '../../../../../lib/orderDocumentBuilder';
-import { normalizeOrderDocumentKey } from '../../../../../lib/orderDocumentDefinitions';
+import { hasDocumentRenderer, renderXlsxTemplateDocument } from '../../../../../lib/documentRendererClient';
+import { buildPurchaseDocumentPayload } from '../../../../../lib/purchaseDocumentBuilder';
+import { normalizePurchaseDocumentKey } from '../../../../../lib/purchaseDocumentDefinitions';
 
 export const config = {
     api: {
@@ -17,8 +17,8 @@ const normalizeQueryValue = (value: string | string[] | undefined): string | nul
     return text || null;
 };
 
-const resolveFormat = (value: string | null): 'pdf' | 'word' => {
-    if (value === 'word') return 'word';
+const resolveFormat = (value: string | null): 'pdf' | 'excel' => {
+    if (value === 'excel') return 'excel';
     return 'pdf';
 };
 
@@ -36,62 +36,68 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const user = await requireAuth(req, res);
     if (!user) return;
 
-    const orderId = Number(req.query.id);
-    if (!Number.isInteger(orderId) || orderId <= 0) {
-        return res.status(400).json({ error: 'Некорректный id заявки' });
+    const purchaseId = Number(req.query.id);
+    if (!Number.isInteger(purchaseId) || purchaseId <= 0) {
+        return res.status(400).json({ error: 'Некорректный id закупки' });
     }
 
-    const documentKey = normalizeOrderDocumentKey(normalizeQueryValue(req.query.documentKey));
+    const documentKey = normalizePurchaseDocumentKey(normalizeQueryValue(req.query.documentKey));
     if (!documentKey) {
-        return res.status(400).json({ error: 'Неизвестный документ заявки' });
+        return res.status(400).json({ error: 'Неизвестный документ закупки' });
     }
 
     const format = resolveFormat(normalizeQueryValue(req.query.format));
     const disposition = resolveDisposition(normalizeQueryValue(req.query.disposition));
 
-    const canViewOrders = hasPermission(user, 'orders.view');
-    const canPrintOrders = hasPermission(user, 'orders.print');
-    const canExportPdf = hasPermission(user, 'orders.export.pdf');
-    const canExportWord = hasPermission(user, 'orders.export.word');
+    const canViewPurchases = hasPermission(user, 'purchases.view');
+    const canPrintPurchases = hasPermission(user, 'purchases.print');
+    const canExportPdf = hasPermission(user, 'purchases.export.pdf');
+    const canExportExcel = hasPermission(user, 'purchases.export.excel');
 
-    if (!canViewOrders) {
+    if (!canViewPurchases) {
         return res.status(403).json({ error: 'Forbidden' });
     }
 
-    if (format === 'pdf' && !canPrintOrders && !canExportPdf) {
+    if (format === 'pdf' && !canPrintPurchases && !canExportPdf) {
         return res.status(403).json({ error: 'Forbidden' });
     }
 
-    if (format === 'word' && !canExportWord) {
+    if (format === 'excel' && !canExportExcel) {
         return res.status(403).json({ error: 'Forbidden' });
     }
 
     if (!hasDocumentRenderer()) {
-        return res.status(400).json({ error: 'Для документов заявки нужен включенный document renderer' });
+        return res.status(400).json({ error: 'Для документов закупки нужен включенный document renderer' });
     }
 
     try {
-        const payload = await buildOrderDocumentPayload(orderId, documentKey);
+        const payload = await buildPurchaseDocumentPayload(purchaseId, documentKey);
         const templateDefinition = payload.template;
 
         if (!templateDefinition.isActive) {
             return res.status(400).json({ error: 'Шаблон документа отключен' });
         }
 
-        if (templateDefinition.sourceFormat !== 'docx' && templateDefinition.sourceFormat !== 'doc') {
-            return res.status(400).json({ error: 'Пока поддерживаются только шаблоны Word для документов заявки' });
+        if (templateDefinition.sourceFormat !== 'xlsx') {
+            return res.status(400).json({ error: 'Пока поддерживаются только шаблоны XLSX для документов закупки' });
         }
 
         if (!templateDefinition.outputFormats.includes(format)) {
             return res.status(400).json({ error: `Формат ${format} не поддерживается для этого шаблона` });
         }
 
-        const rendered = await renderDocxTemplateDocument({
+        const rendered = await renderXlsxTemplateDocument({
             templateName: payload.template.templateName,
             fileBaseName: payload.fileBaseName,
-            replacements: payload.replacements,
-            replaceFirstImageBase64: payload.replaceFirstImageBase64,
+            cells: payload.cells,
+            rowVisibility: payload.rowVisibility,
+            printAreas: payload.printAreas,
+            rangeCopies: payload.rangeCopies,
+            sheetCopies: payload.sheetCopies,
+            hiddenSheets: payload.hiddenSheets,
+            sheetPageSetup: payload.sheetPageSetup,
             outputFormat: format,
+            postprocess: format === 'pdf' ? payload.pdfPostprocess : 'none',
         });
 
         const safeDisposition = format === 'pdf' ? disposition : 'attachment';
@@ -100,9 +106,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         res.setHeader('Content-Disposition', `${safeDisposition}; filename*=UTF-8''${encodeURIComponent(rendered.filename)}`);
         res.status(200).send(rendered.buffer);
     } catch (error) {
-        console.error('Order document render error:', error);
+        console.error('Purchase document render error:', error);
         return res.status(500).json({
-            error: error instanceof Error ? error.message : 'Не удалось сформировать документ заявки',
+            error: error instanceof Error ? error.message : 'Не удалось сформировать документ закупки',
         });
     }
 }

@@ -452,7 +452,9 @@ export const buildOrderDocumentPayload = async (
         getPrimaryClientBankAccount(order.клиент_id),
         getCompanyProfile(),
         getDocumentTemplateDefinition(documentKey),
-        documentKey === 'order_invoice' ? getOrderInvoiceLogoBase64() : Promise.resolve(undefined),
+        documentKey === 'order_invoice' || documentKey === 'order_invoice_alt'
+            ? getOrderInvoiceLogoBase64()
+            : Promise.resolve(undefined),
     ]);
 
     const documentDate = new Date();

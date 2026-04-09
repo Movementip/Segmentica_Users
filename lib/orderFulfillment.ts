@@ -415,6 +415,7 @@ export async function getShipmentPositions(db: DbLike, shipmentId: number) {
                 products."название" AS товар_название,
                 products."артикул" AS товар_артикул,
                 products."категория" AS товар_категория,
+                products."тип_номенклатуры" AS товар_тип_номенклатуры,
                 products."единица_измерения" AS товар_единица_измерения,
                 vat_rates."название" AS ндс_название,
                 vat_rates."ставка" AS ндс_ставка
@@ -450,6 +451,7 @@ export async function getShipmentPositions(db: DbLike, shipmentId: number) {
             товар_название: row.товар_название || `Товар #${row.товар_id}`,
             товар_артикул: row.товар_артикул || '',
             товар_категория: row.товар_категория || '',
+            товар_тип_номенклатуры: row.товар_тип_номенклатуры || '',
             товар_единица_измерения: row.товар_единица_измерения || 'шт',
         };
     });
