@@ -249,33 +249,27 @@ const amountToWordsRub = (amount: number): string => {
 const getChiefAccountant = async (): Promise<StatementActor | null> => {
     const res = await query(
         `
-        SELECT e."фио" AS fio, e."должность" AS position
-        FROM public.users u
-        JOIN public.user_roles ur ON ur.user_id = u.id
-        JOIN public.roles r ON r.id = ur.role_id
-        JOIN public."Сотрудники" e ON e.id = u.employee_id
-        WHERE COALESCE(u.is_active, true) = true
-          AND COALESCE(e."активен", true) = true
-          AND LOWER(COALESCE(r.key, '')) = 'accountant'
-        ORDER BY u.id ASC
+        SELECT "фио" AS fio, "должность" AS position
+        FROM public."Сотрудники"
+        WHERE COALESCE("активен", true) = true
+          AND (
+              BTRIM(COALESCE("должность", '')) = 'Главный бухгалтер'
+              OR BTRIM(COALESCE("должность", '')) = 'главный бухгалтер'
+              OR COALESCE("должность", '') LIKE '%Главный бухгалтер%'
+              OR COALESCE("должность", '') LIKE '%главный бухгалтер%'
+          )
+        ORDER BY
+            CASE
+                WHEN BTRIM(COALESCE("должность", '')) = 'Главный бухгалтер' THEN 0
+                WHEN BTRIM(COALESCE("должность", '')) = 'главный бухгалтер' THEN 1
+                ELSE 1
+            END,
+            id ASC
         LIMIT 1
         `
     );
 
-    let row = res.rows?.[0];
-    if (!row?.fio) {
-        const fallbackRes = await query(
-            `
-            SELECT "фио" AS fio, "должность" AS position
-            FROM public."Сотрудники"
-            WHERE COALESCE("активен", true) = true
-              AND LOWER(COALESCE("должность", '')) LIKE '%бухгалтер%'
-            ORDER BY id ASC
-            LIMIT 1
-            `
-        );
-        row = fallbackRes.rows?.[0];
-    }
+    const row = res.rows?.[0];
 
     if (!row?.fio) return null;
     return {
@@ -290,8 +284,19 @@ const getDirector = async (): Promise<StatementActor | null> => {
         SELECT "фио" AS fio, "должность" AS position
         FROM public."Сотрудники"
         WHERE COALESCE("активен", true) = true
-          AND LOWER(COALESCE("должность", '')) LIKE '%директор%'
-        ORDER BY CASE WHEN LOWER(COALESCE("должность", '')) LIKE '%генераль%' THEN 0 ELSE 1 END, id ASC
+          AND (
+              COALESCE("должность", '') LIKE '%директор%'
+              OR COALESCE("должность", '') LIKE '%Директор%'
+          )
+        ORDER BY
+            CASE
+                WHEN COALESCE("должность", '') LIKE '%Генеральный директор%' THEN 0
+                WHEN COALESCE("должность", '') LIKE '%генеральный директор%' THEN 1
+                WHEN COALESCE("должность", '') LIKE '%Главный директор%' THEN 2
+                WHEN COALESCE("должность", '') LIKE '%главный директор%' THEN 3
+                ELSE 4
+            END,
+            id ASC
         LIMIT 1
         `
     );
@@ -482,7 +487,7 @@ export const buildOrderDocumentPayload = async (
 
     const directorFio = companyProfile.directorName || director?.fio || '';
     const directorPosition = companyProfile.directorPosition || director?.position || 'Генеральный директор';
-    const accountantFio = companyProfile.accountantName || accountant?.fio || directorFio;
+    const accountantFio = accountant?.fio || companyProfile.accountantName || directorFio;
 
     const replacements: Record<string, string> = {
         '{НомерДокумента}': String(order.id),

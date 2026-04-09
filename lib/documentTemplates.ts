@@ -13,6 +13,7 @@ export type DocumentTemplateKey =
     | 'order_service_contract'
     | 'order_work_contract'
     | 'order_outgoing_act'
+    | 'purchase_invoice'
     | 'purchase_upd_status_1'
     | 'purchase_upd_status_2'
     | 'purchase_torg_12'
@@ -36,6 +37,7 @@ export type DocumentTemplateFillStrategyKey =
     | 'order_service_contract'
     | 'order_work_contract'
     | 'order_outgoing_act'
+    | 'purchase_invoice'
     | 'purchase_upd_status_1'
     | 'purchase_upd_status_2'
     | 'purchase_torg_12'
@@ -160,8 +162,8 @@ const STATIC_TEMPLATES: Record<DocumentTemplateKey, DocumentTemplateDefinition> 
     },
     order_invoice_alt: {
         key: 'order_invoice_alt',
-        name: 'Счет на оплату (вариант 2)',
-        description: 'Альтернативный исходящий счет на оплату по заявке.',
+        name: 'Счет',
+        description: 'Универсальный счет по заявке.',
         sourceFormat: 'docx',
         rendererKey: 'libreoffice',
         fillStrategyKey: 'order_invoice_alt',
@@ -245,6 +247,21 @@ const STATIC_TEMPLATES: Record<DocumentTemplateKey, DocumentTemplateDefinition> 
         outputFormats: ['word', 'pdf'],
         templateName: 'Исходящий_акт.docx',
         templatePath: path.join(TEMPLATE_DIR, 'Исходящий_акт.docx'),
+        versionNo: 1,
+        isActive: true,
+    },
+    purchase_invoice: {
+        key: 'purchase_invoice',
+        name: 'Счет',
+        description: 'Универсальный счет по закупке.',
+        sourceFormat: 'docx',
+        rendererKey: 'libreoffice',
+        fillStrategyKey: 'purchase_invoice',
+        previewMode: 'pdf',
+        pdfPostprocess: 'none',
+        outputFormats: ['word', 'pdf'],
+        templateName: 'Счет_образец.docx',
+        templatePath: path.join(TEMPLATE_DIR, 'Счет_образец.docx'),
         versionNo: 1,
         isActive: true,
     },
@@ -403,6 +420,7 @@ const normalizeFillStrategyKey = (
     if (strategy === 'order_service_contract') return 'order_service_contract';
     if (strategy === 'order_work_contract') return 'order_work_contract';
     if (strategy === 'order_outgoing_act') return 'order_outgoing_act';
+    if (strategy === 'purchase_invoice') return 'purchase_invoice';
     if (strategy === 'purchase_upd_status_1') return 'purchase_upd_status_1';
     if (strategy === 'purchase_upd_status_2') return 'purchase_upd_status_2';
     if (strategy === 'purchase_torg_12') return 'purchase_torg_12';

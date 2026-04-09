@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { hasPermission, requireAuth } from '../../../../../lib/auth';
-import { hasDocumentRenderer, renderXlsxTemplateDocument } from '../../../../../lib/documentRendererClient';
+import { hasDocumentRenderer, renderDocxTemplateDocument, renderXlsxTemplateDocument } from '../../../../../lib/documentRendererClient';
 import { buildPurchaseDocumentPayload } from '../../../../../lib/purchaseDocumentBuilder';
 import { normalizePurchaseDocumentKey } from '../../../../../lib/purchaseDocumentDefinitions';
 
@@ -17,7 +17,8 @@ const normalizeQueryValue = (value: string | string[] | undefined): string | nul
     return text || null;
 };
 
-const resolveFormat = (value: string | null): 'pdf' | 'excel' => {
+const resolveFormat = (value: string | null): 'pdf' | 'excel' | 'word' => {
+    if (value === 'word') return 'word';
     if (value === 'excel') return 'excel';
     return 'pdf';
 };
@@ -53,6 +54,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const canPrintPurchases = hasPermission(user, 'purchases.print');
     const canExportPdf = hasPermission(user, 'purchases.export.pdf');
     const canExportExcel = hasPermission(user, 'purchases.export.excel');
+    const canExportWord = hasPermission(user, 'purchases.export.word') || canExportExcel;
 
     if (!canViewPurchases) {
         return res.status(403).json({ error: 'Forbidden' });
@@ -63,6 +65,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (format === 'excel' && !canExportExcel) {
+        return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    if (format === 'word' && !canExportWord) {
         return res.status(403).json({ error: 'Forbidden' });
     }
 
@@ -78,27 +84,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             return res.status(400).json({ error: 'Шаблон документа отключен' });
         }
 
-        if (templateDefinition.sourceFormat !== 'xlsx') {
-            return res.status(400).json({ error: 'Пока поддерживаются только шаблоны XLSX для документов закупки' });
-        }
-
         if (!templateDefinition.outputFormats.includes(format)) {
             return res.status(400).json({ error: `Формат ${format} не поддерживается для этого шаблона` });
         }
 
-        const rendered = await renderXlsxTemplateDocument({
-            templateName: payload.template.templateName,
-            fileBaseName: payload.fileBaseName,
-            cells: payload.cells,
-            rowVisibility: payload.rowVisibility,
-            printAreas: payload.printAreas,
-            rangeCopies: payload.rangeCopies,
-            sheetCopies: payload.sheetCopies,
-            hiddenSheets: payload.hiddenSheets,
-            sheetPageSetup: payload.sheetPageSetup,
-            outputFormat: format,
-            postprocess: format === 'pdf' ? payload.pdfPostprocess : 'none',
-        });
+        const rendered = templateDefinition.sourceFormat === 'xlsx'
+            ? await renderXlsxTemplateDocument({
+                templateName: payload.template.templateName,
+                fileBaseName: payload.fileBaseName,
+                cells: payload.cells || [],
+                rowVisibility: payload.rowVisibility,
+                printAreas: payload.printAreas,
+                rangeCopies: payload.rangeCopies,
+                sheetCopies: payload.sheetCopies,
+                hiddenSheets: payload.hiddenSheets,
+                sheetPageSetup: payload.sheetPageSetup,
+                outputFormat: format === 'excel' ? 'excel' : 'pdf',
+                postprocess: format === 'pdf' ? payload.pdfPostprocess : 'none',
+            })
+            : await renderDocxTemplateDocument({
+                templateName: payload.template.templateName,
+                fileBaseName: payload.fileBaseName,
+                replacements: payload.replacements || {},
+                replaceFirstImageBase64: payload.replaceFirstImageBase64,
+                outputFormat: format === 'word' ? 'word' : 'pdf',
+            });
 
         const safeDisposition = format === 'pdf' ? disposition : 'attachment';
         res.setHeader('Content-Type', rendered.contentType);

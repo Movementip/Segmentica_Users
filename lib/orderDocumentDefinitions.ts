@@ -38,7 +38,7 @@ export const ORDER_DOCUMENT_DEFINITIONS: Record<OrderDocumentKey, OrderDocumentD
     },
     order_invoice_alt: {
         key: 'order_invoice_alt',
-        title: 'Счет на оплату (вариант 2)',
+        title: 'Счет',
         outputFormats: ['pdf', 'word'],
     },
     order_supply_contract: {

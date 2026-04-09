@@ -125,7 +125,8 @@ type PurchaseDocumentPreviewState = {
     title: string;
     description: string;
     previewUrl: string;
-    excelUrl: string;
+    downloadUrl: string;
+    downloadFormat: 'excel' | 'word';
 };
 
 type PreviewPageImage = {
@@ -197,11 +198,15 @@ function PurchaseDetailPage(): JSX.Element {
     const canPrint = Boolean(user?.permissions?.includes('purchases.print'));
     const canExportPdf = Boolean(user?.permissions?.includes('purchases.export.pdf'));
     const canExportExcel = Boolean(user?.permissions?.includes('purchases.export.excel'));
+    const canExportWord = Boolean(
+        user?.permissions?.includes('purchases.export.word')
+        || user?.permissions?.includes('purchases.export.excel')
+    );
     const canAttachmentsView = Boolean(user?.permissions?.includes('purchases.attachments.view'));
     const canAttachmentsUpload = Boolean(user?.permissions?.includes('purchases.attachments.upload'));
     const canAttachmentsDelete = Boolean(user?.permissions?.includes('purchases.attachments.delete'));
     const canPreviewPurchaseDocuments = canPrint || canExportPdf;
-    const canUsePurchaseDocumentCenter = canPreviewPurchaseDocuments || canExportExcel;
+    const canUsePurchaseDocumentCenter = canPreviewPurchaseDocuments || canExportExcel || canExportWord;
 
     const availablePurchaseDocuments = useMemo<PurchaseDocumentDefinition[]>(() => {
         if (!purchase) return [];
@@ -211,7 +216,7 @@ function PurchaseDetailPage(): JSX.Element {
     }, [purchase]);
 
     const buildPurchaseDocumentUrl = useCallback(
-        (documentKey: PurchaseDocumentKey, format: 'pdf' | 'excel', disposition: 'inline' | 'attachment') => {
+        (documentKey: PurchaseDocumentKey, format: 'pdf' | 'excel' | 'word', disposition: 'inline' | 'attachment') => {
             const purchaseId = Number(purchase?.id);
             if (!Number.isInteger(purchaseId) || purchaseId <= 0) return '';
             const params = new URLSearchParams({
@@ -590,11 +595,13 @@ function PurchaseDetailPage(): JSX.Element {
     };
 
     const openPurchaseDocumentPreview = (documentDefinition: PurchaseDocumentDefinition) => {
+        const downloadFormat: 'excel' | 'word' = documentDefinition.outputFormats.includes('word') ? 'word' : 'excel';
+
         if (!canPreviewPurchaseDocuments) {
-            if (canExportExcel) {
-                const excelUrl = buildPurchaseDocumentUrl(documentDefinition.key, 'excel', 'attachment');
-                if (excelUrl) {
-                    window.open(excelUrl, '_blank', 'noopener,noreferrer');
+            if ((downloadFormat === 'word' && canExportWord) || (downloadFormat === 'excel' && canExportExcel)) {
+                const downloadUrl = buildPurchaseDocumentUrl(documentDefinition.key, downloadFormat, 'attachment');
+                if (downloadUrl) {
+                    window.open(downloadUrl, '_blank', 'noopener,noreferrer');
                 }
                 return;
             }
@@ -603,8 +610,8 @@ function PurchaseDetailPage(): JSX.Element {
         }
 
         const previewUrl = buildPurchaseDocumentUrl(documentDefinition.key, 'pdf', 'inline');
-        const excelUrl = buildPurchaseDocumentUrl(documentDefinition.key, 'excel', 'attachment');
-        if (!previewUrl || !excelUrl) return;
+        const downloadUrl = buildPurchaseDocumentUrl(documentDefinition.key, downloadFormat, 'attachment');
+        if (!previewUrl || !downloadUrl) return;
 
         setDocumentPreviewZoom(1);
         setDocumentPreview({
@@ -612,7 +619,8 @@ function PurchaseDetailPage(): JSX.Element {
             title: 'Предпросмотр документа',
             description: documentDefinition.title,
             previewUrl,
-            excelUrl,
+            downloadUrl,
+            downloadFormat,
         });
     };
 
@@ -673,7 +681,7 @@ function PurchaseDetailPage(): JSX.Element {
         window.open(documentPreviewPdfObjectUrl, '_blank', 'noopener,noreferrer');
     };
 
-    const handleDocumentPreviewDownload = (format: 'pdf' | 'excel') => {
+    const handleDocumentPreviewDownload = (format: 'pdf' | 'excel' | 'word') => {
         if (!documentPreview) return;
 
         if (format === 'pdf') {
@@ -699,14 +707,25 @@ function PurchaseDetailPage(): JSX.Element {
             return;
         }
 
-        if (!canExportExcel) {
+        if (format === 'excel' && !canExportExcel) {
             setDocumentPreviewError('Нет доступа');
             return;
         }
 
-        void downloadDocumentFile(documentPreview.excelUrl)
+        if (format === 'word' && !canExportWord) {
+            setDocumentPreviewError('Нет доступа');
+            return;
+        }
+
+        void downloadDocumentFile(documentPreview.downloadUrl)
             .catch((downloadError) => {
-                setDocumentPreviewError(downloadError instanceof Error ? downloadError.message : 'Не удалось скачать Excel-документ');
+                setDocumentPreviewError(
+                    downloadError instanceof Error
+                        ? downloadError.message
+                        : format === 'word'
+                            ? 'Не удалось скачать Word-документ'
+                            : 'Не удалось скачать Excel-документ'
+                );
             });
     };
     const handleEditPurchase = async (purchaseData: any) => {
@@ -1435,7 +1454,7 @@ function PurchaseDetailPage(): JSX.Element {
                                     PDF
                                 </Button>
                             ) : null}
-                            {canExportExcel ? (
+                            {documentPreview.downloadFormat === 'excel' && canExportExcel ? (
                                 <Button
                                     variant="surface"
                                     color="gray"
@@ -1445,6 +1464,18 @@ function PurchaseDetailPage(): JSX.Element {
                                 >
                                     <FiFile className={`${styles.icon} ${styles.excelIcon}`} />
                                     Excel
+                                </Button>
+                            ) : null}
+                            {documentPreview.downloadFormat === 'word' && canExportWord ? (
+                                <Button
+                                    variant="surface"
+                                    color="gray"
+                                    highContrast
+                                    className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
+                                    onClick={() => handleDocumentPreviewDownload('word')}
+                                >
+                                    <FiFile className={styles.icon} />
+                                    Word
                                 </Button>
                             ) : null}
                             <Button

@@ -2,12 +2,13 @@ import type { DocumentTemplateKey } from './documentTemplates';
 
 export type PurchaseDocumentKey = Extract<
     DocumentTemplateKey,
+    | 'purchase_invoice'
     | 'purchase_upd_status_1'
     | 'purchase_upd_status_2'
     | 'purchase_torg_12'
 >;
 
-export type PurchaseDocumentOutputFormat = 'pdf' | 'excel';
+export type PurchaseDocumentOutputFormat = 'pdf' | 'excel' | 'word';
 
 export type PurchaseDocumentDefinition = {
     key: PurchaseDocumentKey;
@@ -27,6 +28,11 @@ const GOODS_NOMENCLATURE_TYPES = new Set([
 ]);
 
 export const PURCHASE_DOCUMENT_DEFINITIONS: Record<PurchaseDocumentKey, PurchaseDocumentDefinition> = {
+    purchase_invoice: {
+        key: 'purchase_invoice',
+        title: 'Счет',
+        outputFormats: ['pdf', 'word'],
+    },
     purchase_upd_status_1: {
         key: 'purchase_upd_status_1',
         title: 'Входящий УПД статус 1',
@@ -46,6 +52,7 @@ export const PURCHASE_DOCUMENT_DEFINITIONS: Record<PurchaseDocumentKey, Purchase
 
 export const normalizePurchaseDocumentKey = (value: string | null | undefined): PurchaseDocumentKey | null => {
     const normalized = String(value || '').trim().toLowerCase();
+    if (normalized === 'purchase_invoice') return 'purchase_invoice';
     if (normalized === 'purchase_upd_status_1') return 'purchase_upd_status_1';
     if (normalized === 'purchase_upd_status_2') return 'purchase_upd_status_2';
     if (normalized === 'purchase_torg_12') return 'purchase_torg_12';
@@ -67,7 +74,9 @@ export const getAvailablePurchaseDocumentDefinitions = (
     );
 
     const hasGoods = normalizedTypes.some((value) => GOODS_NOMENCLATURE_TYPES.has(value));
-    const definitions: PurchaseDocumentDefinition[] = [];
+    const definitions: PurchaseDocumentDefinition[] = [
+        PURCHASE_DOCUMENT_DEFINITIONS.purchase_invoice,
+    ];
 
     if (hasGoods) {
         definitions.push(

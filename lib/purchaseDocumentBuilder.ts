@@ -58,6 +58,10 @@ type CompanyProfile = {
     documentAddress: string;
     inn: string;
     kpp: string;
+    bankName: string;
+    bik: string;
+    correspondentAccount: string;
+    settlementAccount: string;
     phone: string;
     email: string;
     city: string;
@@ -65,13 +69,16 @@ type CompanyProfile = {
     directorPosition: string;
     accountantName: string;
     accountantPosition: string;
+    paymentTerms: string;
 };
 
 export type PurchaseDocumentRenderPayload = {
     documentTitle: string;
     template: DocumentTemplateDefinition;
     fileBaseName: string;
-    cells: RenderXlsxTemplateParams['cells'];
+    cells?: RenderXlsxTemplateParams['cells'];
+    replacements?: Record<string, string>;
+    replaceFirstImageBase64?: string;
     rowVisibility?: RenderXlsxTemplateParams['rowVisibility'];
     printAreas?: RenderXlsxTemplateParams['printAreas'];
     rangeCopies?: RenderXlsxTemplateParams['rangeCopies'];
@@ -90,6 +97,10 @@ const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
     documentAddress: '620061, Свердловская обл, город Екатеринбург г.о., Исток п, Главная ул, строение 21, помещение 421',
     inn: '6685205790',
     kpp: '668501001',
+    bankName: 'СБЕРБАНК',
+    bik: '782347238904238904',
+    correspondentAccount: '7283489324879234',
+    settlementAccount: '345345345',
     phone: '89193730303',
     email: 'segmenica@ru',
     city: 'Екатеринбург',
@@ -97,6 +108,7 @@ const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
     directorPosition: 'Генеральный директор',
     accountantName: 'Юдин Роман Игоревич',
     accountantPosition: 'Главный бухгалтер',
+    paymentTerms: '',
 };
 
 const TORG_ITEM_ROWS = [
@@ -232,6 +244,16 @@ const buildFileBaseName = (title: string, purchaseId: number): string =>
 const buildPurchaseBasis = (purchaseId: number, documentDate: Date): string =>
     `Закупка № ${purchaseId} от ${formatDateRuNumeric(documentDate)}`;
 
+const buildPurchaseItemsBlock = (positions: PurchaseDocumentPosition[]): string =>
+    positions
+        .map((position, index) => {
+            const quantity = position.количество % 1 === 0
+                ? String(position.количество)
+                : String(position.количество).replace('.', ',');
+            return `\t\t${index + 1}. ${position.товар_название} — ${quantity} ${position.товар_единица_измерения || 'шт'} × ${formatMoney(position.цена)} руб. = ${formatMoney(position.сумма_всего)} руб.`;
+        })
+        .join('\n');
+
 const getCompanyProfile = async (): Promise<CompanyProfile> => {
     try {
         const res = await query(
@@ -257,6 +279,10 @@ const getCompanyProfile = async (): Promise<CompanyProfile> => {
             documentAddress: normalizeNullableText(value.documentAddress ?? value.postalAddress) || DEFAULT_COMPANY_PROFILE.documentAddress,
             inn: normalizeNullableText(value.inn) || DEFAULT_COMPANY_PROFILE.inn,
             kpp: normalizeNullableText(value.kpp) || DEFAULT_COMPANY_PROFILE.kpp,
+            bankName: normalizeNullableText(value.bankName ?? value.bank) || DEFAULT_COMPANY_PROFILE.bankName,
+            bik: normalizeNullableText(value.bik) || DEFAULT_COMPANY_PROFILE.bik,
+            correspondentAccount: normalizeNullableText(value.correspondentAccount ?? value.ks) || DEFAULT_COMPANY_PROFILE.correspondentAccount,
+            settlementAccount: normalizeNullableText(value.settlementAccount ?? value.rs) || DEFAULT_COMPANY_PROFILE.settlementAccount,
             phone: normalizeNullableText(value.phone) || DEFAULT_COMPANY_PROFILE.phone,
             email: normalizeNullableText(value.email) || DEFAULT_COMPANY_PROFILE.email,
             city: normalizeNullableText(value.city) || DEFAULT_COMPANY_PROFILE.city,
@@ -272,6 +298,7 @@ const getCompanyProfile = async (): Promise<CompanyProfile> => {
             accountantPosition: normalizeNullableText(
                 value.accountantPosition ?? value.chiefAccountantPosition ?? value.accountantTitle
             ) || DEFAULT_COMPANY_PROFILE.accountantPosition,
+            paymentTerms: normalizeNullableText(value.paymentTerms ?? value.invoicePaymentTerms) || DEFAULT_COMPANY_PROFILE.paymentTerms,
         };
     } catch {
         return DEFAULT_COMPANY_PROFILE;
@@ -281,33 +308,27 @@ const getCompanyProfile = async (): Promise<CompanyProfile> => {
 const getChiefAccountant = async (): Promise<StatementActor | null> => {
     const res = await query(
         `
-        SELECT e."фио" AS fio, e."должность" AS position
-        FROM public.users u
-        JOIN public.user_roles ur ON ur.user_id = u.id
-        JOIN public.roles r ON r.id = ur.role_id
-        JOIN public."Сотрудники" e ON e.id = u.employee_id
-        WHERE COALESCE(u.is_active, true) = true
-          AND COALESCE(e."активен", true) = true
-          AND LOWER(COALESCE(r.key, '')) = 'accountant'
-        ORDER BY u.id ASC
+        SELECT "фио" AS fio, "должность" AS position
+        FROM public."Сотрудники"
+        WHERE COALESCE("активен", true) = true
+          AND (
+              BTRIM(COALESCE("должность", '')) = 'Главный бухгалтер'
+              OR BTRIM(COALESCE("должность", '')) = 'главный бухгалтер'
+              OR COALESCE("должность", '') LIKE '%Главный бухгалтер%'
+              OR COALESCE("должность", '') LIKE '%главный бухгалтер%'
+          )
+        ORDER BY
+            CASE
+                WHEN BTRIM(COALESCE("должность", '')) = 'Главный бухгалтер' THEN 0
+                WHEN BTRIM(COALESCE("должность", '')) = 'главный бухгалтер' THEN 1
+                ELSE 1
+            END,
+            id ASC
         LIMIT 1
         `
     );
 
-    let row = res.rows?.[0];
-    if (!row?.fio) {
-        const fallbackRes = await query(
-            `
-            SELECT "фио" AS fio, "должность" AS position
-            FROM public."Сотрудники"
-            WHERE COALESCE("активен", true) = true
-              AND LOWER(COALESCE("должность", '')) LIKE '%бухгалтер%'
-            ORDER BY id ASC
-            LIMIT 1
-            `
-        );
-        row = fallbackRes.rows?.[0];
-    }
+    const row = res.rows?.[0];
 
     if (!row?.fio) return null;
     return {
@@ -322,8 +343,19 @@ const getDirector = async (): Promise<StatementActor | null> => {
         SELECT "фио" AS fio, "должность" AS position
         FROM public."Сотрудники"
         WHERE COALESCE("активен", true) = true
-          AND LOWER(COALESCE("должность", '')) LIKE '%директор%'
-        ORDER BY CASE WHEN LOWER(COALESCE("должность", '')) LIKE '%генераль%' THEN 0 ELSE 1 END, id ASC
+          AND (
+              COALESCE("должность", '') LIKE '%директор%'
+              OR COALESCE("должность", '') LIKE '%Директор%'
+          )
+        ORDER BY
+            CASE
+                WHEN COALESCE("должность", '') LIKE '%Генеральный директор%' THEN 0
+                WHEN COALESCE("должность", '') LIKE '%генеральный директор%' THEN 1
+                WHEN COALESCE("должность", '') LIKE '%Главный директор%' THEN 2
+                WHEN COALESCE("должность", '') LIKE '%главный директор%' THEN 3
+                ELSE 4
+            END,
+            id ASC
         LIMIT 1
         `
     );
@@ -526,6 +558,98 @@ const buildTransportSummary = (purchase: PurchaseDocumentRow): string => {
     ].filter(Boolean).join(', ');
 };
 
+const buildPurchaseInvoicePayload = async (purchaseId: number): Promise<PurchaseDocumentRenderPayload> => {
+    const definition = getPurchaseDocumentDefinition('purchase_invoice');
+    const { purchase, positions } = await getPurchaseDocumentData(purchaseId);
+
+    const availableDocuments = getAvailablePurchaseDocumentDefinitions({
+        nomenclatureTypes: positions.map((position) => position.товар_тип_номенклатуры || ''),
+    });
+
+    if (!availableDocuments.some((item) => item.key === 'purchase_invoice')) {
+        throw new Error('Документ недоступен для состава этой закупки');
+    }
+
+    const [template, companyProfile, director, supplierBankAccount] = await Promise.all([
+        getDocumentTemplateDefinition('purchase_invoice'),
+        getCompanyProfile(),
+        getDirector(),
+        getPrimarySupplierBankAccount(purchase.поставщик_id),
+    ]);
+
+    const documentDate = new Date();
+    const purchaseDate = parseDateOnly(purchase.дата_заказа);
+    const supplierName = buildSupplierDisplayName({
+        название: purchase.поставщик_название,
+        тип: purchase.поставщик_тип,
+        краткоеНазвание: purchase.поставщик_краткое_название,
+        полноеНазвание: purchase.поставщик_полное_название,
+        фамилия: purchase.поставщик_фамилия,
+        имя: purchase.поставщик_имя,
+        отчество: purchase.поставщик_отчество,
+    });
+    const supplierAddress = buildSupplierPrimaryAddress({
+        адрес: purchase.поставщик_адрес,
+        адресРегистрации: purchase.поставщик_адрес_регистрации,
+        адресПечати: purchase.поставщик_адрес_печати,
+    }) || '';
+    const totalAmount = positions.reduce((sum, position) => sum + position.сумма_всего, 0);
+    const totalVat = positions.reduce((sum, position) => sum + position.сумма_ндс, 0);
+    const basis = buildPurchaseBasis(purchase.id, purchaseDate);
+    const itemsBlock = buildPurchaseItemsBlock(positions);
+    const directorFio = companyProfile.directorName || director?.fio || '';
+    const directorPosition = companyProfile.directorPosition || director?.position || 'Генеральный директор';
+    return {
+        documentTitle: definition.title,
+        template,
+        fileBaseName: buildFileBaseName(definition.title, purchase.id),
+        replacements: {
+            '{НомерДокумента}': String(purchase.id),
+            '{ДатаДокумента}': formatDateRuNumeric(documentDate),
+            '{ГородДокумента}': companyProfile.city,
+            '{НазваниеОрганизации}': supplierName,
+            '{ЮридическийАдрес}': supplierAddress,
+            '{АдресДляДокументов}': supplierAddress,
+            '{ИНН}': normalizeNullableText(purchase.поставщик_инн),
+            '{КПП}': normalizeNullableText(purchase.поставщик_кпп),
+            '{НаименованиеБанка}': normalizeNullableText(supplierBankAccount?.bankName),
+            '{БИК}': normalizeNullableText(supplierBankAccount?.bik),
+            '{КоррСчет}': normalizeNullableText(supplierBankAccount?.correspondentAccount),
+            '{РасчетныйСчет}': normalizeNullableText(supplierBankAccount?.settlementAccount),
+            '{ПочтаДляДокументов}': normalizeNullableText(purchase.поставщик_email),
+            '{Телефон}': normalizeNullableText(purchase.поставщик_телефон),
+            '{ВЛице}': '',
+            '{ДолжностьРуководителя}': '',
+            '{ФИОДляПодписи}': '',
+            '{ФИОБухгалтераДляПодписи}': '',
+            '{ДолжностьИсполнителя}': '',
+            '{ФИОИсполнителяДляПодписи}': '',
+            '{НазваниеКонтр}': companyProfile.displayName,
+            '{АдресКонтр}': companyProfile.documentAddress || companyProfile.legalAddress,
+            '{ИННКонтр}': companyProfile.inn,
+            '{КППКонтр}': companyProfile.kpp,
+            '{НаименованиеБанкаКонтр}': companyProfile.bankName,
+            '{БИКБанкаКонтр}': companyProfile.bik,
+            '{КоррСчетКонтр}': companyProfile.correspondentAccount,
+            '{РасчетныйСчетКонтр}': companyProfile.settlementAccount,
+            '{ПочтаКонтрДляДокументов}': companyProfile.email,
+            '{ТелефонКонтр}': companyProfile.phone,
+            '{ДолжностьКонтр}': directorPosition,
+            '{ФИОКонтрДляПодписи}': directorFio,
+            '{Основание}': basis,
+            '{КоличествоПозиций}': String(positions.length),
+            '{ФактурнаяЧасть}': itemsBlock,
+            '{СуммаДокументаВСЕГО}': formatMoney(totalAmount),
+            '{СуммаДокументаПрописью}': amountToWordsRub(totalAmount),
+            '{СуммаНДСПрописью}': totalVat > 0 ? amountToWordsRub(totalVat) : 'без НДС',
+            '{60ОтСуммыДокумента}': formatMoney(totalAmount * 0.6),
+            '{40ОтСуммыДокумента}': formatMoney(totalAmount * 0.4),
+            '{УсловияОплаты}': companyProfile.paymentTerms,
+        },
+        pdfPostprocess: 'none',
+    };
+};
+
 const buildPurchaseUpdPayload = async (
     purchaseId: number,
     documentKey: Extract<PurchaseDocumentKey, 'purchase_upd_status_1' | 'purchase_upd_status_2'>
@@ -577,8 +701,8 @@ const buildPurchaseUpdPayload = async (
     const totalTax = positions.reduce((sum, position) => sum + position.сумма_ндс, 0);
     const totalAmount = positions.reduce((sum, position) => sum + position.сумма_всего, 0);
     const year = String(purchaseDate.getUTCFullYear());
-    const directorName = companyProfile.directorName || director?.fio || '';
-    const accountantName = companyProfile.accountantName || accountant?.fio || '';
+    const directorName = director?.fio || companyProfile.directorName || '';
+    const accountantName = accountant?.fio || companyProfile.accountantName || '';
 
     const cells: RenderXlsxTemplateParams['cells'] = [
         excelCell(targetSheetName, 'AM1', purchase.id),
@@ -842,6 +966,10 @@ export const buildPurchaseDocumentPayload = async (
     purchaseId: number,
     documentKey: PurchaseDocumentKey
 ): Promise<PurchaseDocumentRenderPayload> => {
+    if (documentKey === 'purchase_invoice') {
+        return buildPurchaseInvoicePayload(purchaseId);
+    }
+
     if (documentKey === 'purchase_torg_12') {
         return buildPurchaseTorg12Payload(purchaseId);
     }
