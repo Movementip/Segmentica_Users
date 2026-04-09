@@ -1,15 +1,18 @@
 import io
+import base64
 import hashlib
 import os
+import posixpath
 import shutil
 import subprocess
 import tempfile
 import traceback
 import unicodedata
+import xml.etree.ElementTree as ET
+import zipfile
 from copy import copy
 from pathlib import Path
 from urllib.parse import quote
-
 from flask import Flask, jsonify, request, send_file
 from openpyxl import load_workbook
 from openpyxl.cell.cell import MergedCell
@@ -21,7 +24,6 @@ from openpyxl.utils import (
 )
 from openpyxl.worksheet.properties import PageSetupProperties
 
-
 app = Flask(__name__)
 
 TEMPLATES_DIR = Path(os.environ.get("TEMPLATES_DIR", "/app/templates/forms")).resolve()
@@ -29,6 +31,27 @@ LIBREOFFICE_BIN = os.environ.get("LIBREOFFICE_BIN", "/usr/bin/soffice")
 LIBREOFFICE_TIMEOUT_MS = int(os.environ.get("LIBREOFFICE_TIMEOUT_MS", "30000"))
 CACHE_DIR = Path(os.environ.get("DOCUMENT_RENDERER_CACHE_DIR", "/tmp/segmentica-render-cache")).resolve()
 SUPPORTED_POSTPROCESS = {"none", "stack_pages_vertical"}
+WORDPROCESSING_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+DRAWING_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
+WORD_DRAWING_NS = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+OFFICE_DOCUMENT_REL_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+PACKAGE_REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
+XML_NS = "http://www.w3.org/XML/1998/namespace"
+WORD_PARAGRAPH_TAG = f"{{{WORDPROCESSING_NS}}}p"
+WORD_RUN_TAG = f"{{{WORDPROCESSING_NS}}}r"
+WORD_RUN_PROPERTIES_TAG = f"{{{WORDPROCESSING_NS}}}rPr"
+WORD_TEXT_TAG = f"{{{WORDPROCESSING_NS}}}t"
+WORD_TAB_TAG = f"{{{WORDPROCESSING_NS}}}tab"
+WORD_BREAK_TAG = f"{{{WORDPROCESSING_NS}}}br"
+DRAWING_BLIP_TAG = f"{{{DRAWING_NS}}}blip"
+WORD_DRAWING_INLINE_TAG = f"{{{WORD_DRAWING_NS}}}inline"
+WORD_DRAWING_ANCHOR_TAG = f"{{{WORD_DRAWING_NS}}}anchor"
+RELATIONSHIP_TAG = f"{{{PACKAGE_REL_NS}}}Relationship"
+REL_EMBED_ATTR = f"{{{OFFICE_DOCUMENT_REL_NS}}}embed"
+FIRST_REPLACED_IMAGE_SCALE = 1.0
+DOCX_MIMETYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+ET.register_namespace("w", WORDPROCESSING_NS)
 
 
 def to_ascii_filename(value: str) -> str:
@@ -446,6 +469,174 @@ def convert_to_pdf(input_path: Path, output_dir: Path) -> Path:
     return pdf_path
 
 
+def _build_parent_map(root):
+    return {child: parent for parent in root.iter() for child in parent}
+
+
+def _append_text_node(run, value: str) -> None:
+    text_node = ET.Element(WORD_TEXT_TAG)
+    if value.startswith(" ") or value.endswith(" ") or "  " in value:
+        text_node.set(f"{{{XML_NS}}}space", "preserve")
+    text_node.text = value
+    run.append(text_node)
+
+
+def _set_run_text(run, text: str) -> None:
+    run_properties = run.find(WORD_RUN_PROPERTIES_TAG)
+    for child in list(run):
+        if child is not run_properties:
+            run.remove(child)
+
+    lines = str(text or "").split("\n")
+    if not lines:
+        lines = [""]
+    for index, line in enumerate(lines):
+        segments = str(line).split("\t")
+        for segment_index, segment in enumerate(segments):
+            _append_text_node(run, segment)
+            if segment_index < len(segments) - 1:
+                run.append(ET.Element(WORD_TAB_TAG))
+        if index < len(lines) - 1:
+            run.append(ET.Element(WORD_BREAK_TAG))
+
+
+def _replace_placeholders_in_paragraph(paragraph, replacements: dict[str, str]) -> bool:
+    runs = [run for run in paragraph.iter(WORD_RUN_TAG)]
+    if not runs:
+        return False
+
+    full_text = "".join("".join(text_node.text or "" for text_node in run.iter(WORD_TEXT_TAG)) for run in runs)
+    if not full_text:
+        return False
+
+    replaced_text = full_text
+    for placeholder, value in replacements.items():
+        if not placeholder:
+            continue
+        replaced_text = replaced_text.replace(str(placeholder), str(value or ""))
+
+    if replaced_text == full_text:
+        return False
+
+    parent_map = _build_parent_map(paragraph)
+    first_run = runs[0]
+    _set_run_text(first_run, replaced_text)
+
+    for run in runs[1:]:
+        parent = parent_map.get(run)
+        if parent is not None:
+            parent.remove(run)
+
+    return True
+
+
+def _resolve_first_image_entry_name(template_zip):
+    try:
+        document_root = ET.fromstring(template_zip.read("word/document.xml"))
+        relationships_root = ET.fromstring(template_zip.read("word/_rels/document.xml.rels"))
+    except (KeyError, ET.ParseError):
+        return None
+
+    relationships = {}
+    for rel in relationships_root.iter(RELATIONSHIP_TAG):
+        rel_id = rel.get("Id")
+        target = rel.get("Target")
+        if rel_id and target:
+            relationships[rel_id] = target
+
+    for blip in document_root.iter(DRAWING_BLIP_TAG):
+        rel_id = blip.get(REL_EMBED_ATTR)
+        target = relationships.get(rel_id)
+        if not target:
+            continue
+        entry_name = target.lstrip("/") if target.startswith("/") else posixpath.normpath(posixpath.join("word", target))
+        if entry_name.startswith("word/media/"):
+            return entry_name
+
+    return None
+
+
+def _scale_first_drawing_container(root, scale_factor: float) -> bool:
+    parent_map = _build_parent_map(root)
+
+    for blip in root.iter(DRAWING_BLIP_TAG):
+        current = blip
+        while current is not None:
+            current = parent_map.get(current)
+            if current is None:
+                break
+            if current.tag not in {WORD_DRAWING_INLINE_TAG, WORD_DRAWING_ANCHOR_TAG}:
+                continue
+
+            for node in current.iter():
+                cx = node.get("cx")
+                cy = node.get("cy")
+                if cx and cx.isdigit():
+                    node.set("cx", str(max(1, round(int(cx) * scale_factor))))
+                if cy and cy.isdigit():
+                    node.set("cy", str(max(1, round(int(cy) * scale_factor))))
+            return True
+
+    return False
+
+
+def _replace_first_image(
+    template_path: Path,
+    output_path: Path,
+    replacements: dict[str, str],
+    replace_first_image_bytes: bytes,
+) -> None:
+    with zipfile.ZipFile(template_path, "r") as template_zip, zipfile.ZipFile(
+        output_path, "w", compression=zipfile.ZIP_DEFLATED
+    ) as output_zip:
+        first_image_entry_name = _resolve_first_image_entry_name(template_zip)
+        for entry in template_zip.infolist():
+            data = template_zip.read(entry.filename)
+            if entry.filename == first_image_entry_name:
+                data = replace_first_image_bytes
+            elif entry.filename.startswith("word/") and entry.filename.endswith(".xml"):
+                try:
+                    root = ET.fromstring(data)
+                    changed = False
+                    for paragraph in root.iter(WORD_PARAGRAPH_TAG):
+                        changed = _replace_placeholders_in_paragraph(paragraph, replacements) or changed
+                    if entry.filename == "word/document.xml":
+                        changed = _scale_first_drawing_container(root, FIRST_REPLACED_IMAGE_SCALE) or changed
+                    if changed:
+                        data = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+                except ET.ParseError:
+                    pass
+            output_zip.writestr(entry, data)
+
+
+def apply_replacements_to_docx(
+    template_path: Path,
+    output_path: Path,
+    replacements: dict[str, str],
+    replace_first_image_bytes: bytes = None,
+) -> None:
+    if replace_first_image_bytes:
+        _replace_first_image(template_path, output_path, replacements, replace_first_image_bytes)
+    else:
+        with zipfile.ZipFile(template_path, "r") as template_zip, zipfile.ZipFile(
+            output_path, "w", compression=zipfile.ZIP_DEFLATED
+        ) as output_zip:
+            for entry in template_zip.infolist():
+                data = template_zip.read(entry.filename)
+                if entry.filename.startswith("word/") and entry.filename.endswith(".xml"):
+                    try:
+                        root = ET.fromstring(data)
+                        changed = False
+                        for paragraph in root.iter(WORD_PARAGRAPH_TAG):
+                            changed = _replace_placeholders_in_paragraph(paragraph, replacements) or changed
+                        if changed:
+                            data = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+                    except ET.ParseError:
+                        pass
+
+                output_zip.writestr(entry, data)
+
+
 def ensure_cache_dir() -> None:
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -572,6 +763,83 @@ def render_xlsx_template():
         final_pdf = pdf_path
 
         pdf_bytes = final_pdf.read_bytes()
+        cached_pdf_path.write_bytes(pdf_bytes)
+        response = send_file(
+            io.BytesIO(pdf_bytes),
+            mimetype="application/pdf",
+            as_attachment=True,
+            download_name="document.pdf",
+        )
+        return apply_download_filename(response, f"{file_base_name}.pdf", as_attachment=True)
+    except FileNotFoundError as error:
+        return jsonify({"error": str(error)}), 404
+    except Exception as error:
+        traceback.print_exc()
+        return jsonify({"error": str(error)}), 500
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+@app.post("/render/docx-template")
+def render_docx_template():
+    payload = request.get_json(silent=True) or {}
+    template_name = str(payload.get("templateName") or "").strip()
+    file_base_name = str(payload.get("fileBaseName") or "document").strip() or "document"
+    output_format = str(payload.get("outputFormat") or "pdf").strip().lower()
+    replacements = payload.get("replacements") or {}
+    replace_first_image_base64 = str(payload.get("replaceFirstImageBase64") or "").strip()
+
+    if not template_name:
+        return jsonify({"error": "templateName is required"}), 400
+    if output_format not in {"word", "pdf"}:
+        return jsonify({"error": "outputFormat must be word or pdf"}), 400
+    if not isinstance(replacements, dict):
+        return jsonify({"error": "replacements must be an object"}), 400
+
+    replace_first_image_bytes = None
+    if replace_first_image_base64:
+        try:
+            replace_first_image_bytes = base64.b64decode(replace_first_image_base64, validate=True)
+        except Exception:
+            return jsonify({"error": "replaceFirstImageBase64 must be valid base64"}), 400
+
+    clear_cache_dir()
+    temp_dir = Path(tempfile.mkdtemp(prefix="segmentica-render-"))
+    try:
+        template_path = ensure_template_path(template_name)
+        generated_docx = temp_dir / f"{file_base_name}.docx"
+        apply_replacements_to_docx(
+            template_path,
+            generated_docx,
+            {str(key): "" if value is None else str(value) for key, value in replacements.items()},
+            replace_first_image_bytes,
+        )
+        generated_docx_bytes = generated_docx.read_bytes()
+
+        if output_format == "word":
+            response = send_file(
+                io.BytesIO(generated_docx_bytes),
+                mimetype=DOCX_MIMETYPE,
+                as_attachment=True,
+                download_name="document.docx",
+            )
+            return apply_download_filename(response, f"{file_base_name}.docx", as_attachment=True)
+
+        ensure_cache_dir()
+        cache_key = build_cache_key(generated_docx_bytes, output_format, "none")
+        cached_pdf_path = CACHE_DIR / f"{cache_key}.pdf"
+        if cached_pdf_path.exists():
+            pdf_bytes = cached_pdf_path.read_bytes()
+            response = send_file(
+                io.BytesIO(pdf_bytes),
+                mimetype="application/pdf",
+                as_attachment=True,
+                download_name="document.pdf",
+            )
+            return apply_download_filename(response, f"{file_base_name}.pdf", as_attachment=True)
+
+        pdf_path = convert_to_pdf(generated_docx, temp_dir)
+        pdf_bytes = pdf_path.read_bytes()
         cached_pdf_path.write_bytes(pdf_bytes)
         response = send_file(
             io.BytesIO(pdf_bytes),

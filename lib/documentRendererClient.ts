@@ -51,6 +51,14 @@ export type RenderXlsxTemplateParams = {
     postprocess?: DocumentTemplatePostprocess;
 };
 
+export type RenderDocxTemplateParams = {
+    templateName: string;
+    fileBaseName: string;
+    replacements: Record<string, string>;
+    replaceFirstImageBase64?: string;
+    outputFormat: 'word' | 'pdf';
+};
+
 const DOCUMENT_RENDERER_URL = String(process.env.DOCUMENT_RENDERER_URL || '').trim().replace(/\/+$/, '');
 
 export const hasDocumentRenderer = (): boolean => Boolean(DOCUMENT_RENDERER_URL);
@@ -91,6 +99,47 @@ export const renderXlsxTemplateDocument = async (params: RenderXlsxTemplateParam
         contentType: response.headers.get('content-type')
             || (params.outputFormat === 'excel'
                 ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+                : 'application/pdf'),
+    };
+};
+
+export const renderDocxTemplateDocument = async (params: RenderDocxTemplateParams): Promise<{
+    buffer: Buffer;
+    filename: string;
+    contentType: string;
+}> => {
+    if (!DOCUMENT_RENDERER_URL) {
+        throw new Error('DOCUMENT_RENDERER_URL is not configured');
+    }
+
+    const response = await fetch(`${DOCUMENT_RENDERER_URL}/render/docx-template`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(params),
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text().catch(() => '');
+        throw new Error(
+            `Document renderer failed with status ${response.status}. ${errorText || 'No response body from renderer.'}`
+        );
+    }
+
+    const disposition = response.headers.get('content-disposition') || '';
+    const filenameMatch = disposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)/i);
+    const extension = params.outputFormat === 'word' ? 'docx' : 'pdf';
+    const filename = filenameMatch?.[1]
+        ? decodeURIComponent(filenameMatch[1].replace(/"/g, ''))
+        : `${params.fileBaseName}.${extension}`;
+
+    return {
+        buffer: Buffer.from(await response.arrayBuffer()),
+        filename,
+        contentType: response.headers.get('content-type')
+            || (params.outputFormat === 'word'
+                ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
                 : 'application/pdf'),
     };
 };

@@ -2,13 +2,29 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { query } from './db';
 
-export type DocumentTemplateKey = 'finance_statement_t49' | 'finance_payslip' | 'finance_timesheet_t13';
+export type DocumentTemplateKey =
+    | 'finance_statement_t49'
+    | 'finance_payslip'
+    | 'finance_timesheet_t13'
+    | 'order_invoice'
+    | 'order_supply_contract'
+    | 'order_service_contract'
+    | 'order_work_contract'
+    | 'order_outgoing_act';
 
-export type DocumentTemplateSourceFormat = 'xls' | 'xlsx' | 'docx';
+export type DocumentTemplateSourceFormat = 'xls' | 'xlsx' | 'doc' | 'docx';
 export type DocumentTemplateRendererKey = 'libreoffice';
 export type DocumentTemplatePreviewMode = 'pdf' | 'html';
 export type DocumentTemplatePostprocess = 'none' | 'stack_pages_vertical';
-export type DocumentTemplateFillStrategyKey = 'finance_statement_t49' | 'finance_payslip' | 'finance_timesheet_t13';
+export type DocumentTemplateFillStrategyKey =
+    | 'finance_statement_t49'
+    | 'finance_payslip'
+    | 'finance_timesheet_t13'
+    | 'order_invoice'
+    | 'order_supply_contract'
+    | 'order_service_contract'
+    | 'order_work_contract'
+    | 'order_outgoing_act';
 
 export type DocumentTemplateDefinition = {
     key: DocumentTemplateKey;
@@ -19,7 +35,7 @@ export type DocumentTemplateDefinition = {
     fillStrategyKey: DocumentTemplateFillStrategyKey;
     previewMode: DocumentTemplatePreviewMode;
     pdfPostprocess: DocumentTemplatePostprocess;
-    outputFormats: Array<'excel' | 'pdf'>;
+    outputFormats: Array<'excel' | 'pdf' | 'word'>;
     templateName: string;
     templatePath: string;
     versionNo: number | null;
@@ -109,20 +125,95 @@ const STATIC_TEMPLATES: Record<DocumentTemplateKey, DocumentTemplateDefinition> 
         versionNo: 1,
         isActive: true,
     },
+    order_invoice: {
+        key: 'order_invoice',
+        name: 'Счет на оплату',
+        description: 'Исходящий счет на оплату по заявке.',
+        sourceFormat: 'docx',
+        rendererKey: 'libreoffice',
+        fillStrategyKey: 'order_invoice',
+        previewMode: 'pdf',
+        pdfPostprocess: 'none',
+        outputFormats: ['word', 'pdf'],
+        templateName: 'Исходящий_счет_на_оплату.docx',
+        templatePath: path.join(TEMPLATE_DIR, 'Исходящий_счет_на_оплату.docx'),
+        versionNo: 1,
+        isActive: true,
+    },
+    order_supply_contract: {
+        key: 'order_supply_contract',
+        name: 'Договор поставки',
+        description: 'Исходящий договор поставки по заявке.',
+        sourceFormat: 'docx',
+        rendererKey: 'libreoffice',
+        fillStrategyKey: 'order_supply_contract',
+        previewMode: 'pdf',
+        pdfPostprocess: 'none',
+        outputFormats: ['word', 'pdf'],
+        templateName: 'Договор_поставки.docx',
+        templatePath: path.join(TEMPLATE_DIR, 'Договор_поставки.docx'),
+        versionNo: 1,
+        isActive: true,
+    },
+    order_service_contract: {
+        key: 'order_service_contract',
+        name: 'Договор оказания услуг',
+        description: 'Исходящий договор оказания услуг по заявке.',
+        sourceFormat: 'docx',
+        rendererKey: 'libreoffice',
+        fillStrategyKey: 'order_service_contract',
+        previewMode: 'pdf',
+        pdfPostprocess: 'none',
+        outputFormats: ['word', 'pdf'],
+        templateName: 'Договор_оказания_услуг.docx',
+        templatePath: path.join(TEMPLATE_DIR, 'Договор_оказания_услуг.docx'),
+        versionNo: 1,
+        isActive: true,
+    },
+    order_work_contract: {
+        key: 'order_work_contract',
+        name: 'Договор подряда',
+        description: 'Исходящий договор подряда по заявке.',
+        sourceFormat: 'docx',
+        rendererKey: 'libreoffice',
+        fillStrategyKey: 'order_work_contract',
+        previewMode: 'pdf',
+        pdfPostprocess: 'none',
+        outputFormats: ['word', 'pdf'],
+        templateName: 'Договор_подряда.docx',
+        templatePath: path.join(TEMPLATE_DIR, 'Договор_подряда.docx'),
+        versionNo: 1,
+        isActive: true,
+    },
+    order_outgoing_act: {
+        key: 'order_outgoing_act',
+        name: 'Исходящий акт',
+        description: 'Исходящий акт по заявке.',
+        sourceFormat: 'docx',
+        rendererKey: 'libreoffice',
+        fillStrategyKey: 'order_outgoing_act',
+        previewMode: 'pdf',
+        pdfPostprocess: 'none',
+        outputFormats: ['word', 'pdf'],
+        templateName: 'Исходящий_акт.docx',
+        templatePath: path.join(TEMPLATE_DIR, 'Исходящий_акт.docx'),
+        versionNo: 1,
+        isActive: true,
+    },
 };
 
-const normalizeOutputFormats = (value: unknown): Array<'excel' | 'pdf'> => {
+const normalizeOutputFormats = (value: unknown): Array<'excel' | 'pdf' | 'word'> => {
     if (!Array.isArray(value)) return ['excel', 'pdf'];
     const formats = value
         .map((item) => String(item || '').trim().toLowerCase())
-        .filter((item): item is 'excel' | 'pdf' => item === 'excel' || item === 'pdf');
+        .filter((item): item is 'excel' | 'pdf' | 'word' => item === 'excel' || item === 'pdf' || item === 'word');
 
     return formats.length ? formats : ['excel', 'pdf'];
 };
 
 const normalizeSourceFormat = (value: unknown, fallback: DocumentTemplateSourceFormat): DocumentTemplateSourceFormat => {
     const format = String(value || '').trim().toLowerCase();
-    if (format === 'xls' || format === 'xlsx' || format === 'docx') return format;
+    if (format === 'xls' || format === 'xlsx' || format === 'doc' || format === 'docx') return format;
     return fallback;
 };
 
@@ -152,6 +243,11 @@ const normalizeFillStrategyKey = (
     if (strategy === 'finance_statement_t49') return 'finance_statement_t49';
     if (strategy === 'finance_payslip') return 'finance_payslip';
     if (strategy === 'finance_timesheet_t13') return 'finance_timesheet_t13';
+    if (strategy === 'order_invoice') return 'order_invoice';
+    if (strategy === 'order_supply_contract') return 'order_supply_contract';
+    if (strategy === 'order_service_contract') return 'order_service_contract';
+    if (strategy === 'order_work_contract') return 'order_work_contract';
+    if (strategy === 'order_outgoing_act') return 'order_outgoing_act';
     return fallback;
 };
 
