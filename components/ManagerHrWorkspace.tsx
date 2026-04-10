@@ -53,6 +53,7 @@ const EMPTY_SELECT_VALUE = '__empty__';
 
 type ManagerHrWorkspaceProps = {
     manager: ManagerSummary;
+    extraActions?: React.ReactNode;
     canEdit: boolean;
     canScheduleEdit: boolean;
     canScheduleApplyPattern: boolean;
@@ -205,6 +206,7 @@ const createMilitaryDocument = (): ManagerMilitaryDocument => ({
 
 export function ManagerHrWorkspace({
     manager,
+    extraActions,
     canEdit,
     canScheduleEdit,
     canScheduleApplyPattern,
@@ -446,6 +448,7 @@ export function ManagerHrWorkspace({
                             <Badge variant="soft" color={data.manager.isActive ? 'green' : 'red'} highContrast className={styles.statusBadge}>
                                 {data.manager.isActive ? 'Работает' : 'Неактивен'}
                             </Badge>
+                            {extraActions}
 
                             <Button
                                 type="button"

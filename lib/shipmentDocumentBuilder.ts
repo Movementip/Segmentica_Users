@@ -6,7 +6,7 @@ import {
     getShipmentDocumentDefinition,
     type ShipmentDocumentKey,
 } from './shipmentDocumentDefinitions';
-import { buildClientDisplayName, buildClientPrimaryAddress } from './clientContragents';
+import { buildClientDisplayName, buildClientPrimaryAddress, type ClientBankAccount } from './clientContragents';
 
 type ShipmentDocumentRow = {
     id: number;
@@ -29,6 +29,7 @@ type ShipmentDocumentRow = {
     клиент_отчество?: string | null;
     клиент_инн?: string | null;
     клиент_кпп?: string | null;
+    клиент_окпо?: string | null;
     клиент_адрес?: string | null;
     клиент_адрес_регистрации?: string | null;
     клиент_адрес_печати?: string | null;
@@ -62,6 +63,16 @@ type CompanyProfile = {
     documentAddress: string;
     inn: string;
     kpp: string;
+    ogrn: string;
+    okpo: string;
+    oktmo: string;
+    okato: string;
+    okved: string;
+    activityCode: string;
+    bankName: string;
+    bik: string;
+    correspondentAccount: string;
+    settlementAccount: string;
     phone: string;
     email: string;
     city: string;
@@ -77,6 +88,7 @@ export type ShipmentDocumentRenderPayload = {
     fileBaseName: string;
     cells: RenderXlsxTemplateParams['cells'];
     rowVisibility?: RenderXlsxTemplateParams['rowVisibility'];
+    rowBreaks?: RenderXlsxTemplateParams['rowBreaks'];
     printAreas?: RenderXlsxTemplateParams['printAreas'];
     rangeCopies?: RenderXlsxTemplateParams['rangeCopies'];
     sheetCopies?: RenderXlsxTemplateParams['sheetCopies'];
@@ -94,6 +106,16 @@ const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
     documentAddress: '620061, Свердловская обл, город Екатеринбург г.о., Исток п, Главная ул, строение 21, помещение 421',
     inn: '6685205790',
     kpp: '668501001',
+    ogrn: '1226600072577',
+    okpo: '95164141',
+    oktmo: '65701000',
+    okato: '65401380002',
+    okved: '46.73.6',
+    activityCode: '46.73.6',
+    bankName: 'СБЕРБАНК',
+    bik: '782347238904238904',
+    correspondentAccount: '7283489324879234',
+    settlementAccount: '345345345',
     phone: '89193730303',
     email: 'segmenica@ru',
     city: 'Екатеринбург',
@@ -107,6 +129,11 @@ const TORG_ITEM_ROWS = [
     30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41,
     47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61,
 ];
+const TORG_FIRST_PAGE_ITEM_ROWS = TORG_ITEM_ROWS.filter((row) => row >= 30 && row <= 41);
+const TORG_SECOND_PAGE_ITEM_ROWS = TORG_ITEM_ROWS.filter((row) => row >= 47 && row <= 61);
+const TORG_ACTIVITY_CODE = '43.76.6';
+const TORG_FIRST_PAGE_BREAK_ROW = 42;
+const TORG_FOOTER_PAGE_BREAK_ROW = 63;
 
 const UNIT_CODE_MAP: Record<string, string> = {
     шт: '796',
@@ -124,6 +151,19 @@ const normalizeNullableText = (value: unknown): string => {
     if (value == null) return '';
     const text = String(value).trim();
     return text || '';
+};
+
+const toShortFio = (value: string | null | undefined): string => {
+    const normalized = normalizeNullableText(value);
+    if (!normalized) return '';
+    const parts = normalized.split(/\s+/).filter(Boolean);
+    if (parts.length === 1) return parts[0];
+    const [lastName, firstName = '', middleName = ''] = parts;
+    const initials = [firstName, middleName]
+        .filter(Boolean)
+        .map((part) => `${part.charAt(0).toUpperCase()}.`)
+        .join(' ');
+    return initials ? `${lastName} ${initials}` : lastName;
 };
 
 const parseDateOnly = (value: string | null | undefined): Date => {
@@ -151,6 +191,31 @@ const formatDateRuLong = (value: Date): string => {
     const formatted = formatter.format(value);
     return formatted.includes('г.') ? formatted : `${formatted} г.`;
 };
+
+const getMonthRuGenitive = (value: Date): string => {
+    const months = [
+        'января',
+        'февраля',
+        'марта',
+        'апреля',
+        'мая',
+        'июня',
+        'июля',
+        'августа',
+        'сентября',
+        'октября',
+        'ноября',
+        'декабря',
+    ];
+
+    return months[value.getUTCMonth()] || '';
+};
+
+const formatDateRuParts = (value: Date): { day: string; month: string; year: string } => ({
+    day: String(value.getUTCDate()).padStart(2, '0'),
+    month: getMonthRuGenitive(value),
+    year: String(value.getUTCFullYear()),
+});
 
 const formatMoney = (value: number): string =>
     new Intl.NumberFormat('ru-RU', {
@@ -262,6 +327,16 @@ const getCompanyProfile = async (): Promise<CompanyProfile> => {
             documentAddress: normalizeNullableText(value.documentAddress ?? value.postalAddress) || DEFAULT_COMPANY_PROFILE.documentAddress,
             inn: normalizeNullableText(value.inn) || DEFAULT_COMPANY_PROFILE.inn,
             kpp: normalizeNullableText(value.kpp) || DEFAULT_COMPANY_PROFILE.kpp,
+            ogrn: normalizeNullableText(value.ogrn) || DEFAULT_COMPANY_PROFILE.ogrn,
+            okpo: normalizeNullableText(value.okpo) || DEFAULT_COMPANY_PROFILE.okpo,
+            oktmo: normalizeNullableText(value.oktmo) || DEFAULT_COMPANY_PROFILE.oktmo,
+            okato: normalizeNullableText(value.okato) || DEFAULT_COMPANY_PROFILE.okato,
+            okved: normalizeNullableText(value.okved ?? value.mainOkved) || DEFAULT_COMPANY_PROFILE.okved,
+            activityCode: normalizeNullableText(value.activityCode ?? value.okdp ?? value.okved ?? value.mainOkved) || DEFAULT_COMPANY_PROFILE.activityCode,
+            bankName: normalizeNullableText(value.bankName ?? value.bank) || DEFAULT_COMPANY_PROFILE.bankName,
+            bik: normalizeNullableText(value.bik) || DEFAULT_COMPANY_PROFILE.bik,
+            correspondentAccount: normalizeNullableText(value.correspondentAccount ?? value.ks) || DEFAULT_COMPANY_PROFILE.correspondentAccount,
+            settlementAccount: normalizeNullableText(value.settlementAccount ?? value.rs) || DEFAULT_COMPANY_PROFILE.settlementAccount,
             phone: normalizeNullableText(value.phone) || DEFAULT_COMPANY_PROFILE.phone,
             email: normalizeNullableText(value.email) || DEFAULT_COMPANY_PROFILE.email,
             city: normalizeNullableText(value.city) || DEFAULT_COMPANY_PROFILE.city,
@@ -372,6 +447,7 @@ const getShipmentDocumentData = async (
             k."отчество" AS клиент_отчество,
             k."инн" AS клиент_инн,
             k."кпп" AS клиент_кпп,
+            k."окпо" AS клиент_окпо,
             k."адрес" AS клиент_адрес,
             k."адрес_регистрации" AS клиент_адрес_регистрации,
             k."адрес_печати" AS клиент_адрес_печати,
@@ -453,8 +529,27 @@ const excelCell = (
     style: wrapText ? { wrapText: true, vertical: 'top' } : undefined,
 });
 
+const excelLeftCell = (
+    sheetName: string,
+    address: string,
+    value: string | number,
+    wrapText = false
+): RenderXlsxTemplateParams['cells'][number] => ({
+    sheetName,
+    address,
+    value,
+    style: {
+        horizontal: 'left',
+        vertical: wrapText ? 'top' : 'center',
+        ...(wrapText ? { wrapText: true } : {}),
+    },
+});
+
 const clearCells = (sheetName: string, addresses: string[]): RenderXlsxTemplateParams['cells'] =>
     addresses.map((address) => excelCell(sheetName, address, ''));
+
+const shiftCellAddress = (address: string, rowOffset: number): string =>
+    address.replace(/([A-Z]+)(\d+)/, (_, column: string, row: string) => `${column}${Number(row) + rowOffset}`);
 
 const getUnitCode = (unit: string | null | undefined): string => {
     const normalized = normalizeNullableText(unit).toLowerCase().replace(/\s+/g, '');
@@ -468,6 +563,14 @@ const buildCompanyBlock = (profile: CompanyProfile): string =>
         [profile.inn && `ИНН ${profile.inn}`, profile.kpp && `КПП ${profile.kpp}`].filter(Boolean).join(', '),
         [profile.phone && `тел. ${profile.phone}`, profile.email].filter(Boolean).join(', '),
     ].filter(Boolean).join('\n');
+
+const buildCompanyTransportLine = (profile: CompanyProfile): string =>
+    [
+        profile.legalName || profile.displayName,
+        profile.documentAddress || profile.legalAddress,
+        [profile.inn && `ИНН ${profile.inn}`, profile.kpp && `КПП ${profile.kpp}`].filter(Boolean).join(', '),
+        [profile.phone && `тел. ${profile.phone}`, profile.email].filter(Boolean).join(', '),
+    ].filter(Boolean).join(', ');
 
 const buildClientBlock = (shipment: ShipmentDocumentRow): string => {
     const clientName = buildClientDisplayName({
@@ -499,12 +602,158 @@ const buildClientBlock = (shipment: ShipmentDocumentRow): string => {
     ].filter(Boolean).join('\n');
 };
 
+const buildClientTransportLine = (shipment: ShipmentDocumentRow): string => {
+    const clientName = buildClientDisplayName({
+        название: shipment.клиент_название,
+        тип: shipment.клиент_тип,
+        краткоеНазвание: shipment.клиент_краткое_название,
+        полноеНазвание: shipment.клиент_полное_название,
+        фамилия: shipment.клиент_фамилия,
+        имя: shipment.клиент_имя,
+        отчество: shipment.клиент_отчество,
+    });
+    const clientAddress = buildClientPrimaryAddress({
+        адрес: shipment.клиент_адрес,
+        адресРегистрации: shipment.клиент_адрес_регистрации,
+        адресПечати: shipment.клиент_адрес_печати,
+    }) || '';
+
+    return [
+        clientName,
+        clientAddress,
+        [
+            shipment.клиент_инн && `ИНН ${shipment.клиент_инн}`,
+            shipment.клиент_кпп && `КПП ${shipment.клиент_кпп}`,
+        ].filter(Boolean).join(', '),
+        [
+            shipment.клиент_телефон && `тел. ${shipment.клиент_телефон}`,
+            shipment.клиент_email,
+        ].filter(Boolean).join(', '),
+    ].filter(Boolean).join(', ');
+};
+
+const buildCarrierTransportLine = (shipment: ShipmentDocumentRow): string =>
+    [
+        shipment.транспорт_название || 'Перевозчик не указан',
+        [shipment.транспорт_телефон && `тел. ${shipment.транспорт_телефон}`, shipment.транспорт_email].filter(Boolean).join(', '),
+    ].filter(Boolean).join(', ');
+
 const buildShipmentTransportSummary = (shipment: ShipmentDocumentRow): string => {
     if (!shipment.использовать_доставку) return 'Самовывоз';
     return [
         shipment.транспорт_название || 'Доставка',
         shipment.стоимость_доставки != null ? `стоимость доставки ${formatMoney(shipment.стоимость_доставки)} руб.` : '',
     ].filter(Boolean).join(', ');
+};
+
+const buildCompanyTorgName = (profile: CompanyProfile): string =>
+    profile.legalName || profile.displayName;
+
+const buildCompanyTorgLine = (profile: CompanyProfile): string =>
+    [
+        buildCompanyTorgName(profile),
+        profile.documentAddress || profile.legalAddress,
+        profile.phone && `тел. ${profile.phone}`,
+        [profile.inn && `ИНН ${profile.inn}`, profile.kpp && `КПП ${profile.kpp}`].filter(Boolean).join(', '),
+        [
+            profile.settlementAccount && `р/с ${profile.settlementAccount}`,
+            profile.bankName && `в ${profile.bankName}`,
+            profile.correspondentAccount && `к/с ${profile.correspondentAccount}`,
+            profile.bik && `БИК ${profile.bik}`,
+        ].filter(Boolean).join(', '),
+    ].filter(Boolean).join(', ');
+
+const buildClientTorgName = (shipment: ShipmentDocumentRow): string =>
+    shipment.клиент_тип === 'Организация'
+        ? normalizeNullableText(shipment.клиент_полное_название)
+        || normalizeNullableText(shipment.клиент_краткое_название)
+        || normalizeNullableText(shipment.клиент_название)
+        : buildClientDisplayName({
+            название: shipment.клиент_название,
+            тип: shipment.клиент_тип,
+            краткоеНазвание: shipment.клиент_краткое_название,
+            полноеНазвание: shipment.клиент_полное_название,
+            фамилия: shipment.клиент_фамилия,
+            имя: shipment.клиент_имя,
+            отчество: shipment.клиент_отчество,
+        });
+
+const buildClientTorgLine = (shipment: ShipmentDocumentRow, clientBankAccount: ClientBankAccount | null): string => {
+    const clientAddress = buildClientPrimaryAddress({
+        адрес: shipment.клиент_адрес,
+        адресРегистрации: shipment.клиент_адрес_регистрации,
+        адресПечати: shipment.клиент_адрес_печати,
+    }) || '';
+
+    return [
+        buildClientTorgName(shipment),
+        clientAddress,
+        shipment.клиент_телефон && `тел. ${shipment.клиент_телефон}`,
+        [shipment.клиент_инн && `ИНН ${shipment.клиент_инн}`, shipment.клиент_кпп && `КПП ${shipment.клиент_кпп}`].filter(Boolean).join(', '),
+        [
+            clientBankAccount?.settlementAccount && `р/с ${clientBankAccount.settlementAccount}`,
+            clientBankAccount?.bankName && `в ${clientBankAccount.bankName}`,
+            clientBankAccount?.correspondentAccount && `к/с ${clientBankAccount.correspondentAccount}`,
+            clientBankAccount?.bik && `БИК ${clientBankAccount.bik}`,
+        ].filter(Boolean).join(', '),
+    ].filter(Boolean).join(', ');
+};
+
+const numToWordsRuGenitive = (value: number): string => {
+    const forms: Record<number, string> = {
+        0: 'нуля',
+        1: 'одного',
+        2: 'двух',
+        3: 'трех',
+        4: 'четырех',
+        5: 'пяти',
+        6: 'шести',
+        7: 'семи',
+        8: 'восьми',
+        9: 'девяти',
+        10: 'десяти',
+        11: 'одиннадцати',
+        12: 'двенадцати',
+        13: 'тринадцати',
+        14: 'четырнадцати',
+        15: 'пятнадцати',
+        16: 'шестнадцати',
+        17: 'семнадцати',
+        18: 'восемнадцати',
+        19: 'девятнадцати',
+        20: 'двадцати',
+    };
+    if (value in forms) return forms[value];
+    return numToWordsRu(value, false);
+};
+
+const getPrimaryClientBankAccount = async (clientId: number | null): Promise<ClientBankAccount | null> => {
+    if (!clientId) return null;
+
+    const res = await query(
+        `
+        SELECT *
+        FROM public."Расчетные_счета_клиентов"
+        WHERE "клиент_id" = $1
+        ORDER BY COALESCE("основной", false) DESC, sort_order ASC, id ASC
+        LIMIT 1
+        `,
+        [clientId]
+    );
+
+    const row = res.rows?.[0];
+    if (!row) return null;
+
+    return {
+        id: Number(row.id),
+        name: normalizeNullableText(row.название),
+        bik: normalizeNullableText(row.бик) || null,
+        bankName: normalizeNullableText(row.банк) || null,
+        correspondentAccount: normalizeNullableText(row.к_с) || null,
+        settlementAccount: normalizeNullableText(row.р_с) || null,
+        isPrimary: Boolean(row.основной),
+        sortOrder: Number(row.sort_order) || 0,
+    };
 };
 
 const buildShipmentCargoSummary = (positions: ShipmentDocumentPosition[]): string =>
@@ -570,6 +819,12 @@ const buildShipmentUpdPayload = async (
     const year = String(shipmentDate.getUTCFullYear());
     const directorName = director?.fio || companyProfile.directorName || '';
     const accountantName = accountant?.fio || companyProfile.accountantName || '';
+    const directorPosition = companyProfile.directorPosition || director?.position || 'Генеральный директор';
+    const directorShortName = toShortFio(directorName);
+    const accountantShortName = toShortFio(accountantName);
+    const footerRowOffset = footerStartRow - 31;
+    const footerCell = (address: string, value: string | number, wrapText = false) =>
+        excelCell(targetSheetName, shiftCellAddress(address, footerRowOffset), value, wrapText);
 
     const cells: RenderXlsxTemplateParams['cells'] = [
         excelCell(targetSheetName, 'AM1', shipment.id),
@@ -586,29 +841,45 @@ const buildShipmentUpdPayload = async (
         excelCell(targetSheetName, 'BA12', clientAddress, true),
         excelCell(targetSheetName, 'BA13', [shipment.клиент_инн, shipment.клиент_кпп].filter(Boolean).join('/') || ''),
         excelCell(targetSheetName, 'BA14', 'российский рубль, 643'),
-        excelCell(targetSheetName, 'AR40', basis, true),
-        excelCell(targetSheetName, 'AF42', buildShipmentTransportSummary(shipment), true),
-        excelCell(targetSheetName, 'B35', positions.length),
-        excelCell(targetSheetName, 'CJ31', Number(totalNet.toFixed(2))),
-        excelCell(targetSheetName, 'DZ31', Number(totalAmount.toFixed(2))),
-        excelCell(targetSheetName, 'AA45', ''),
-        excelCell(targetSheetName, 'BA45', ''),
-        excelCell(targetSheetName, 'DK45', ''),
-        excelCell(targetSheetName, 'EI45', ''),
-        excelCell(targetSheetName, 'AI47', String(shipmentDate.getUTCDate()).padStart(2, '0')),
-        excelCell(targetSheetName, 'AO47', new Intl.DateTimeFormat('ru-RU', { month: 'long', timeZone: 'UTC' }).format(shipmentDate)),
-        excelCell(targetSheetName, 'BN47', year.slice(0, 2)),
-        excelCell(targetSheetName, 'BR47', year.slice(2)),
-        excelCell(targetSheetName, 'AZ33', ''),
-        excelCell(targetSheetName, 'BO33', directorName),
-        excelCell(targetSheetName, 'DQ33', ''),
-        excelCell(targetSheetName, 'EM34', accountantName),
+        footerCell('B35', positions.length),
+        footerCell('CJ31', Number(totalNet.toFixed(2))),
+        footerCell('DZ31', Number(totalAmount.toFixed(2))),
+        footerCell('AZ33', ''),
+        footerCell('BO33', directorShortName),
+        footerCell('DQ33', ''),
+        footerCell('EM34', accountantShortName),
+        footerCell('AR40', basis, true),
+        footerCell('AF42', buildShipmentTransportSummary(shipment), true),
+        footerCell('B45', directorPosition),
+        footerCell('AA45', ''),
+        footerCell('BA45', directorName),
+        footerCell('CK45', ''),
+        footerCell('DK45', ''),
+        footerCell('EI45', ''),
+        footerCell('AI47', String(shipmentDate.getUTCDate()).padStart(2, '0')),
+        footerCell('AO47', getMonthRuGenitive(shipmentDate)),
+        footerCell('BN47', year.slice(0, 2)),
+        footerCell('BR47', year.slice(2)),
+        footerCell('DS47', String(shipmentDate.getUTCDate()).padStart(2, '0')),
+        footerCell('DY47', getMonthRuGenitive(shipmentDate)),
+        footerCell('EV47', year.slice(0, 2)),
+        footerCell('EZ47', year.slice(2)),
+        footerCell('B49', ''),
+        footerCell('CK49', ''),
+        footerCell('B52', directorPosition),
+        footerCell('AA52', ''),
+        footerCell('BA52', directorName),
+        footerCell('CK52', ''),
+        footerCell('DK52', ''),
+        footerCell('EI52', ''),
+        footerCell('B55', companyProfile.legalName),
+        footerCell('CK55', clientName),
     ];
 
     if (documentKey === 'shipment_upd_status_1') {
-        cells.push(excelCell(targetSheetName, 'DM31', Number(totalTax.toFixed(2))));
+        cells.push(footerCell('DM31', Number(totalTax.toFixed(2))));
     } else {
-        cells.push(excelCell(targetSheetName, 'DM31', ''));
+        cells.push(footerCell('DM31', ''));
     }
 
     positions.forEach((position, index) => {
@@ -708,47 +979,79 @@ const buildShipmentTorg12Payload = async (shipmentId: number): Promise<ShipmentD
         throw new Error('В отгрузке нет позиций для формирования документа');
     }
 
-    const [template, companyProfile] = await Promise.all([
+    const [template, companyProfile, director, chiefAccountant, clientBankAccount] = await Promise.all([
         getDocumentTemplateDefinition(documentKey),
         getCompanyProfile(),
+        getDirector(),
+        getChiefAccountant(),
+        getPrimaryClientBankAccount(shipment.клиент_id),
     ]);
 
     const sourceSheetName = 'стр1';
     const targetSheetName = 'Документ';
     const shipmentDate = parseDateOnly(shipment.дата_отгрузки);
-    const clientName = buildClientDisplayName({
-        название: shipment.клиент_название,
-        тип: shipment.клиент_тип,
-        краткоеНазвание: shipment.клиент_краткое_название,
-        полноеНазвание: shipment.клиент_полное_название,
-        фамилия: shipment.клиент_фамилия,
-        имя: shipment.клиент_имя,
-        отчество: shipment.клиент_отчество,
-    });
-    const clientAddress = buildClientPrimaryAddress({
-        адрес: shipment.клиент_адрес,
-        адресРегистрации: shipment.клиент_адрес_регистрации,
-        адресПечати: shipment.клиент_адрес_печати,
-    }) || '';
-    const companyBlock = buildCompanyBlock(companyProfile);
-    const clientBlock = buildClientBlock(shipment);
+    const issueDate = parseDateOnly(new Date().toISOString());
+    const issueDateParts = formatDateRuParts(issueDate);
+    const clientLine = buildClientTorgLine(shipment, clientBankAccount);
+    const companyLine = buildCompanyTorgLine(companyProfile);
     const totalQty = sumBy(positions, (position) => position.количество);
     const totalNet = sumBy(positions, (position) => position.сумма_без_ндс);
     const totalTax = sumBy(positions, (position) => position.сумма_ндс);
     const totalAmount = sumBy(positions, (position) => position.сумма_всего);
     const firstPagePositions = positions.slice(0, 12);
     const secondPagePositions = positions.slice(12);
+    const directorName = director?.fio || companyProfile.directorName || '';
+    const directorPosition = director?.position || companyProfile.directorPosition || '';
+    const chiefAccountantName = chiefAccountant?.fio || companyProfile.accountantName || '';
+    const directorShortName = toShortFio(directorName);
+    const chiefAccountantShortName = toShortFio(chiefAccountantName);
+    const totalAmountRubles = Math.floor(totalAmount + 1e-9);
+    const totalAmountKopecks = Math.round((totalAmount - totalAmountRubles) * 100);
+    const pageCount = 2;
+    const pageCountWords = numToWordsRuGenitive(pageCount);
+    const recordsCountWords = numToWordsRu(positions.length, false);
+    const totalPlacesWords = numToWordsRu(positions.length, false);
+
+    const rowVisibility: RenderXlsxTemplateParams['rowVisibility'] = [];
+    TORG_FIRST_PAGE_ITEM_ROWS.slice(firstPagePositions.length).forEach((row) => {
+        rowVisibility.push({ sheetName: targetSheetName, row, hidden: true });
+    });
+    if (secondPagePositions.length === 0) {
+        for (let row = 43; row <= 64; row += 1) {
+            rowVisibility.push({ sheetName: targetSheetName, row, hidden: true });
+        }
+    } else {
+        TORG_SECOND_PAGE_ITEM_ROWS.slice(secondPagePositions.length).forEach((row) => {
+            rowVisibility.push({ sheetName: targetSheetName, row, hidden: true });
+        });
+    }
+    const rowBreaks: RenderXlsxTemplateParams['rowBreaks'] = [{
+        sheetName: targetSheetName,
+        clearExisting: true,
+        breaks: [secondPagePositions.length > 0 ? TORG_FIRST_PAGE_BREAK_ROW : TORG_FOOTER_PAGE_BREAK_ROW],
+    }];
 
     const cells: RenderXlsxTemplateParams['cells'] = [
-        ...clearCells(targetSheetName, ['AX25', 'BI25', 'BY21', 'BY22']),
-        excelCell(targetSheetName, 'I7', companyProfile.legalName, true),
-        excelCell(targetSheetName, 'I10', companyBlock, true),
-        excelCell(targetSheetName, 'BY7', clientName, true),
-        excelCell(targetSheetName, 'BY10', clientBlock || clientAddress, true),
-        excelCell(targetSheetName, 'AX25', shipment.id),
-        excelCell(targetSheetName, 'BI25', formatDateRuNumeric(shipmentDate)),
-        excelCell(targetSheetName, 'BY21', shipment.использовать_доставку ? 'по транспортной накладной' : ''),
-        excelCell(targetSheetName, 'BY22', shipment.использовать_доставку ? formatDateRuNumeric(shipmentDate) : ''),
+        ...clearCells(targetSheetName, ['AN70', 'AN71', 'AN72', 'AN73']),
+        excelCell(targetSheetName, 'A7', companyLine, true),
+        excelCell(targetSheetName, 'A9', 'главный офис', true),
+        excelCell(targetSheetName, 'A10', ''),
+        excelCell(targetSheetName, 'L12', clientLine, true),
+        excelCell(targetSheetName, 'I14', companyLine, true),
+        excelCell(targetSheetName, 'I16', clientLine, true),
+        excelCell(targetSheetName, 'I18', shipment.заявка_id ? 'Заявка' : 'Отгрузка', true),
+        excelCell(targetSheetName, 'CF7', companyProfile.okpo),
+        excelCell(targetSheetName, 'CF10', TORG_ACTIVITY_CODE),
+        excelCell(targetSheetName, 'CF12', shipment.клиент_окпо || ''),
+        excelCell(targetSheetName, 'CF13', companyProfile.okpo),
+        excelCell(targetSheetName, 'CF15', shipment.клиент_окпо || ''),
+        excelCell(targetSheetName, 'CF23', 'Отгрузка товаров'),
+        excelCell(targetSheetName, 'AX26', shipment.id),
+        excelCell(targetSheetName, 'BI26', formatDateRuNumeric(shipmentDate)),
+        excelCell(targetSheetName, 'CF17', shipment.заявка_id || shipment.id),
+        excelCell(targetSheetName, 'CF19', shipment.заявка_дата_создания ? formatDateRuNumeric(parseDateOnly(shipment.заявка_дата_создания)) : formatDateRuNumeric(shipmentDate)),
+        excelCell(targetSheetName, 'CF21', shipment.использовать_доставку ? shipment.id : ''),
+        excelCell(targetSheetName, 'CF22', shipment.использовать_доставку ? formatDateRuNumeric(shipmentDate) : ''),
         excelCell(targetSheetName, 'BB42', Number(sumBy(firstPagePositions, (position) => position.количество).toFixed(3))),
         excelCell(targetSheetName, 'BQ42', Number(sumBy(firstPagePositions, (position) => position.сумма_без_ндс).toFixed(2))),
         excelCell(targetSheetName, 'CB42', Number(sumBy(firstPagePositions, (position) => position.сумма_ндс).toFixed(2))),
@@ -761,13 +1064,25 @@ const buildShipmentTorg12Payload = async (shipmentId: number): Promise<ShipmentD
         excelCell(targetSheetName, 'BQ63', Number(totalNet.toFixed(2))),
         excelCell(targetSheetName, 'CB63', Number(totalTax.toFixed(2))),
         excelCell(targetSheetName, 'CI63', Number(totalAmount.toFixed(2))),
-        excelCell(targetSheetName, 'D66', positions.length),
-        excelCell(targetSheetName, 'AC70', Number(totalQty.toFixed(3))),
-        excelCell(targetSheetName, 'D72', positions.length),
-        excelCell(targetSheetName, 'AC72', Number(totalQty.toFixed(3))),
-        excelCell(targetSheetName, 'N78', amountToWordsRub(totalAmount), true),
-        excelCell(targetSheetName, 'AJ79', Math.floor(totalAmount + 1e-9)),
-        excelCell(targetSheetName, 'AT79', Math.round((totalAmount - Math.floor(totalAmount + 1e-9)) * 100)),
+        excelCell(targetSheetName, 'Y65', pageCountWords, true),
+        excelCell(targetSheetName, 'K66', recordsCountWords, true),
+        excelCell(targetSheetName, 'K72', totalPlacesWords, true),
+        excelCell(targetSheetName, 'AN70', ''),
+        excelCell(targetSheetName, 'AN71', ''),
+        excelCell(targetSheetName, 'AN72', ''),
+        excelCell(targetSheetName, 'AN73', ''),
+        excelCell(targetSheetName, 'N77', amountToWordsRub(totalAmount), true),
+        excelCell(targetSheetName, 'A79', totalAmountRubles),
+        excelCell(targetSheetName, 'AM79', String(totalAmountKopecks).padStart(2, '0')),
+        excelCell(targetSheetName, 'L81', directorPosition, true),
+        excelCell(targetSheetName, 'AG81', directorShortName, true),
+        excelCell(targetSheetName, 'AG83', chiefAccountantShortName, true),
+        excelCell(targetSheetName, 'N88', issueDateParts.day),
+        excelCell(targetSheetName, 'R88', issueDateParts.month),
+        excelCell(targetSheetName, 'AA88', issueDateParts.year),
+        excelCell(targetSheetName, 'BE88', issueDateParts.day),
+        excelCell(targetSheetName, 'BI88', issueDateParts.month),
+        excelCell(targetSheetName, 'BR88', issueDateParts.year),
     ];
 
     positions.forEach((position, index) => {
@@ -775,7 +1090,7 @@ const buildShipmentTorg12Payload = async (shipmentId: number): Promise<ShipmentD
         const vatRateLabel = position.ндс_ставка > 0 ? `${position.ндс_ставка}%` : 'без НДС';
         cells.push(
             excelCell(targetSheetName, `A${row}`, index + 1),
-            excelCell(targetSheetName, `D${row}`, position.товар_название, true),
+            excelLeftCell(targetSheetName, `D${row}`, position.товар_название, true),
             excelCell(targetSheetName, `T${row}`, position.товар_артикул || ''),
             excelCell(targetSheetName, `X${row}`, position.товар_единица_измерения || 'шт'),
             excelCell(targetSheetName, `AC${row}`, getUnitCode(position.товар_единица_измерения)),
@@ -797,6 +1112,8 @@ const buildShipmentTorg12Payload = async (shipmentId: number): Promise<ShipmentD
         template,
         fileBaseName: buildFileBaseName(definition.title, shipment.id),
         cells,
+        rowVisibility,
+        rowBreaks,
         sheetCopies: [{ sourceSheetName, targetSheetName }],
         hiddenSheets: [sourceSheetName],
         printAreas: [{ sheetName: targetSheetName, range: 'A1:CQ89' }],
@@ -841,76 +1158,83 @@ const buildShipmentTransportWaybillPayload = async (shipmentId: number): Promise
         адресРегистрации: shipment.клиент_адрес_регистрации,
         адресПечати: shipment.клиент_адрес_печати,
     }) || '';
-    const companyBlock = buildCompanyBlock(companyProfile);
-    const clientBlock = buildClientBlock(shipment);
+    const companyTransportLine = buildCompanyTransportLine(companyProfile);
+    const clientTransportLine = buildClientTransportLine(shipment);
     const cargoSummary = buildShipmentCargoSummary(positions);
     const totalQty = sumBy(positions, (position) => position.количество);
     const totalAmount = sumBy(positions, (position) => position.сумма_всего);
     const deliveryAmount = Number(shipment.стоимость_доставки) || 0;
-    const transportBlock = [
-        shipment.транспорт_название || 'Перевозчик не указан',
-        [shipment.транспорт_телефон && `тел. ${shipment.транспорт_телефон}`, shipment.транспорт_email].filter(Boolean).join(', '),
-    ].filter(Boolean).join('\n');
+    const carrierTransportLine = buildCarrierTransportLine(shipment);
     const directorName = companyProfile.directorName || director?.fio || '';
     const directorPosition = companyProfile.directorPosition || director?.position || 'Генеральный директор';
 
     const cells: RenderXlsxTemplateParams['cells'] = [
-        excelCell(targetSheetName, 'B9', formatDateRuNumeric(shipmentDate)),
-        excelCell(targetSheetName, 'Y9', shipment.id),
-        excelCell(targetSheetName, 'BP9', shipment.заявка_дата_создания ? formatDateRuNumeric(parseDateOnly(shipment.заявка_дата_создания)) : formatDateRuNumeric(shipmentDate)),
-        excelCell(targetSheetName, 'CM9', shipment.заявка_id || ''),
-        excelCell(targetSheetName, 'B16', companyBlock, true),
-        excelCell(targetSheetName, 'BP16', companyBlock, true),
-        excelCell(targetSheetName, 'B21', clientBlock || clientName, true),
-        excelCell(targetSheetName, 'B23', clientAddress, true),
-        excelCell(targetSheetName, 'B26', cargoSummary, true),
-        excelCell(targetSheetName, 'BF26', positions.length),
-        excelCell(targetSheetName, 'B28', `Количество: ${Number(totalQty.toFixed(3))}; стоимость: ${formatMoney(totalAmount)} руб.`, true),
-        excelCell(targetSheetName, 'BF30', formatMoney(totalAmount)),
-        excelCell(targetSheetName, 'B33', shipment.использовать_доставку ? `Транспортная накладная № ${shipment.id} от ${formatDateRuNumeric(shipmentDate)}` : '', true),
-        excelCell(targetSheetName, 'B35', shipment.заявка_id ? `Заявка № ${shipment.заявка_id}` : '', true),
-        excelCell(targetSheetName, 'B37', buildShipmentBasis(shipment, shipmentDate), true),
-        excelCell(targetSheetName, 'B40', `Маршрут: ${companyProfile.documentAddress || companyProfile.legalAddress} -> ${clientAddress}`, true),
-        excelCell(targetSheetName, 'BF40', companyProfile.phone, true),
-        excelCell(targetSheetName, 'B42', '', true),
-        excelCell(targetSheetName, 'BF42', buildShipmentTransportSummary(shipment), true),
-        excelCell(targetSheetName, 'B45', transportBlock, true),
-        excelCell(targetSheetName, 'BF45', shipment.транспорт_название || '', true),
-        excelCell(targetSheetName, 'B57', companyProfile.legalName, true),
-        excelCell(targetSheetName, 'B59', companyProfile.legalName, true),
-        excelCell(targetSheetName, 'B61', companyProfile.documentAddress || companyProfile.legalAddress, true),
-        excelCell(targetSheetName, 'BF61', formatDateRuNumeric(shipmentDate)),
-        excelCell(targetSheetName, 'B63', formatDateRuNumeric(shipmentDate)),
-        excelCell(targetSheetName, 'BF63', formatDateRuNumeric(shipmentDate)),
-        excelCell(targetSheetName, 'B65', Number(totalQty.toFixed(3))),
-        excelCell(targetSheetName, 'B67', positions.length),
-        excelCell(targetSheetName, 'BF67', 'по местам'),
-        excelCell(targetSheetName, 'B69', '', true),
-        excelCell(targetSheetName, 'B71', `${directorPosition}, ${directorName}`, true),
-        excelCell(targetSheetName, 'BF71', shipment.транспорт_название || '', true),
-        excelCell(targetSheetName, 'B80', clientAddress, true),
-        excelCell(targetSheetName, 'BF80', formatDateRuNumeric(shipmentDate)),
-        excelCell(targetSheetName, 'B82', formatDateRuNumeric(shipmentDate)),
-        excelCell(targetSheetName, 'BF82', formatDateRuNumeric(shipmentDate)),
-        excelCell(targetSheetName, 'B84', 'Груз передан в исправном состоянии', true),
-        excelCell(targetSheetName, 'BF84', positions.length),
-        excelCell(targetSheetName, 'B86', Number(totalQty.toFixed(3))),
-        excelCell(targetSheetName, 'BF86', '', true),
-        excelCell(targetSheetName, 'B88', clientName || 'Грузополучатель', true),
-        excelCell(targetSheetName, 'BF88', shipment.транспорт_название || '', true),
-        excelCell(targetSheetName, 'B94', Number(deliveryAmount.toFixed(2))),
-        excelCell(targetSheetName, 'AD94', 'без НДС'),
-        excelCell(targetSheetName, 'BE94', 0),
-        excelCell(targetSheetName, 'CF94', Number(deliveryAmount.toFixed(2))),
-        excelCell(targetSheetName, 'B98', transportBlock, true),
-        excelCell(targetSheetName, 'BF98', companyBlock, true),
-        excelCell(targetSheetName, 'B100', 'договор перевозки', true),
-        excelCell(targetSheetName, 'BF100', buildShipmentBasis(shipment, shipmentDate), true),
-        excelCell(targetSheetName, 'BF102', companyProfile.legalName, true),
-        excelCell(targetSheetName, 'B104', shipment.транспорт_название || '', true),
-        excelCell(targetSheetName, 'BF104', directorName, true),
-        excelCell(targetSheetName, 'B106', '', true),
-        excelCell(targetSheetName, 'BF106', `${directorPosition}, ${formatDateRuNumeric(shipmentDate)}`, true),
+        // Top header has separate merged cells for labels and values:
+        // B9:G9 / Y9:AC9 / BP9:BU9 / CM9:CP9 are labels,
+        // H9:W9 / AD9:BN9 / BV9:CK9 / CQ9:DG9 are value areas.
+        excelCell(targetSheetName, 'H9', formatDateRuNumeric(shipmentDate)),
+        excelCell(targetSheetName, 'AD9', shipment.id),
+        excelCell(
+            targetSheetName,
+            'BV9',
+            shipment.заявка_дата_создания
+                ? formatDateRuNumeric(parseDateOnly(shipment.заявка_дата_создания))
+                : formatDateRuNumeric(shipmentDate)
+        ),
+        excelCell(targetSheetName, 'CQ9', shipment.заявка_id || ''),
+        excelCell(targetSheetName, 'X10', 1),
+        excelCell(targetSheetName, 'B15', companyTransportLine, true),
+        excelCell(targetSheetName, 'BP15', companyTransportLine, true),
+        excelCell(targetSheetName, 'B20', clientTransportLine || clientName, true),
+        excelCell(targetSheetName, 'B22', clientAddress, true),
+        excelCell(targetSheetName, 'B25', cargoSummary, true),
+        excelCell(targetSheetName, 'BF25', positions.length),
+        excelCell(targetSheetName, 'B27', `Количество: ${Number(totalQty.toFixed(3))}; стоимость: ${formatMoney(totalAmount)} руб.`, true),
+        excelCell(targetSheetName, 'BF29', formatMoney(totalAmount)),
+        excelCell(targetSheetName, 'B32', shipment.использовать_доставку ? `Транспортная накладная № ${shipment.id} от ${formatDateRuNumeric(shipmentDate)}` : '', true),
+        excelCell(targetSheetName, 'B34', shipment.заявка_id ? `Заявка № ${shipment.заявка_id}` : '', true),
+        excelCell(targetSheetName, 'B36', buildShipmentBasis(shipment, shipmentDate), true),
+        excelCell(targetSheetName, 'B39', `Маршрут: ${companyProfile.documentAddress || companyProfile.legalAddress} -> ${clientAddress}`, true),
+        excelCell(targetSheetName, 'BF39', carrierTransportLine, true),
+        excelCell(targetSheetName, 'B41', '', true),
+        excelCell(targetSheetName, 'BF41', buildShipmentTransportSummary(shipment), true),
+        excelCell(targetSheetName, 'B44', carrierTransportLine, true),
+        excelCell(targetSheetName, 'BF44', '', true),
+        excelCell(targetSheetName, 'B56', companyProfile.legalName, true),
+        excelCell(
+          targetSheetName,
+          'B58',
+          [companyProfile.legalName, companyProfile.inn ? `ИНН ${companyProfile.inn}` : null]
+            .filter(Boolean)
+            .join(', '),
+          true
+        ),
+        excelCell(targetSheetName, 'B60', companyProfile.documentAddress || companyProfile.legalAddress, true),
+        excelCell(targetSheetName, 'BF60', formatDateRuNumeric(shipmentDate)),
+        excelCell(targetSheetName, 'B62', formatDateRuNumeric(shipmentDate)),
+        excelCell(targetSheetName, 'BF62', formatDateRuNumeric(shipmentDate)),
+        excelCell(targetSheetName, 'B64', Number(totalQty.toFixed(3))),
+        excelCell(targetSheetName, 'B66', positions.length),
+        excelCell(targetSheetName, 'BF66', 'по местам'),
+        excelCell(targetSheetName, 'B68', '', true),
+
+        excelCell(targetSheetName, 'B79', clientAddress, true),
+        excelCell(targetSheetName, 'BF79', formatDateRuNumeric(shipmentDate)),
+        excelCell(targetSheetName, 'B81', formatDateRuNumeric(shipmentDate)),
+        excelCell(targetSheetName, 'BF81', formatDateRuNumeric(shipmentDate)),
+        excelCell(targetSheetName, 'B83', 'Груз передан в исправном состоянии', true),
+        excelCell(targetSheetName, 'BF83', positions.length),
+        excelCell(targetSheetName, 'B85', Number(totalQty.toFixed(3))),
+        excelCell(targetSheetName, 'BF85', '', true),
+
+        excelCell(targetSheetName, 'B93', Number(deliveryAmount.toFixed(2))),
+        excelCell(targetSheetName, 'AD93', 'без НДС'),
+        excelCell(targetSheetName, 'BE93', 0),
+        excelCell(targetSheetName, 'CF93', Number(deliveryAmount.toFixed(2))),
+
+        excelCell(targetSheetName, 'B199', 'договор перевозки', true),
+        excelCell(targetSheetName, 'BF99', buildShipmentBasis(shipment, shipmentDate), true),
+
     ];
 
     return {
@@ -920,7 +1244,7 @@ const buildShipmentTransportWaybillPayload = async (shipmentId: number): Promise
         cells,
         sheetCopies: [{ sourceSheetName, targetSheetName }],
         hiddenSheets: [sourceSheetName],
-        printAreas: [{ sheetName: targetSheetName, range: 'A1:CR106' }],
+        printAreas: [{ sheetName: targetSheetName, range: 'A1:DG106' }],
         sheetPageSetup: [{ sheetName: targetSheetName, fitToWidth: 1, fitToHeight: 0 }],
         pdfPostprocess: 'none',
     };

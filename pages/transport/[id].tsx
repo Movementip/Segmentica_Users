@@ -10,6 +10,7 @@ import { Box, Button, Dialog, Flex, Card, DropdownMenu, Table, Tabs, Text, TextF
 import { FiArrowLeft, FiDownload, FiEdit2, FiFile, FiMoreHorizontal, FiPaperclip, FiPlus, FiRefreshCw, FiSearch, FiTrash2, FiUploadCloud } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { RecordPrintCenter, RecordPrintSheet, type RecordPrintDocument } from '../../components/print/RecordPrintCenter';
 
 interface TransportCompany {
     id: number;
@@ -474,6 +475,132 @@ export default function TransportDetail() {
     }
 
     const transportSafe = data.transport;
+    const transportPrintDocuments = useMemo<RecordPrintDocument[]>(() => {
+        if (!data) return [];
+
+        const documents: RecordPrintDocument[] = [
+            {
+                key: 'transport-card',
+                title: 'Карточка транспортной компании',
+                content: (
+                    <RecordPrintSheet
+                        title={`Карточка ТК #${transportSafe.id}`}
+                        subtitle={transportSafe.название}
+                        meta={
+                            <>
+                                <div>Активных отгрузок: {transportSafe.активные_отгрузки || 0}</div>
+                                <div>Печать: {new Date().toLocaleString('ru-RU')}</div>
+                            </>
+                        }
+                        sections={[
+                            {
+                                title: 'Основная информация',
+                                fields: [
+                                    { label: 'ID', value: `#${transportSafe.id}` },
+                                    { label: 'Название', value: transportSafe.название || '—' },
+                                    { label: 'Телефон', value: transportSafe.телефон || '—' },
+                                    { label: 'Email', value: transportSafe.email || '—' },
+                                    { label: 'Тариф', value: formatCurrency(transportSafe.тариф) },
+                                    { label: 'Дата регистрации', value: formatDate(transportSafe.created_at) },
+                                ],
+                            },
+                            {
+                                title: 'Показатели',
+                                fields: [
+                                    { label: 'Всего отгрузок', value: transportSafe.общее_количество_отгрузок || 0 },
+                                    { label: 'Активные отгрузки', value: transportSafe.активные_отгрузки || 0 },
+                                    { label: 'Завершенные отгрузки', value: transportSafe.завершенные_отгрузки || 0 },
+                                    { label: 'Выручка', value: formatCurrency(transportSafe.общая_выручка) },
+                                    { label: 'Средняя стоимость', value: formatCurrency(transportSafe.средняя_стоимость) },
+                                    { label: 'Успешность', value: `${summary.successRate}%` },
+                                ],
+                            },
+                        ]}
+                    />
+                ),
+            },
+        ];
+
+        if (filteredShipments.length) {
+            documents.push({
+                key: 'transport-shipments',
+                title: 'История отгрузок',
+                content: (
+                    <RecordPrintSheet
+                        title={`История отгрузок ТК #${transportSafe.id}`}
+                        subtitle={transportSafe.название}
+                        meta={
+                            <>
+                                <div>Отгрузок: {filteredShipments.length}</div>
+                                <div>Печать: {new Date().toLocaleString('ru-RU')}</div>
+                            </>
+                        }
+                        sections={[
+                            {
+                                title: 'Отгрузки',
+                                table: {
+                                    columns: ['№ отгрузки', 'Дата', 'Клиент', 'Статус', 'Трекинг', 'Стоимость'],
+                                    rows: filteredShipments.map((shipment) => [
+                                        `#${shipment.id}`,
+                                        formatDateTime(shipment.дата_отгрузки),
+                                        shipment.клиент_название || '—',
+                                        getStatusText(shipment.статус),
+                                        shipment.номер_отслеживания || '—',
+                                        formatCurrency(shipment.стоимость_доставки),
+                                    ]),
+                                },
+                            },
+                        ]}
+                    />
+                ),
+            });
+        }
+
+        if (data.performance.length) {
+            documents.push({
+                key: 'transport-performance',
+                title: 'Помесячная эффективность',
+                content: (
+                    <RecordPrintSheet
+                        title={`Помесячная эффективность ТК #${transportSafe.id}`}
+                        subtitle={transportSafe.название}
+                        meta={
+                            <>
+                                <div>Месяцев: {data.performance.length}</div>
+                                <div>Печать: {new Date().toLocaleString('ru-RU')}</div>
+                            </>
+                        }
+                        sections={[
+                            {
+                                title: 'Показатели по месяцам',
+                                table: {
+                                    columns: ['Месяц', 'Отгрузок', 'Средняя стоимость', 'Выручка', 'Успешные доставки'],
+                                    rows: data.performance.map((row) => [
+                                        row.месяц || '—',
+                                        row.количество_отгрузок || 0,
+                                        formatCurrency(row.средняя_стоимость),
+                                        formatCurrency(row.общая_выручка),
+                                        row.успешные_доставки || 0,
+                                    ]),
+                                },
+                            },
+                        ]}
+                    />
+                ),
+            });
+        }
+
+        return documents;
+    }, [
+        data,
+        filteredShipments,
+        formatCurrency,
+        formatDate,
+        formatDateTime,
+        getStatusText,
+        summary.successRate,
+        transportSafe,
+    ]);
 
     return (
         <Layout>
@@ -498,6 +625,10 @@ export default function TransportDetail() {
                         >
                             <FiArrowLeft className={styles.icon} /> Назад к ТК
                         </Button>
+                        <RecordPrintCenter
+                            documents={transportPrintDocuments}
+                            buttonClassName={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
+                        />
                         <Button
                             type="button"
                             variant="surface"

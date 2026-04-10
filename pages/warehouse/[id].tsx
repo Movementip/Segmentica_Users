@@ -1,5 +1,5 @@
 import { useRouter } from 'next/router';
-import { useCallback, useState, useEffect } from 'react';
+import { useCallback, useMemo, useState, useEffect } from 'react';
 import { Layout } from '../../layout/Layout';
 import { EditProductModal } from '../../components/EditProductModal';
 import deleteConfirmationStyles from '../../components/DeleteConfirmation.module.css';
@@ -8,6 +8,7 @@ import { Box, Button, Card, Dialog, Flex, Table, Tabs, Text, TextField } from '@
 import { FiArrowLeft, FiDownload, FiEdit2, FiFile, FiPaperclip, FiSearch, FiTrash2, FiUploadCloud } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { RecordPrintCenter, RecordPrintSheet, type RecordPrintDocument } from '../../components/print/RecordPrintCenter';
 
 const PRODUCT_TYPE_LABELS: Record<string, string> = {
     товар: 'Товар',
@@ -489,6 +490,171 @@ export default function WarehouseDetail() {
     const vatLabel = PRODUCT_VAT_LABELS[item.товар_ндс_id || 5] || '22%';
     const accountingAccountLabel = item.товар_счет_учета ? ACCOUNT_LABELS[item.товар_счет_учета] || item.товар_счет_учета : null;
     const expenseAccountLabel = item.товар_счет_затрат ? ACCOUNT_LABELS[item.товар_счет_затрат] || item.товар_счет_затрат : null;
+    const warehousePrintDocuments = useMemo<RecordPrintDocument[]>(() => {
+        if (!data) return [];
+
+        const result: RecordPrintDocument[] = [
+            {
+                key: 'warehouse-card',
+                title: 'Карточка складской позиции',
+                content: (
+                    <RecordPrintSheet
+                        title={`Карточка складской позиции #${item.id}`}
+                        subtitle={item.товар_название}
+                        meta={
+                            <>
+                                <div>Артикул: {item.товар_артикул || '—'}</div>
+                                <div>Печать: {new Date().toLocaleString('ru-RU')}</div>
+                            </>
+                        }
+                        sections={[
+                            {
+                                title: 'Остатки и стоимость',
+                                fields: [
+                                    { label: 'Текущий остаток', value: `${item.количество} ${item.товар_единица}` },
+                                    { label: 'Минимальный остаток', value: `${item.товар_мин_остаток} ${item.товар_единица}` },
+                                    { label: 'Статус', value: getStockStatusText(item.stock_status) },
+                                    { label: 'Стоимость по закупке', value: formatCurrency(item.количество * (item.товар_цена_закупки || 0)) },
+                                ],
+                            },
+                            {
+                                title: 'Сведения о товаре',
+                                fields: [
+                                    { label: 'Категория', value: item.товар_категория || '—' },
+                                    { label: 'Тип номенклатуры', value: productTypeLabel },
+                                    { label: 'Ставка НДС', value: vatLabel },
+                                    { label: 'Счет учета', value: accountingAccountLabel || '—' },
+                                    { label: 'Счет затрат', value: expenseAccountLabel || '—' },
+                                    { label: 'Цена закупки', value: formatCurrency(item.товар_цена_закупки || 0) },
+                                    { label: 'Цена продажи', value: formatCurrency(item.товар_цена_продажи || 0) },
+                                    {
+                                        label: 'Последнее поступление',
+                                        value: item.дата_последнего_поступления ? formatDate(item.дата_последнего_поступления) : 'Нет данных',
+                                    },
+                                ],
+                            },
+                        ]}
+                    />
+                ),
+            },
+        ];
+
+        if (movements.length) {
+            result.push({
+                key: 'warehouse-movements',
+                title: 'История движений',
+                content: (
+                    <RecordPrintSheet
+                        title={`История движений по позиции #${item.id}`}
+                        subtitle={item.товар_название}
+                        meta={
+                            <>
+                                <div>Движений: {movements.length}</div>
+                                <div>Печать: {new Date().toLocaleString('ru-RU')}</div>
+                            </>
+                        }
+                        sections={[
+                            {
+                                title: 'Движения',
+                                table: {
+                                    columns: ['Дата', 'Операция', 'Количество', 'Основание', 'Контрагент', 'Комментарий'],
+                                    rows: movements.map((movement) => [
+                                        formatDateTime(movement.дата_операции),
+                                        movement.тип_операции || '—',
+                                        `${movement.количество} ${item.товар_единица}`,
+                                        movement.заявка_номер
+                                            ? `Заявка #${movement.заявка_номер}`
+                                            : movement.закупка_номер
+                                                ? `Закупка #${movement.закупка_номер}`
+                                                : movement.отгрузка_номер
+                                                    ? `Отгрузка #${movement.отгрузка_номер}`
+                                                    : '—',
+                                        movement.клиент_название || movement.поставщик_название || '—',
+                                        movement.комментарий || '—',
+                                    ]),
+                                },
+                            },
+                        ]}
+                    />
+                ),
+            });
+        }
+
+        if (waitingOrders.length || pendingPurchases.length) {
+            result.push({
+                key: 'warehouse-demand',
+                title: 'Резервы и ожидания',
+                content: (
+                    <RecordPrintSheet
+                        title={`Резервы и ожидания по позиции #${item.id}`}
+                        subtitle={item.товар_название}
+                        meta={
+                            <>
+                                <div>Ожидающих заявок: {waitingOrders.length}</div>
+                                <div>Ожидаемых закупок: {pendingPurchases.length}</div>
+                            </>
+                        }
+                        sections={[
+                            waitingOrders.length
+                                ? {
+                                    title: 'Ожидающие заявки',
+                                    table: {
+                                        columns: ['№ заявки', 'Дата', 'Клиент', 'Количество', 'Цена', 'Статус'],
+                                        rows: waitingOrders.map((order) => [
+                                            `#${order.заявка_номер}`,
+                                            formatDate(order.заявка_дата),
+                                            order.клиент_название || '—',
+                                            `${order.количество} ${item.товар_единица}`,
+                                            formatCurrency(order.цена || 0),
+                                            order.заявка_статус || '—',
+                                        ]),
+                                    },
+                                }
+                                : {
+                                    title: 'Ожидающие заявки',
+                                    note: 'Ожидающих заявок по этой позиции нет.',
+                                },
+                            pendingPurchases.length
+                                ? {
+                                    title: 'Ожидаемые закупки',
+                                    table: {
+                                        columns: ['№ закупки', 'Дата', 'Поставщик', 'Количество', 'Ожидаемая дата', 'Статус'],
+                                        rows: pendingPurchases.map((purchase) => [
+                                            `#${purchase.закупка_номер}`,
+                                            formatDate(purchase.закупка_дата),
+                                            purchase.поставщик_название || '—',
+                                            `${purchase.количество} ${item.товар_единица}`,
+                                            purchase.ожидаемая_дата ? formatDate(purchase.ожидаемая_дата) : '—',
+                                            purchase.закупка_статус || '—',
+                                        ]),
+                                    },
+                                }
+                                : {
+                                    title: 'Ожидаемые закупки',
+                                    note: 'Ожидаемых закупок по этой позиции нет.',
+                                },
+                        ]}
+                    />
+                ),
+            });
+        }
+
+        return result;
+    }, [
+        accountingAccountLabel,
+        data,
+        expenseAccountLabel,
+        formatCurrency,
+        formatDate,
+        formatDateTime,
+        getStockStatusText,
+        item,
+        movements,
+        pendingPurchases,
+        productTypeLabel,
+        vatLabel,
+        waitingOrders,
+    ]);
 
     return (
         <Layout>
@@ -511,6 +677,10 @@ export default function WarehouseDetail() {
                         >
                             <FiArrowLeft className={styles.icon} /> Назад
                         </Button>
+                        <RecordPrintCenter
+                            documents={warehousePrintDocuments}
+                            buttonClassName={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
+                        />
 
                         {canEdit ? (
                             <Button

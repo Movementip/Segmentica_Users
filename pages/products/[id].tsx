@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { withLayout } from '../../layout/Layout';
 import { EditProductModal } from '../../components/EditProductModal';
@@ -9,6 +9,7 @@ import { Box, Button, Card, Dialog, Flex, Grid, Separator, Table, Text } from '@
 import { FiArrowLeft, FiDownload, FiEdit2, FiFile, FiPaperclip, FiRefreshCw, FiTrash2, FiUploadCloud } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { RecordPrintCenter, RecordPrintSheet, type RecordPrintDocument } from '../../components/print/RecordPrintCenter';
 
 const PRODUCT_TYPE_LABELS: Record<string, string> = {
     товар: 'Товар',
@@ -310,6 +311,102 @@ function ProductDetailPage(): JSX.Element {
     const vatLabel = product ? PRODUCT_VAT_LABELS[product.ндс_id || 5] || '22%' : '22%';
     const accountingAccountLabel = product?.счет_учета ? ACCOUNT_LABELS[product.счет_учета] || product.счет_учета : null;
     const expenseAccountLabel = product?.счет_затрат ? ACCOUNT_LABELS[product.счет_затрат] || product.счет_затрат : null;
+    const productPrintDocuments = useMemo<RecordPrintDocument[]>(() => {
+        if (!product) return [];
+
+        const documents: RecordPrintDocument[] = [
+            {
+                key: 'product-card',
+                title: 'Карточка товара',
+                content: (
+                    <RecordPrintSheet
+                        title={`Карточка товара #${product.id}`}
+                        subtitle={product.название}
+                        meta={
+                            <>
+                                <div>Артикул: {product.артикул || '—'}</div>
+                                <div>Печать: {new Date().toLocaleString('ru-RU')}</div>
+                            </>
+                        }
+                        sections={[
+                            {
+                                title: 'Основная информация',
+                                fields: [
+                                    { label: 'ID', value: `#${product.id}` },
+                                    { label: 'Название', value: product.название || '—' },
+                                    { label: 'Артикул', value: product.артикул || '—' },
+                                    { label: 'Категория', value: product.категория || '—' },
+                                    { label: 'Тип номенклатуры', value: productTypeLabel },
+                                    { label: 'Ставка НДС', value: vatLabel },
+                                    { label: 'Счет учета', value: accountingAccountLabel || '—' },
+                                    { label: 'Счет затрат', value: expenseAccountLabel || '—' },
+                                ],
+                            },
+                            {
+                                title: 'Цены и параметры',
+                                fields: [
+                                    { label: 'Цена продажи', value: formatCurrency(product.цена_продажи) },
+                                    {
+                                        label: 'Цена закупки',
+                                        value: product.цена_закупки != null ? formatCurrency(product.цена_закупки) : 'Не указана',
+                                    },
+                                    { label: 'Единица измерения', value: product.единица_измерения || '—' },
+                                    { label: 'Минимальный остаток', value: product.минимальный_остаток ?? '—' },
+                                    { label: 'Дата регистрации', value: formatDate(product.created_at) },
+                                    { label: 'Комментарий', value: product.комментарий || 'Не указан' },
+                                ],
+                            },
+                        ]}
+                    />
+                ),
+            },
+        ];
+
+        if (product.история_цен?.length) {
+            documents.push({
+                key: 'product-price-history',
+                title: 'История цен',
+                content: (
+                    <RecordPrintSheet
+                        title={`История цен товара #${product.id}`}
+                        subtitle={product.название}
+                        meta={
+                            <>
+                                <div>Записей: {product.история_цен.length}</div>
+                                <div>Печать: {new Date().toLocaleString('ru-RU')}</div>
+                            </>
+                        }
+                        sections={[
+                            {
+                                title: 'Изменения цен',
+                                table: {
+                                    columns: ['Дата', 'Цена закупки', 'Цена продажи', 'Источник', 'Комментарий'],
+                                    rows: product.история_цен.map((entry) => [
+                                        formatDateTime(entry.изменено_в),
+                                        entry.цена_закупки != null ? formatCurrency(entry.цена_закупки) : '—',
+                                        entry.цена_продажи != null ? formatCurrency(entry.цена_продажи) : '—',
+                                        entry.источник || '—',
+                                        entry.комментарий || '—',
+                                    ]),
+                                },
+                            },
+                        ]}
+                    />
+                ),
+            });
+        }
+
+        return documents;
+    }, [
+        accountingAccountLabel,
+        expenseAccountLabel,
+        formatCurrency,
+        formatDate,
+        formatDateTime,
+        product,
+        productTypeLabel,
+        vatLabel,
+    ]);
 
     const goBack = () => {
         router.push('/products');
@@ -406,6 +503,10 @@ function ProductDetailPage(): JSX.Element {
                             <FiArrowLeft className={styles.icon} />
                             Назад
                         </Button>
+                        <RecordPrintCenter
+                            documents={productPrintDocuments}
+                            buttonClassName={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
+                        />
                         {canEdit ? (
                             <Button
                                 type="button"

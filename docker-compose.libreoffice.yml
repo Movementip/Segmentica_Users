@@ -10,4 +10,7 @@ services:
       PORT: 3000
       LIBREOFFICE_BIN: /usr/bin/soffice
       TEMPLATES_DIR: /app/templates/forms
+    volumes:
+      - ./templates:/app/templates
+      - ./services/document-renderer/app.py:/app/app.py:ro
     restart: unless-stopped

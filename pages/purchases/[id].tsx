@@ -7,7 +7,7 @@ import { Htag } from '../../components';
 import EditPurchaseModal from '../../components/EditPurchaseModal';
 import deleteConfirmationStyles from '../../components/DeleteConfirmation.module.css';
 import styles from './PurchaseDetail.module.css';
-import { BsFillFileEarmarkPdfFill } from 'react-icons/bs';
+import { BsFillFileEarmarkExcelFill, BsFillFileEarmarkPdfFill, BsFillFileEarmarkWordFill } from 'react-icons/bs';
 import {
     FiArrowLeft,
     FiChevronDown,
@@ -1462,7 +1462,7 @@ function PurchaseDetailPage(): JSX.Element {
                                     className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
                                     onClick={() => handleDocumentPreviewDownload('excel')}
                                 >
-                                    <FiFile className={`${styles.icon} ${styles.excelIcon}`} />
+                                    <BsFillFileEarmarkExcelFill className={`${styles.icon} ${styles.excelIcon}`} />
                                     Excel
                                 </Button>
                             ) : null}
@@ -1474,7 +1474,7 @@ function PurchaseDetailPage(): JSX.Element {
                                     className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
                                     onClick={() => handleDocumentPreviewDownload('word')}
                                 >
-                                    <FiFile className={styles.icon} />
+                                    <BsFillFileEarmarkWordFill className={`${styles.icon} ${styles.wordIcon}`} />
                                     Word
                                 </Button>
                             ) : null}

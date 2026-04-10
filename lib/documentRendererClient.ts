@@ -27,6 +27,11 @@ export type RenderXlsxTemplateParams = {
         row: number;
         height: number;
     }>;
+    rowBreaks?: Array<{
+        sheetName: string;
+        breaks: number[];
+        clearExisting?: boolean;
+    }>;
     printAreas?: Array<{
         sheetName: string;
         range: string;

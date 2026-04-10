@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/router';
 import { withLayout } from '../../layout/Layout';
 import { EditCategoryModal } from '../../components/EditCategoryModal';
@@ -8,6 +8,7 @@ import { Badge, Box, Button, Card, Dialog, Flex, Grid, Separator, Text } from '@
 import { FiArrowLeft, FiEdit3, FiRefreshCw, FiSlash, FiTrash2 } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { RecordPrintCenter, RecordPrintSheet, type RecordPrintDocument } from '../../components/print/RecordPrintCenter';
 
 interface CategoryDetail {
     id: number;
@@ -87,6 +88,85 @@ function CategoryDetailPage(): JSX.Element {
             day: '2-digit'
         });
     };
+
+    const categoryPrintDocuments = useMemo<RecordPrintDocument[]>(() => {
+        if (!category) return [];
+
+        const documents: RecordPrintDocument[] = [
+            {
+                key: 'category-card',
+                title: 'Карточка категории',
+                content: (
+                    <RecordPrintSheet
+                        title={`Карточка категории #${category.id}`}
+                        subtitle={category.название}
+                        meta={
+                            <>
+                                <div>Статус: {category.активна ? 'Активна' : 'Неактивна'}</div>
+                                <div>Печать: {new Date().toLocaleString('ru-RU')}</div>
+                            </>
+                        }
+                        sections={[
+                            {
+                                title: 'Основные сведения',
+                                fields: [
+                                    { label: 'ID', value: `#${category.id}` },
+                                    { label: 'Название', value: category.название || '—' },
+                                    { label: 'Описание', value: category.описание || 'Описание отсутствует' },
+                                    { label: 'Статус', value: category.активна ? 'Категория активна' : 'Категория неактивна' },
+                                    { label: 'Дата создания', value: formatDate(category.created_at) },
+                                    { label: 'Родительская категория', value: category.родительская_категория_название || 'Корневая категория' },
+                                ],
+                            },
+                            {
+                                title: 'Структура',
+                                fields: [
+                                    { label: 'Подкатегорий', value: category.подкатегории?.length || 0 },
+                                    { label: 'Товаров в категории', value: category.товары || 0 },
+                                ],
+                                columns: 1,
+                            },
+                        ]}
+                    />
+                ),
+            },
+        ];
+
+        if (category.подкатегории?.length) {
+            documents.push({
+                key: 'category-children',
+                title: 'Подкатегории',
+                content: (
+                    <RecordPrintSheet
+                        title={`Подкатегории категории #${category.id}`}
+                        subtitle={category.название}
+                        meta={
+                            <>
+                                <div>Подкатегорий: {category.подкатегории.length}</div>
+                                <div>Печать: {new Date().toLocaleString('ru-RU')}</div>
+                            </>
+                        }
+                        sections={[
+                            {
+                                title: 'Список подкатегорий',
+                                table: {
+                                    columns: ['ID', 'Название', 'Статус', 'Товаров'],
+                                    rows: category.подкатегории.map((item) => [
+                                        `#${item.id}`,
+                                        item.название || '—',
+                                        item.активна ? 'Активна' : 'Неактивна',
+                                        item.товары || 0,
+                                    ]),
+                                },
+                            },
+                        ]}
+                    />
+                ),
+            });
+        }
+
+        return documents;
+    }, [category, formatDate]);
 
     const handleToggleCategoryActive = async () => {
         if (!category) {
@@ -189,6 +269,10 @@ function CategoryDetailPage(): JSX.Element {
                     <Button type="button" variant="surface" color="gray" className={`${styles.button} ${styles.surfaceButton}`} onClick={() => router.push('/categories')}>
                         <FiArrowLeft /> К дереву
                     </Button>
+                    <RecordPrintCenter
+                        documents={categoryPrintDocuments}
+                        buttonClassName={`${styles.button} ${styles.surfaceButton}`}
+                    />
                     <Button type="button" variant="surface" color="gray" className={`${styles.button} ${styles.surfaceButton}`} onClick={fetchCategoryDetail}>
                         <FiRefreshCw /> Обновить
                     </Button>

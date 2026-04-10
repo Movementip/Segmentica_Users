@@ -10,6 +10,7 @@ import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
 import { ManagerHrWorkspace } from '../../components/ManagerHrWorkspace';
 import { EmployeeSchedulePanel } from '../../components/EmployeeSchedulePanel';
+import { RecordPrintCenter, RecordPrintSheet, type RecordPrintDocument } from '../../components/print/RecordPrintCenter';
 
 interface ManagerDetail {
     id: number;
@@ -441,6 +442,109 @@ function ManagerDetailPage(): JSX.Element {
             .sort((a, b) => a.group.localeCompare(b.group, 'ru'));
     }, [profilePermissions]);
 
+    const managerPrintDocuments = useMemo<RecordPrintDocument[]>(() => {
+        if (!manager) return [];
+
+        const documents: RecordPrintDocument[] = [
+            {
+                key: 'manager-card',
+                title: 'Карточка сотрудника',
+                content: (
+                    <RecordPrintSheet
+                        title={`Карточка сотрудника #${manager.id}`}
+                        subtitle={manager.фио}
+                        meta={
+                            <>
+                                <div>Статус: {manager.активен ? 'Работает' : 'Неактивен'}</div>
+                                <div>Печать: {new Date().toLocaleString('ru-RU')}</div>
+                            </>
+                        }
+                        sections={[
+                            {
+                                title: 'Основные данные',
+                                fields: [
+                                    { label: 'ID', value: `#${manager.id}` },
+                                    { label: 'ФИО', value: manager.фио || '—' },
+                                    { label: 'Должность', value: manager.должность || '—' },
+                                    { label: 'Телефон', value: manager.телефон || '—' },
+                                    { label: 'Email', value: manager.email || '—' },
+                                    { label: 'Ставка', value: manager.ставка != null ? formatCurrency(manager.ставка) : '—' },
+                                    { label: 'Дата приема', value: manager.дата_приема ? formatDate(manager.дата_приема) : '—' },
+                                    { label: 'Дата создания', value: formatDate(manager.created_at) },
+                                ],
+                            },
+                            groupedPermissions.length
+                                ? {
+                                    title: 'Права доступа',
+                                    table: {
+                                        columns: ['Группа', 'Разрешения'],
+                                        rows: groupedPermissions.map((group) => [
+                                            group.group,
+                                            group.items.map((permission) => permission.name || permission.key).join(', '),
+                                        ]),
+                                    },
+                                }
+                                : {
+                                    title: 'Права доступа',
+                                    note: 'Для этой карточки список прав доступа недоступен или не загружен.',
+                                },
+                        ]}
+                    />
+                ),
+            },
+        ];
+
+        if (payrollData?.available) {
+            documents.push({
+                key: 'manager-payroll',
+                title: 'Сводка по выплатам',
+                content: (
+                    <RecordPrintSheet
+                        title={`Сводка по выплатам сотрудника #${manager.id}`}
+                        subtitle={manager.фио}
+                        meta={
+                            <>
+                                <div>Платежей: {payrollData.paymentCount}</div>
+                                <div>Печать: {new Date().toLocaleString('ru-RU')}</div>
+                            </>
+                        }
+                        sections={[
+                            {
+                                title: 'Сводка',
+                                fields: [
+                                    { label: 'Всего выплачено', value: formatCurrency(payrollData.totalPaid) },
+                                    { label: 'Количество выплат', value: payrollData.paymentCount },
+                                    { label: 'Последняя выплата', value: payrollData.latestPaymentDate ? formatDate(payrollData.latestPaymentDate) : '—' },
+                                    { label: 'Период анализа', value: `${payrollData.monthsRequested} мес.` },
+                                ],
+                            },
+                            payrollData.items.length
+                                ? {
+                                    title: 'История выплат',
+                                    table: {
+                                        columns: ['Дата', 'Тип', 'Статус', 'Сумма', 'Связанная заявка'],
+                                        rows: payrollData.items.map((item) => [
+                                            formatDate(item.date),
+                                            item.type || '—',
+                                            item.status || '—',
+                                            formatCurrency(item.amount),
+                                            item.relatedOrderId ? `#${item.relatedOrderId}` : '—',
+                                        ]),
+                                    },
+                                }
+                                : {
+                                    title: 'История выплат',
+                                    note: 'В выбранном периоде выплаты не найдены.',
+                                },
+                        ]}
+                    />
+                ),
+            });
+        }
+
+        return documents;
+    }, [formatCurrency, formatDate, groupedPermissions, manager, payrollData]);
+
     const payrollMonthOptions = useMemo(() => {
         return Array.from(
             new Set(
@@ -703,6 +807,10 @@ function ManagerDetailPage(): JSX.Element {
                                 <FiArrowLeft className={styles.icon} />
                                 На дашборд
                             </Button>
+                            <RecordPrintCenter
+                                documents={managerPrintDocuments}
+                                buttonClassName={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
+                            />
                             <Button
                                 variant="surface"
                                 color="gray"
@@ -1137,6 +1245,7 @@ function ManagerDetailPage(): JSX.Element {
         <div className={styles.container}>
             <ManagerHrWorkspace
                 manager={manager}
+                extraActions={<RecordPrintCenter documents={managerPrintDocuments} />}
                 canEdit={canEdit || isOwnProfile}
                 canScheduleEdit={canScheduleManage}
                 canScheduleApplyPattern={canScheduleManage}

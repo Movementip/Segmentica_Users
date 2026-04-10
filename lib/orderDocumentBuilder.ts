@@ -1,4 +1,9 @@
-import { buildClientDisplayName, buildClientPrimaryAddress, type ClientBankAccount } from './clientContragents';
+import {
+    buildClientDisplayName,
+    buildClientPrimaryAddress,
+    normalizeClientContragentType,
+    type ClientBankAccount,
+} from './clientContragents';
 import { readFile } from 'fs/promises';
 import path from 'path';
 import { query } from './db';
@@ -124,6 +129,27 @@ const formatMoney = (value: number): string =>
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
     }).format(Number(value) || 0);
+
+const formatDateRuLong = (value: Date): string => {
+    const months = [
+        'января',
+        'февраля',
+        'марта',
+        'апреля',
+        'мая',
+        'июня',
+        'июля',
+        'августа',
+        'сентября',
+        'октября',
+        'ноября',
+        'декабря',
+    ];
+    const day = String(value.getUTCDate()).padStart(2, '0');
+    const month = months[value.getUTCMonth()] || '';
+    const year = value.getUTCFullYear();
+    return `«${day}» ${month} ${year} г.`;
+};
 
 const getCompanyProfile = async (): Promise<OrderDocumentCompanyProfile> => {
     try {
@@ -422,6 +448,66 @@ const buildOrderItemsBlock = (positions: OrderDocumentPosition[]): string =>
         })
         .join('\n');
 
+const buildOrderInvoiceStructuredRows = (positions: OrderDocumentPosition[]) =>
+    positions.map((position, index) => {
+        const quantity = position.количество % 1 === 0
+            ? String(position.количество)
+            : String(position.количество).replace('.', ',');
+        return {
+            number: String(index + 1),
+            name: position.товар_название,
+            unit: normalizeNullableText(position.товар_единица_измерения),
+            quantity,
+            price: formatMoney(position.цена),
+            sum: formatMoney(position.сумма_всего),
+        };
+    });
+
+const buildOrderSpecificationItemsBlock = (positions: OrderDocumentPosition[]): string =>
+    positions
+        .map((position, index) => {
+            const quantity = position.количество % 1 === 0
+                ? String(position.количество)
+                : String(position.количество).replace('.', ',');
+            return `${index + 1}\t${position.товар_название}\t${quantity} ${position.товар_единица_измерения || 'шт'}\t${formatMoney(position.цена)}`;
+        })
+        .join('\n');
+
+const buildOrderSpecificationRows = (positions: OrderDocumentPosition[]) =>
+    positions.map((position, index) => {
+        const quantity = position.количество % 1 === 0
+            ? String(position.количество)
+            : String(position.количество).replace('.', ',');
+        return {
+            number: String(index + 1),
+            name: position.товар_название,
+            quantity: `${quantity} ${position.товар_единица_измерения || 'шт'}`,
+            price: formatMoney(position.цена),
+        };
+    });
+
+const buildOrderSpecificationTotal = (positions: OrderDocumentPosition[]): string => {
+    if (!positions.length) return '0 поз.';
+
+    const units = Array.from(
+        new Set(
+            positions
+                .map((position) => normalizeNullableText(position.товар_единица_измерения))
+                .filter(Boolean)
+        )
+    );
+
+    if (units.length === 1) {
+        const totalQuantity = positions.reduce((sum, position) => sum + (Number(position.количество) || 0), 0);
+        const quantity = totalQuantity % 1 === 0
+            ? String(totalQuantity)
+            : String(totalQuantity).replace('.', ',');
+        return `${quantity} ${units[0]}`;
+    }
+
+    return `${positions.length} поз.`;
+};
+
 const buildOrderBasis = (orderId: number, documentDate: Date): string =>
     `Заявка № ${orderId} от ${formatDateRu(documentDate)}`;
 
@@ -478,16 +564,44 @@ export const buildOrderDocumentPayload = async (
         адресРегистрации: order.клиент_адрес_регистрации,
         адресПечати: order.клиент_адрес_печати,
     }) || '';
+    const clientType = normalizeClientContragentType(order.клиент_тип);
     const totalAmount = positions.reduce((sum, position) => sum + position.сумма_всего, 0);
     const totalVat = positions.reduce((sum, position) => sum + position.сумма_ндс, 0);
     const sixtyPercentAmount = totalAmount * 0.6;
     const fortyPercentAmount = totalAmount * 0.4;
     const basis = buildOrderBasis(order.id, orderDate);
-    const itemsBlock = buildOrderItemsBlock(positions);
+    const itemsBlock = documentKey === 'order_supply_specification'
+        ? buildOrderSpecificationItemsBlock(positions)
+        : buildOrderItemsBlock(positions);
 
     const directorFio = companyProfile.directorName || director?.fio || '';
     const directorPosition = companyProfile.directorPosition || director?.position || 'Генеральный директор';
     const accountantFio = accountant?.fio || companyProfile.accountantName || directorFio;
+    const clientPersonFullName = [order.клиент_фамилия, order.клиент_имя, order.клиент_отчество]
+        .map((value) => normalizeNullableText(value))
+        .filter(Boolean)
+        .join(' ');
+    const clientSignatoryFio = clientType === 'Организация'
+        ? ''
+        : (clientPersonFullName || clientName);
+    const clientPosition = clientType === 'Организация'
+        ? 'генеральный директор'
+        : clientType === 'Индивидуальный предприниматель'
+            ? 'индивидуальный предприниматель'
+            : clientType === 'Физическое лицо'
+                ? 'физическое лицо'
+                : 'уполномоченный представитель';
+    const specificationRows = buildOrderSpecificationRows(positions);
+    const invoiceStructuredRows = buildOrderInvoiceStructuredRows(positions);
+    const buyerLineParts = [
+        clientName,
+        normalizeNullableText(order.клиент_инн) && `ИНН: ${normalizeNullableText(order.клиент_инн)}`,
+        normalizeNullableText(order.клиент_кпп) && `КПП: ${normalizeNullableText(order.клиент_кпп)}`,
+    ].filter(Boolean);
+    const companyContacts = [
+        normalizeNullableText(companyProfile.phone) && `Телефон: ${normalizeNullableText(companyProfile.phone)}`,
+        normalizeNullableText(companyProfile.email) && `Эл. почта: ${normalizeNullableText(companyProfile.email)}`,
+    ].filter(Boolean);
 
     const replacements: Record<string, string> = {
         '{НомерДокумента}': String(order.id),
@@ -520,8 +634,8 @@ export const buildOrderDocumentPayload = async (
         '{РасчетныйСчетКонтр}': normalizeNullableText(clientBankAccount?.settlementAccount),
         '{ПочтаКонтрДляДокументов}': normalizeNullableText(order.клиент_email),
         '{ТелефонКонтр}': normalizeNullableText(order.клиент_телефон),
-        '{ДолжностьКонтр}': '',
-        '{ФИОКонтрДляПодписи}': '',
+        '{ДолжностьКонтр}': clientPosition,
+        '{ФИОКонтрДляПодписи}': clientSignatoryFio,
         '{Основание}': basis,
         '{КоличествоПозиций}': String(positions.length),
         '{ФактурнаяЧасть}': itemsBlock,
@@ -531,6 +645,37 @@ export const buildOrderDocumentPayload = async (
         '{60ОтСуммыДокумента}': formatMoney(sixtyPercentAmount),
         '{40ОтСуммыДокумента}': formatMoney(fortyPercentAmount),
         '{УсловияОплаты}': companyProfile.paymentTerms,
+        '__SPECIFICATION_HEADER_BASIS__': `от ${formatDateRuLong(orderDate)} № ${order.id}`,
+        '__SPECIFICATION_TITLE__': `СПЕЦИФИКАЦИЯ № ${order.id}`,
+        '__SPECIFICATION_DATE_LONG__': formatDateRuLong(documentDate),
+        '__SPECIFICATION_TOTAL__': buildOrderSpecificationTotal(positions),
+        '__SPECIFICATION_ROWS_JSON__': JSON.stringify(specificationRows),
+        '__SPECIFICATION_SUPPLIER_NAME__': companyProfile.displayName,
+        '__SPECIFICATION_SUPPLIER_POSITION__': directorPosition,
+        '__SPECIFICATION_SUPPLIER_FIO__': directorFio,
+        '__SPECIFICATION_BUYER_LABEL__': 'Покупатель:',
+        '__SPECIFICATION_BUYER_NAME__': clientName,
+        '__SPECIFICATION_BUYER_POSITION__': clientPosition,
+        '__SPECIFICATION_BUYER_FIO__': clientSignatoryFio,
+        '__ALT_INVOICE_COMPANY_NAME__': companyProfile.displayName,
+        '__ALT_INVOICE_COMPANY_ADDRESS__': companyProfile.documentAddress || companyProfile.legalAddress,
+        '__ALT_INVOICE_COMPANY_CONTACTS__': companyContacts.join('\n'),
+        '__ALT_INVOICE_BANK_NAME__': companyProfile.bankName,
+        '__ALT_INVOICE_BIK__': companyProfile.bik,
+        '__ALT_INVOICE_CORR_ACCOUNT__': companyProfile.correspondentAccount,
+        '__ALT_INVOICE_INN__': companyProfile.inn,
+        '__ALT_INVOICE_KPP__': companyProfile.kpp,
+        '__ALT_INVOICE_SETTLEMENT_ACCOUNT__': companyProfile.settlementAccount,
+        '__ALT_INVOICE_RECIPIENT__': companyProfile.displayName,
+        '__ALT_INVOICE_TITLE__': `Счёт № ${order.id} от ${formatDateRu(documentDate)}`,
+        '__ALT_INVOICE_SUPPLIER_NAME__': companyProfile.displayName,
+        '__ALT_INVOICE_BUYER_TEXT__': buyerLineParts.join(', '),
+        '__ALT_INVOICE_ROWS_JSON__': JSON.stringify(invoiceStructuredRows),
+        '__ALT_INVOICE_TOTAL_LINE__': `Итого к оплате: ${formatMoney(totalAmount)}\nВ том числе НДС: ${totalVat > 0 ? formatMoney(totalVat) : 'Без НДС'}`,
+        '__ALT_INVOICE_TOTAL_WORDS__': `Всего к оплате: ${amountToWordsRub(totalAmount)}, ${totalVat > 0 ? `в том числе НДС ${formatMoney(totalVat)} руб.` : 'без НДС.'}`,
+        '__ALT_INVOICE_SIGN_LABEL__': 'Поставщик',
+        '__ALT_INVOICE_SIGN_POSITION__': directorPosition,
+        '__ALT_INVOICE_SIGN_FIO__': directorFio,
     };
 
     return {

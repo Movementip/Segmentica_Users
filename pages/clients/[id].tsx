@@ -10,6 +10,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
 import { getClientContragentTypeLabel, getClientContragentTypeTheme, normalizeClientContragentType, type ClientContragent } from '../../lib/clientContragents';
+import { RecordPrintCenter, RecordPrintSheet, type RecordPrintDocument } from '../../components/print/RecordPrintCenter';
 
 const MotionTableRow = motion(Table.Row);
 
@@ -359,6 +360,152 @@ function ClientDetailPage(): JSX.Element {
         return 'Адрес по ФИАС';
     };
 
+    const clientPrintDocuments = useMemo<RecordPrintDocument[]>(() => {
+        if (!client) return [];
+
+        const identity = getClientIdentity(client);
+        const normalizedType = normalizeClientContragentType(client.тип);
+        const bankAccounts = client.bankAccounts || [];
+        const latestOrderDate = orders.length
+            ? orders
+                .map((order) => new Date(order.дата_создания).getTime())
+                .filter((value) => Number.isFinite(value))
+                .sort((a, b) => b - a)[0]
+            : null;
+
+        const documents: RecordPrintDocument[] = [
+            {
+                key: 'client-card',
+                title: 'Карточка клиента',
+                content: (
+                    <RecordPrintSheet
+                        title={`Карточка клиента #${client.id}`}
+                        subtitle={client.название}
+                        meta={
+                            <>
+                                <div>Тип: {getClientContragentTypeLabel(client.тип)}</div>
+                                <div>Печать: {new Date().toLocaleString('ru-RU')}</div>
+                            </>
+                        }
+                        sections={[
+                            {
+                                title: 'Основные реквизиты',
+                                fields: [
+                                    { label: 'ID', value: `#${client.id}` },
+                                    { label: 'Тип клиента', value: getClientContragentTypeLabel(client.тип) },
+                                    { label: identity.label, value: identity.value },
+                                    { label: 'Краткое название', value: formatTextValue(client.краткоеНазвание || client.название) },
+                                    { label: 'ИНН', value: formatTextValue(client.инн) },
+                                    { label: 'КПП', value: formatTextValue(client.кпп) },
+                                    {
+                                        label: normalizedType === 'Организация' ? 'ОГРН' : 'ОГРНИП',
+                                        value: formatTextValue(client.огрн || client.огрнип),
+                                    },
+                                    { label: 'ОКПО', value: formatTextValue(client.окпо) },
+                                ],
+                            },
+                            {
+                                title: 'Контакты и адреса',
+                                fields: [
+                                    { label: 'Телефон', value: formatTextValue(client.телефон) },
+                                    { label: 'Email', value: formatTextValue(client.email) },
+                                    { label: getRegistrationLabel(client), value: formatTextValue(client.адресРегистрации) },
+                                    { label: 'Адрес для документов', value: formatTextValue(client.адресПечати || client.адрес) },
+                                    { label: 'Комментарий', value: formatTextValue(client.комментарий) },
+                                    {
+                                        label: 'Паспорт',
+                                        value: normalizedType === 'Физическое лицо'
+                                            ? ([
+                                                client.паспортСерия && `серия ${client.паспортСерия}`,
+                                                client.паспортНомер && `номер ${client.паспортНомер}`,
+                                                client.паспортДатаВыдачи && `от ${formatDate(client.паспортДатаВыдачи)}`,
+                                            ].filter(Boolean).join(', ') || '—')
+                                            : '—',
+                                    },
+                                ],
+                            },
+                            bankAccounts.length
+                                ? {
+                                    title: 'Банковские реквизиты',
+                                    table: {
+                                        columns: ['Счет', 'Банк', 'БИК', 'Расчетный счет', 'Корр. счет'],
+                                        rows: bankAccounts.map((account) => [
+                                            `${account.name}${account.isPrimary ? ' (основной)' : ''}`,
+                                            account.bankName || '—',
+                                            account.bik || '—',
+                                            account.settlementAccount || '—',
+                                            account.correspondentAccount || '—',
+                                        ]),
+                                    },
+                                }
+                                : {
+                                    title: 'Банковские реквизиты',
+                                    note: 'Банковские реквизиты для клиента еще не заполнены.',
+                                },
+                        ]}
+                    />
+                ),
+            },
+        ];
+
+        if (orders.length) {
+            documents.push({
+                key: 'client-orders',
+                title: 'История заявок клиента',
+                content: (
+                    <RecordPrintSheet
+                        title={`История заявок клиента #${client.id}`}
+                        subtitle={client.название}
+                        meta={
+                            <>
+                                <div>Заявок: {orders.length}</div>
+                                <div>Печать: {new Date().toLocaleString('ru-RU')}</div>
+                            </>
+                        }
+                        sections={[
+                            {
+                                title: 'Сводка',
+                                fields: [
+                                    { label: 'Количество заявок', value: orders.length },
+                                    { label: 'Сумма по заявкам', value: formatCurrency(ordersTotal) },
+                                    {
+                                        label: 'Последняя заявка',
+                                        value: latestOrderDate ? new Date(latestOrderDate).toLocaleString('ru-RU') : '—',
+                                    },
+                                ],
+                                columns: 1,
+                            },
+                            {
+                                title: 'Заявки',
+                                table: {
+                                    columns: ['№ заявки', 'Дата создания', 'Статус', 'Сумма'],
+                                    rows: orders.map((order) => [
+                                        `#${order.номер}`,
+                                        formatDateTime(order.дата_создания),
+                                        order.статус || '—',
+                                        formatCurrency(order.общая_сумма || 0),
+                                    ]),
+                                },
+                            },
+                        ]}
+                    />
+                ),
+            });
+        }
+
+        return documents;
+    }, [
+        client,
+        formatCurrency,
+        formatDate,
+        formatDateTime,
+        formatTextValue,
+        getClientIdentity,
+        getRegistrationLabel,
+        orders,
+        ordersTotal,
+    ]);
+
     const statusBadge = (statusRaw: string) => {
         const status = (statusRaw || '').toLowerCase();
         const map: Record<string, { label: string; color: any }> = {
@@ -459,6 +606,10 @@ function ClientDetailPage(): JSX.Element {
                             <FiArrowLeft className={styles.icon} />
                             Назад
                         </Button>
+                        <RecordPrintCenter
+                            documents={clientPrintDocuments}
+                            buttonClassName={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
+                        />
                         {canEdit ? (
                             <Button
                                 variant="surface"

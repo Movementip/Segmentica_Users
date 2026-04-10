@@ -12,6 +12,7 @@ import { FiArrowLeft, FiDownload, FiEdit2, FiFile, FiPaperclip, FiPlus, FiRefres
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
 import { getSupplierContragentTypeLabel, getSupplierContragentTypeTheme, normalizeSupplierContragentType, type SupplierBankAccount, type SupplierContragent } from '../../lib/supplierContragents';
+import { RecordPrintCenter, RecordPrintSheet, type RecordPrintDocument } from '../../components/print/RecordPrintCenter';
 
 interface SupplierProduct {
     id: number;
@@ -458,6 +459,167 @@ function SupplierDetailPage(): JSX.Element {
     const purchasesInTransit = supplier.закупки.filter((p) => (p.статус || '').toLowerCase() === 'в пути').length;
     const purchasesSum = supplier.закупки.reduce((sum, p) => sum + (Number(p.общая_сумма) || 0), 0);
     const supplierTypeTheme = getSupplierContragentTypeTheme(supplier.тип);
+    const supplierPrintDocuments = useMemo<RecordPrintDocument[]>(() => {
+        if (!supplier) return [];
+
+        const normalizedType = normalizeSupplierContragentType(supplier.тип);
+        const bankAccounts = supplier.bankAccounts || [];
+        const documents: RecordPrintDocument[] = [
+            {
+                key: 'supplier-card',
+                title: 'Карточка поставщика',
+                content: (
+                    <RecordPrintSheet
+                        title={`Карточка поставщика #${supplier.id}`}
+                        subtitle={supplier.название}
+                        meta={
+                            <>
+                                <div>Тип: {getSupplierContragentTypeLabel(supplier.тип)}</div>
+                                <div>Печать: {new Date().toLocaleString('ru-RU')}</div>
+                            </>
+                        }
+                        sections={[
+                            {
+                                title: 'Основные реквизиты',
+                                fields: [
+                                    { label: 'ID', value: `#${supplier.id}` },
+                                    { label: 'Тип', value: getSupplierContragentTypeLabel(supplier.тип) },
+                                    { label: 'Полное имя / название', value: getSupplierIdentity() },
+                                    { label: 'Краткое название', value: formatTextValue(supplier.краткоеНазвание || supplier.название) },
+                                    { label: 'ИНН', value: formatTextValue(supplier.инн) },
+                                    { label: 'КПП', value: formatTextValue(supplier.кпп) },
+                                    {
+                                        label: normalizedType === 'Организация' ? 'ОГРН' : 'ОГРНИП',
+                                        value: formatTextValue(supplier.огрн || supplier.огрнип),
+                                    },
+                                    { label: 'ОКПО', value: formatTextValue(supplier.окпо) },
+                                ],
+                            },
+                            {
+                                title: 'Контакты и условия',
+                                fields: [
+                                    { label: 'Телефон', value: formatTextValue(supplier.телефон) },
+                                    { label: 'Email', value: formatTextValue(supplier.email) },
+                                    { label: getRegistrationLabel(), value: formatTextValue(supplier.адресРегистрации || supplier.адрес) },
+                                    { label: 'Адрес для документов', value: formatTextValue(supplier.адресПечати || supplier.адрес) },
+                                    { label: 'Рейтинг', value: supplier.рейтинг ?? '—' },
+                                    { label: 'Комментарий', value: formatTextValue(supplier.комментарий) },
+                                ],
+                            },
+                            bankAccounts.length
+                                ? {
+                                    title: 'Банковские реквизиты',
+                                    table: {
+                                        columns: ['Счет', 'Банк', 'БИК', 'Расчетный счет', 'Корр. счет'],
+                                        rows: bankAccounts.map((account) => [
+                                            `${account.name}${account.isPrimary ? ' (основной)' : ''}`,
+                                            account.bankName || '—',
+                                            account.bik || '—',
+                                            account.settlementAccount || '—',
+                                            account.correspondentAccount || '—',
+                                        ]),
+                                    },
+                                }
+                                : {
+                                    title: 'Банковские реквизиты',
+                                    note: 'Банковские реквизиты поставщика не заполнены.',
+                                },
+                        ]}
+                    />
+                ),
+            },
+        ];
+
+        if (supplier.ассортимент.length) {
+            documents.push({
+                key: 'supplier-assortment',
+                title: 'Ассортимент поставщика',
+                content: (
+                    <RecordPrintSheet
+                        title={`Ассортимент поставщика #${supplier.id}`}
+                        subtitle={supplier.название}
+                        meta={
+                            <>
+                                <div>Позиций: {supplier.ассортимент.length}</div>
+                                <div>Печать: {new Date().toLocaleString('ru-RU')}</div>
+                            </>
+                        }
+                        sections={[
+                            {
+                                title: 'Ассортимент',
+                                table: {
+                                    columns: ['Название', 'Артикул', 'Категория', 'Ед.', 'Цена', 'Срок поставки'],
+                                    rows: supplier.ассортимент.map((product) => [
+                                        product.товар_название || '—',
+                                        product.товар_артикул || '—',
+                                        product.товар_категория || '—',
+                                        product.товар_единица_измерения || '—',
+                                        formatCurrency(product.цена || 0),
+                                        product.срок_поставки ? `${product.срок_поставки} дн.` : '—',
+                                    ]),
+                                },
+                            },
+                        ]}
+                    />
+                ),
+            });
+        }
+
+        if (supplier.закупки.length) {
+            documents.push({
+                key: 'supplier-purchases',
+                title: 'История закупок',
+                content: (
+                    <RecordPrintSheet
+                        title={`История закупок поставщика #${supplier.id}`}
+                        subtitle={supplier.название}
+                        meta={
+                            <>
+                                <div>Закупок: {supplier.закупки.length}</div>
+                                <div>Печать: {new Date().toLocaleString('ru-RU')}</div>
+                            </>
+                        }
+                        sections={[
+                            {
+                                title: 'Сводка',
+                                fields: [
+                                    { label: 'Всего закупок', value: purchasesCount },
+                                    { label: 'Закупок в пути', value: purchasesInTransit },
+                                    { label: 'Общая сумма', value: formatCurrency(purchasesSum) },
+                                ],
+                                columns: 1,
+                            },
+                            {
+                                title: 'Закупки',
+                                table: {
+                                    columns: ['№ закупки', 'Дата заказа', 'Статус', 'Сумма', 'Связанная заявка'],
+                                    rows: supplier.закупки.map((purchase) => [
+                                        `#${purchase.id}`,
+                                        formatDate(purchase.дата_заказа),
+                                        purchase.статус || '—',
+                                        formatCurrency(purchase.общая_сумма || 0),
+                                        purchase.заявка_id ? `#${purchase.заявка_id}` : '—',
+                                    ]),
+                                },
+                            },
+                        ]}
+                    />
+                ),
+            });
+        }
+
+        return documents;
+    }, [
+        formatCurrency,
+        formatDate,
+        formatTextValue,
+        getRegistrationLabel,
+        getSupplierIdentity,
+        purchasesCount,
+        purchasesInTransit,
+        purchasesSum,
+        supplier,
+    ]);
 
     return (
         <div className={styles.container}>
@@ -483,6 +645,10 @@ function SupplierDetailPage(): JSX.Element {
                     >
                         <FiArrowLeft className={styles.icon} /> Назад
                     </Button>
+                    <RecordPrintCenter
+                        documents={supplierPrintDocuments}
+                        buttonClassName={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
+                    />
                     <Button
                         type="button"
                         variant="surface"

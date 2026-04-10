@@ -6,7 +6,7 @@ import { withLayout } from '../../layout/Layout';
 import styles from './ShipmentDetail.module.css';
 import shipmentEditorStyles from './Shipments.module.css';
 import deleteConfirmationStyles from '../../components/DeleteConfirmation.module.css';
-import { BsFillFileEarmarkPdfFill } from 'react-icons/bs';
+import { BsFillFileEarmarkExcelFill, BsFillFileEarmarkPdfFill } from 'react-icons/bs';
 import { Badge, Box, Button, Card, Dialog, DropdownMenu, Flex, Grid, Select, Separator, Table, Text, TextField } from '@radix-ui/themes';
 import {
     FiTruck,
@@ -1583,7 +1583,7 @@ function ShipmentDetailPage(): JSX.Element {
                                     className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
                                     onClick={() => handleDocumentPreviewDownload('excel')}
                                 >
-                                    <FiFile className={`${styles.icon} ${styles.excelIcon}`} />
+                                    <BsFillFileEarmarkExcelFill className={`${styles.icon} ${styles.excelIcon}`} />
                                     Excel
                                 </Button>
                             ) : null}

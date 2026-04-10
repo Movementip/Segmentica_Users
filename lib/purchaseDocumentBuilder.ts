@@ -6,7 +6,12 @@ import {
     getPurchaseDocumentDefinition,
     type PurchaseDocumentKey,
 } from './purchaseDocumentDefinitions';
-import { buildSupplierDisplayName, buildSupplierPrimaryAddress, type SupplierBankAccount } from './supplierContragents';
+import {
+    buildSupplierDisplayName,
+    buildSupplierPrimaryAddress,
+    normalizeSupplierContragentType,
+    type SupplierBankAccount,
+} from './supplierContragents';
 
 type PurchaseDocumentRow = {
     id: number;
@@ -25,6 +30,7 @@ type PurchaseDocumentRow = {
     поставщик_отчество?: string | null;
     поставщик_инн?: string | null;
     поставщик_кпп?: string | null;
+    поставщик_окпо?: string | null;
     поставщик_адрес?: string | null;
     поставщик_адрес_регистрации?: string | null;
     поставщик_адрес_печати?: string | null;
@@ -58,6 +64,12 @@ type CompanyProfile = {
     documentAddress: string;
     inn: string;
     kpp: string;
+    ogrn: string;
+    okpo: string;
+    oktmo: string;
+    okato: string;
+    okved: string;
+    activityCode: string;
     bankName: string;
     bik: string;
     correspondentAccount: string;
@@ -80,6 +92,7 @@ export type PurchaseDocumentRenderPayload = {
     replacements?: Record<string, string>;
     replaceFirstImageBase64?: string;
     rowVisibility?: RenderXlsxTemplateParams['rowVisibility'];
+    rowBreaks?: RenderXlsxTemplateParams['rowBreaks'];
     printAreas?: RenderXlsxTemplateParams['printAreas'];
     rangeCopies?: RenderXlsxTemplateParams['rangeCopies'];
     sheetCopies?: RenderXlsxTemplateParams['sheetCopies'];
@@ -97,6 +110,12 @@ const DEFAULT_COMPANY_PROFILE: CompanyProfile = {
     documentAddress: '620061, Свердловская обл, город Екатеринбург г.о., Исток п, Главная ул, строение 21, помещение 421',
     inn: '6685205790',
     kpp: '668501001',
+    ogrn: '1226600072577',
+    okpo: '95164141',
+    oktmo: '65701000',
+    okato: '65401380002',
+    okved: '46.73.6',
+    activityCode: '46.73.6',
     bankName: 'СБЕРБАНК',
     bik: '782347238904238904',
     correspondentAccount: '7283489324879234',
@@ -115,6 +134,11 @@ const TORG_ITEM_ROWS = [
     30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41,
     47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61,
 ];
+const TORG_FIRST_PAGE_ITEM_ROWS = TORG_ITEM_ROWS.filter((row) => row >= 30 && row <= 41);
+const TORG_SECOND_PAGE_ITEM_ROWS = TORG_ITEM_ROWS.filter((row) => row >= 47 && row <= 61);
+const TORG_ACTIVITY_CODE = '43.76.6';
+const TORG_FIRST_PAGE_BREAK_ROW = 42;
+const TORG_FOOTER_PAGE_BREAK_ROW = 63;
 
 const UNIT_CODE_MAP: Record<string, string> = {
     шт: '796',
@@ -132,6 +156,19 @@ const normalizeNullableText = (value: unknown): string => {
     if (value == null) return '';
     const text = String(value).trim();
     return text || '';
+};
+
+const toShortFio = (value: string | null | undefined): string => {
+    const normalized = normalizeNullableText(value);
+    if (!normalized) return '';
+    const parts = normalized.split(/\s+/).filter(Boolean);
+    if (parts.length === 1) return parts[0];
+    const [lastName, firstName = '', middleName = ''] = parts;
+    const initials = [firstName, middleName]
+        .filter(Boolean)
+        .map((part) => `${part.charAt(0).toUpperCase()}.`)
+        .join(' ');
+    return initials ? `${lastName} ${initials}` : lastName;
 };
 
 const parseDateOnly = (value: string | null | undefined): Date => {
@@ -161,6 +198,31 @@ const formatDateRuLong = (value: Date): string => {
     const formatted = formatter.format(value);
     return formatted.includes('г.') ? formatted : `${formatted} г.`;
 };
+
+const getMonthRuGenitive = (value: Date): string => {
+    const months = [
+        'января',
+        'февраля',
+        'марта',
+        'апреля',
+        'мая',
+        'июня',
+        'июля',
+        'августа',
+        'сентября',
+        'октября',
+        'ноября',
+        'декабря',
+    ];
+
+    return months[value.getUTCMonth()] || '';
+};
+
+const formatDateRuParts = (value: Date): { day: string; month: string; year: string } => ({
+    day: String(value.getUTCDate()).padStart(2, '0'),
+    month: getMonthRuGenitive(value),
+    year: String(value.getUTCFullYear()),
+});
 
 const formatMoney = (value: number): string =>
     new Intl.NumberFormat('ru-RU', {
@@ -254,6 +316,21 @@ const buildPurchaseItemsBlock = (positions: PurchaseDocumentPosition[]): string 
         })
         .join('\n');
 
+const buildPurchaseInvoiceStructuredRows = (positions: PurchaseDocumentPosition[]) =>
+    positions.map((position, index) => {
+        const quantity = position.количество % 1 === 0
+            ? String(position.количество)
+            : String(position.количество).replace('.', ',');
+        return {
+            number: String(index + 1),
+            name: position.товар_название,
+            unit: normalizeNullableText(position.товар_единица_измерения),
+            quantity,
+            price: formatMoney(position.цена),
+            sum: formatMoney(position.сумма_всего),
+        };
+    });
+
 const getCompanyProfile = async (): Promise<CompanyProfile> => {
     try {
         const res = await query(
@@ -279,6 +356,12 @@ const getCompanyProfile = async (): Promise<CompanyProfile> => {
             documentAddress: normalizeNullableText(value.documentAddress ?? value.postalAddress) || DEFAULT_COMPANY_PROFILE.documentAddress,
             inn: normalizeNullableText(value.inn) || DEFAULT_COMPANY_PROFILE.inn,
             kpp: normalizeNullableText(value.kpp) || DEFAULT_COMPANY_PROFILE.kpp,
+            ogrn: normalizeNullableText(value.ogrn) || DEFAULT_COMPANY_PROFILE.ogrn,
+            okpo: normalizeNullableText(value.okpo) || DEFAULT_COMPANY_PROFILE.okpo,
+            oktmo: normalizeNullableText(value.oktmo) || DEFAULT_COMPANY_PROFILE.oktmo,
+            okato: normalizeNullableText(value.okato) || DEFAULT_COMPANY_PROFILE.okato,
+            okved: normalizeNullableText(value.okved ?? value.mainOkved) || DEFAULT_COMPANY_PROFILE.okved,
+            activityCode: normalizeNullableText(value.activityCode ?? value.okdp ?? value.okved ?? value.mainOkved) || DEFAULT_COMPANY_PROFILE.activityCode,
             bankName: normalizeNullableText(value.bankName ?? value.bank) || DEFAULT_COMPANY_PROFILE.bankName,
             bik: normalizeNullableText(value.bik) || DEFAULT_COMPANY_PROFILE.bik,
             correspondentAccount: normalizeNullableText(value.correspondentAccount ?? value.ks) || DEFAULT_COMPANY_PROFILE.correspondentAccount,
@@ -416,7 +499,8 @@ const getPurchaseDocumentData = async (
             s."отчество" AS поставщик_отчество,
             s."инн" AS поставщик_инн,
             s."кпп" AS поставщик_кпп,
-            s."адрес" AS поставщик_адрес,
+            s."окпо" AS поставщик_окпо,
+            COALESCE(s."адрес_печати", s."адрес_регистрации") AS поставщик_адрес,
             s."адрес_регистрации" AS поставщик_адрес_регистрации,
             s."адрес_печати" AS поставщик_адрес_печати,
             s."email" AS поставщик_email,
@@ -499,8 +583,27 @@ const excelCell = (
     style: wrapText ? { wrapText: true, vertical: 'top' } : undefined,
 });
 
+const excelLeftCell = (
+    sheetName: string,
+    address: string,
+    value: string | number,
+    wrapText = false
+): RenderXlsxTemplateParams['cells'][number] => ({
+    sheetName,
+    address,
+    value,
+    style: {
+        horizontal: 'left',
+        vertical: wrapText ? 'top' : 'center',
+        ...(wrapText ? { wrapText: true } : {}),
+    },
+});
+
 const clearCells = (sheetName: string, addresses: string[]): RenderXlsxTemplateParams['cells'] =>
     addresses.map((address) => excelCell(sheetName, address, ''));
+
+const shiftCellAddress = (address: string, rowOffset: number): string =>
+    address.replace(/([A-Z]+)(\d+)/, (_, column: string, row: string) => `${column}${Number(row) + rowOffset}`);
 
 const getUnitCode = (unit: string | null | undefined): string => {
     const normalized = normalizeNullableText(unit).toLowerCase().replace(/\s+/g, '');
@@ -558,6 +661,91 @@ const buildTransportSummary = (purchase: PurchaseDocumentRow): string => {
     ].filter(Boolean).join(', ');
 };
 
+const buildCompanyTorgName = (profile: CompanyProfile): string =>
+    profile.legalName || profile.displayName;
+
+const buildCompanyTorgLine = (profile: CompanyProfile): string =>
+    [
+        buildCompanyTorgName(profile),
+        profile.documentAddress || profile.legalAddress,
+        profile.phone && `тел. ${profile.phone}`,
+        [profile.inn && `ИНН ${profile.inn}`, profile.kpp && `КПП ${profile.kpp}`].filter(Boolean).join(', '),
+        [
+            profile.settlementAccount && `р/с ${profile.settlementAccount}`,
+            profile.bankName && `в ${profile.bankName}`,
+            profile.correspondentAccount && `к/с ${profile.correspondentAccount}`,
+            profile.bik && `БИК ${profile.bik}`,
+        ].filter(Boolean).join(', '),
+    ].filter(Boolean).join(', ');
+
+const buildSupplierTorgName = (purchase: PurchaseDocumentRow): string =>
+    normalizeSupplierContragentType(purchase.поставщик_тип) === 'Организация'
+        ? normalizeNullableText(purchase.поставщик_полное_название)
+        || normalizeNullableText(purchase.поставщик_краткое_название)
+        || normalizeNullableText(purchase.поставщик_название)
+        : buildSupplierDisplayName({
+            название: purchase.поставщик_название,
+            тип: purchase.поставщик_тип,
+            краткоеНазвание: purchase.поставщик_краткое_название,
+            полноеНазвание: purchase.поставщик_полное_название,
+            фамилия: purchase.поставщик_фамилия,
+            имя: purchase.поставщик_имя,
+            отчество: purchase.поставщик_отчество,
+        });
+
+const buildSupplierTorgLine = (
+    purchase: PurchaseDocumentRow,
+    supplierBankAccount: SupplierBankAccount | null
+): string => {
+    const supplierName = buildSupplierTorgName(purchase);
+    const supplierAddress = buildSupplierPrimaryAddress({
+        адрес: purchase.поставщик_адрес,
+        адресРегистрации: purchase.поставщик_адрес_регистрации,
+        адресПечати: purchase.поставщик_адрес_печати,
+    }) || '';
+
+    return [
+        supplierName,
+        supplierAddress,
+        purchase.поставщик_телефон && `тел. ${purchase.поставщик_телефон}`,
+        [purchase.поставщик_инн && `ИНН ${purchase.поставщик_инн}`, purchase.поставщик_кпп && `КПП ${purchase.поставщик_кпп}`].filter(Boolean).join(', '),
+        [
+            supplierBankAccount?.settlementAccount && `р/с ${supplierBankAccount.settlementAccount}`,
+            supplierBankAccount?.bankName && `в ${supplierBankAccount.bankName}`,
+            supplierBankAccount?.correspondentAccount && `к/с ${supplierBankAccount.correspondentAccount}`,
+            supplierBankAccount?.bik && `БИК ${supplierBankAccount.bik}`,
+        ].filter(Boolean).join(', '),
+    ].filter(Boolean).join(', ');
+};
+
+const numToWordsRuGenitive = (value: number): string => {
+    const forms: Record<number, string> = {
+        0: 'нуля',
+        1: 'одного',
+        2: 'двух',
+        3: 'трех',
+        4: 'четырех',
+        5: 'пяти',
+        6: 'шести',
+        7: 'семи',
+        8: 'восьми',
+        9: 'девяти',
+        10: 'десяти',
+        11: 'одиннадцати',
+        12: 'двенадцати',
+        13: 'тринадцати',
+        14: 'четырнадцати',
+        15: 'пятнадцати',
+        16: 'шестнадцати',
+        17: 'семнадцати',
+        18: 'восемнадцати',
+        19: 'девятнадцати',
+        20: 'двадцати',
+    };
+    if (value in forms) return forms[value];
+    return numToWordsRu(value, false);
+};
+
 const buildPurchaseInvoicePayload = async (purchaseId: number): Promise<PurchaseDocumentRenderPayload> => {
     const definition = getPurchaseDocumentDefinition('purchase_invoice');
     const { purchase, positions } = await getPurchaseDocumentData(purchaseId);
@@ -597,8 +785,25 @@ const buildPurchaseInvoicePayload = async (purchaseId: number): Promise<Purchase
     const totalVat = positions.reduce((sum, position) => sum + position.сумма_ндс, 0);
     const basis = buildPurchaseBasis(purchase.id, purchaseDate);
     const itemsBlock = buildPurchaseItemsBlock(positions);
+    const invoiceStructuredRows = buildPurchaseInvoiceStructuredRows(positions);
     const directorFio = companyProfile.directorName || director?.fio || '';
     const directorPosition = companyProfile.directorPosition || director?.position || 'Генеральный директор';
+    const supplierType = normalizeSupplierContragentType(purchase.поставщик_тип);
+    const supplierPosition = supplierType === 'Организация'
+        ? 'Генеральный директор'
+        : supplierType === 'Индивидуальный предприниматель'
+            ? 'Индивидуальный предприниматель'
+            : '';
+    const supplierSignatoryFio = supplierType === 'Организация' ? '' : supplierName;
+    const supplierContacts = [
+        normalizeNullableText(purchase.поставщик_телефон) && `Телефон: ${normalizeNullableText(purchase.поставщик_телефон)}`,
+        normalizeNullableText(purchase.поставщик_email) && `Эл. почта: ${normalizeNullableText(purchase.поставщик_email)}`,
+    ].filter(Boolean);
+    const buyerLineParts = [
+        companyProfile.displayName,
+        companyProfile.inn && `ИНН: ${companyProfile.inn}`,
+        companyProfile.kpp && `КПП: ${companyProfile.kpp}`,
+    ].filter(Boolean);
     return {
         documentTitle: definition.title,
         template,
@@ -645,6 +850,25 @@ const buildPurchaseInvoicePayload = async (purchaseId: number): Promise<Purchase
             '{60ОтСуммыДокумента}': formatMoney(totalAmount * 0.6),
             '{40ОтСуммыДокумента}': formatMoney(totalAmount * 0.4),
             '{УсловияОплаты}': companyProfile.paymentTerms,
+            '__ALT_INVOICE_COMPANY_NAME__': supplierName,
+            '__ALT_INVOICE_COMPANY_ADDRESS__': supplierAddress,
+            '__ALT_INVOICE_COMPANY_CONTACTS__': supplierContacts.join('\n'),
+            '__ALT_INVOICE_BANK_NAME__': normalizeNullableText(supplierBankAccount?.bankName),
+            '__ALT_INVOICE_BIK__': normalizeNullableText(supplierBankAccount?.bik),
+            '__ALT_INVOICE_CORR_ACCOUNT__': normalizeNullableText(supplierBankAccount?.correspondentAccount),
+            '__ALT_INVOICE_INN__': normalizeNullableText(purchase.поставщик_инн),
+            '__ALT_INVOICE_KPP__': normalizeNullableText(purchase.поставщик_кпп),
+            '__ALT_INVOICE_SETTLEMENT_ACCOUNT__': normalizeNullableText(supplierBankAccount?.settlementAccount),
+            '__ALT_INVOICE_RECIPIENT__': supplierName,
+            '__ALT_INVOICE_TITLE__': `Счёт № ${purchase.id} от ${formatDateRuNumeric(documentDate)}`,
+            '__ALT_INVOICE_SUPPLIER_NAME__': supplierName,
+            '__ALT_INVOICE_BUYER_TEXT__': buyerLineParts.join(', '),
+            '__ALT_INVOICE_ROWS_JSON__': JSON.stringify(invoiceStructuredRows),
+            '__ALT_INVOICE_TOTAL_LINE__': `Итого к оплате: ${formatMoney(totalAmount)}\nВ том числе НДС: ${totalVat > 0 ? formatMoney(totalVat) : 'Без НДС'}`,
+            '__ALT_INVOICE_TOTAL_WORDS__': `Всего к оплате: ${amountToWordsRub(totalAmount)}, ${totalVat > 0 ? `в том числе НДС ${formatMoney(totalVat)} руб.` : 'без НДС.'}`,
+            '__ALT_INVOICE_SIGN_LABEL__': 'Поставщик',
+            '__ALT_INVOICE_SIGN_POSITION__': supplierPosition,
+            '__ALT_INVOICE_SIGN_FIO__': supplierSignatoryFio,
         },
         pdfPostprocess: 'none',
     };
@@ -701,8 +925,16 @@ const buildPurchaseUpdPayload = async (
     const totalTax = positions.reduce((sum, position) => sum + position.сумма_ндс, 0);
     const totalAmount = positions.reduce((sum, position) => sum + position.сумма_всего, 0);
     const year = String(purchaseDate.getUTCFullYear());
+    const receiptDate = parseDateOnly(purchase.дата_поступления || purchase.дата_заказа);
     const directorName = director?.fio || companyProfile.directorName || '';
     const accountantName = accountant?.fio || companyProfile.accountantName || '';
+    const directorPosition = companyProfile.directorPosition || director?.position || 'Генеральный директор';
+    const directorShortName = toShortFio(directorName);
+    const accountantShortName = toShortFio(accountantName);
+    const supplierType = normalizeSupplierContragentType(purchase.поставщик_тип);
+    const footerRowOffset = footerStartRow - 31;
+    const footerCell = (address: string, value: string | number, wrapText = false) =>
+        excelCell(targetSheetName, shiftCellAddress(address, footerRowOffset), value, wrapText);
 
     const cells: RenderXlsxTemplateParams['cells'] = [
         excelCell(targetSheetName, 'AM1', purchase.id),
@@ -717,35 +949,51 @@ const buildPurchaseUpdPayload = async (
         ),
         excelCell(targetSheetName, 'BA7', supplierName === '' ? '' : `${supplierName}${supplierAddress ? `, ${supplierAddress}` : ''}`, true),
         excelCell(targetSheetName, 'BA8', `${companyProfile.legalName}, ${companyProfile.documentAddress || companyProfile.legalAddress}`, true),
-        excelCell(targetSheetName, 'BE10', `Входящий УПД ${purchase.id}`),
-        excelCell(targetSheetName, 'CJ10', dateStringLong),
+        excelCell(targetSheetName, 'BE10', ''),
+        excelCell(targetSheetName, 'CJ10', ''),
         excelCell(targetSheetName, 'BA11', companyProfile.legalName, true),
         excelCell(targetSheetName, 'BA12', companyProfile.documentAddress || companyProfile.legalAddress, true),
         excelCell(targetSheetName, 'BA13', `${companyProfile.inn}/${companyProfile.kpp}`),
         excelCell(targetSheetName, 'BA14', 'российский рубль, 643'),
-        excelCell(targetSheetName, 'AR40', basis, true),
-        excelCell(targetSheetName, 'AF42', buildTransportSummary(purchase), true),
-        excelCell(targetSheetName, 'B35', positions.length),
-        excelCell(targetSheetName, 'CJ31', Number(totalNet.toFixed(2))),
-        excelCell(targetSheetName, 'DZ31', Number(totalAmount.toFixed(2))),
-        excelCell(targetSheetName, 'AA45', ''),
-        excelCell(targetSheetName, 'BA45', ''),
-        excelCell(targetSheetName, 'DK45', ''),
-        excelCell(targetSheetName, 'EI45', ''),
-        excelCell(targetSheetName, 'AI47', String(purchaseDate.getUTCDate()).padStart(2, '0')),
-        excelCell(targetSheetName, 'AO47', new Intl.DateTimeFormat('ru-RU', { month: 'long', timeZone: 'UTC' }).format(purchaseDate)),
-        excelCell(targetSheetName, 'BN47', year.slice(0, 2)),
-        excelCell(targetSheetName, 'BR47', year.slice(2)),
-        excelCell(targetSheetName, 'AZ33', ''),
-        excelCell(targetSheetName, 'BO33', directorName),
-        excelCell(targetSheetName, 'DQ33', ''),
-        excelCell(targetSheetName, 'EM34', accountantName),
+        footerCell('B35', positions.length),
+        footerCell('CJ31', Number(totalNet.toFixed(2))),
+        footerCell('DZ31', Number(totalAmount.toFixed(2))),
+        footerCell('AZ33', ''),
+        footerCell('BO33', directorShortName),
+        footerCell('DQ33', ''),
+        footerCell('EM34', accountantShortName),
+        footerCell('AR40', basis, true),
+        footerCell('AF42', buildTransportSummary(purchase), true),
+        footerCell('B45', supplierType === 'Индивидуальный предприниматель' ? 'Индивидуальный предприниматель' : ''),
+        footerCell('AA45', ''),
+        footerCell('BA45', supplierType === 'Индивидуальный предприниматель' || supplierType === 'Физическое лицо' ? supplierName : ''),
+        footerCell('CK45', directorName ? directorPosition : ''),
+        footerCell('DK45', ''),
+        footerCell('EI45', directorName),
+        footerCell('AI47', String(purchaseDate.getUTCDate()).padStart(2, '0')),
+        footerCell('AO47', getMonthRuGenitive(purchaseDate)),
+        footerCell('BN47', year.slice(0, 2)),
+        footerCell('BR47', year.slice(2)),
+        footerCell('DS47', String(receiptDate.getUTCDate()).padStart(2, '0')),
+        footerCell('DY47', getMonthRuGenitive(receiptDate)),
+        footerCell('EV47', String(receiptDate.getUTCFullYear()).slice(0, 2)),
+        footerCell('EZ47', String(receiptDate.getUTCFullYear()).slice(2)),
+        footerCell('B49', ''),
+        footerCell('CK49', ''),
+        footerCell('B52', supplierType === 'Индивидуальный предприниматель' ? 'Индивидуальный предприниматель' : ''),
+        footerCell('AA52', ''),
+        footerCell('BA52', supplierType === 'Индивидуальный предприниматель' || supplierType === 'Физическое лицо' ? supplierName : ''),
+        footerCell('CK52', directorName ? directorPosition : ''),
+        footerCell('DK52', ''),
+        footerCell('EI52', directorName),
+        footerCell('B55', supplierName),
+        footerCell('CK55', companyProfile.legalName),
     ];
 
     if (documentKey === 'purchase_upd_status_1') {
-        cells.push(excelCell(targetSheetName, 'DM31', Number(totalTax.toFixed(2))));
+        cells.push(footerCell('DM31', Number(totalTax.toFixed(2))));
     } else {
-        cells.push(excelCell(targetSheetName, 'DM31', ''));
+        cells.push(footerCell('DM31', ''));
     }
 
     positions.forEach((position, index) => {
@@ -814,7 +1062,15 @@ const buildPurchaseUpdPayload = async (
 
     cells.push(
         ...clearCells(targetSheetName, [
-            'AZ35', 'DQ35', 'AZ38', 'BO38', 'AA45', 'BA45', 'DK45', 'EI45', 'CD49',
+            shiftCellAddress('AZ35', footerRowOffset),
+            shiftCellAddress('DQ35', footerRowOffset),
+            shiftCellAddress('AZ38', footerRowOffset),
+            shiftCellAddress('BO38', footerRowOffset),
+            shiftCellAddress('AA45', footerRowOffset),
+            shiftCellAddress('DK45', footerRowOffset),
+            shiftCellAddress('AA52', footerRowOffset),
+            shiftCellAddress('DK52', footerRowOffset),
+            shiftCellAddress('CD49', footerRowOffset),
         ])
     );
 
@@ -863,39 +1119,85 @@ const buildPurchaseTorg12Payload = async (purchaseId: number): Promise<PurchaseD
         throw new Error(`ТОРГ-12 пока поддерживает не больше ${TORG_ITEM_ROWS.length} позиций в одном документе`);
     }
 
-    const [template, companyProfile, supplierBankAccount] = await Promise.all([
+    const [template, companyProfile, supplierBankAccount, director, chiefAccountant] = await Promise.all([
         getDocumentTemplateDefinition('purchase_torg_12'),
         getCompanyProfile(),
         getPrimarySupplierBankAccount(purchase.поставщик_id),
+        getDirector(),
+        getChiefAccountant(),
     ]);
 
     const sourceSheetName = 'стр1';
     const targetSheetName = 'Документ';
     const purchaseDate = parseDateOnly(purchase.дата_заказа);
-    const supplierBlock = buildSupplierBlock(purchase, supplierBankAccount);
-    const companyBlock = buildCompanyBlock(companyProfile);
-    const basis = buildPurchaseBasis(purchase.id, purchaseDate);
+    const receiptDate = parseDateOnly(purchase.дата_поступления || purchase.дата_заказа);
+    const issueDate = parseDateOnly(new Date().toISOString());
+    const issueDateParts = formatDateRuParts(issueDate);
+    const supplierLine = buildSupplierTorgLine(purchase, supplierBankAccount);
+    const companyLine = buildCompanyTorgLine(companyProfile);
     const totalNet = positions.reduce((sum, position) => sum + position.сумма_без_ндс, 0);
     const totalTax = positions.reduce((sum, position) => sum + position.сумма_ндс, 0);
     const totalAmount = positions.reduce((sum, position) => sum + position.сумма_всего, 0);
     const totalQty = positions.reduce((sum, position) => sum + position.количество, 0);
     const firstPagePositions = positions.slice(0, 12);
     const secondPagePositions = positions.slice(12);
+    const directorName = director?.fio || companyProfile.directorName || '';
+    const directorPosition = director?.position || companyProfile.directorPosition || '';
+    const chiefAccountantName = chiefAccountant?.fio || companyProfile.accountantName || '';
+    const directorShortName = toShortFio(directorName);
+    const chiefAccountantShortName = toShortFio(chiefAccountantName);
+    const totalAmountRubles = Math.floor(totalAmount + 1e-9);
+    const totalAmountKopecks = Math.round((totalAmount - totalAmountRubles) * 100);
+    const pageCount = 2;
+    const pageCountWords = numToWordsRuGenitive(pageCount);
+    const recordsCountWords = numToWordsRu(positions.length, false);
+    const totalPlacesWords = numToWordsRu(positions.length, false);
 
     const sumBy = (
         rows: PurchaseDocumentPosition[],
         getter: (position: PurchaseDocumentPosition) => number
     ) => rows.reduce((sum, position) => sum + getter(position), 0);
 
+    const rowVisibility: RenderXlsxTemplateParams['rowVisibility'] = [];
+    TORG_FIRST_PAGE_ITEM_ROWS.slice(firstPagePositions.length).forEach((row) => {
+        rowVisibility.push({ sheetName: targetSheetName, row, hidden: true });
+    });
+    if (secondPagePositions.length === 0) {
+        for (let row = 43; row <= 64; row += 1) {
+            rowVisibility.push({ sheetName: targetSheetName, row, hidden: true });
+        }
+    } else {
+        TORG_SECOND_PAGE_ITEM_ROWS.slice(secondPagePositions.length).forEach((row) => {
+            rowVisibility.push({ sheetName: targetSheetName, row, hidden: true });
+        });
+    }
+    const rowBreaks: RenderXlsxTemplateParams['rowBreaks'] = [{
+        sheetName: targetSheetName,
+        clearExisting: true,
+        breaks: [secondPagePositions.length > 0 ? TORG_FIRST_PAGE_BREAK_ROW : TORG_FOOTER_PAGE_BREAK_ROW],
+    }];
+
     const cells: RenderXlsxTemplateParams['cells'] = [
-        excelCell(targetSheetName, 'L12', companyBlock, true),
-        excelCell(targetSheetName, 'L15', supplierBlock, true),
-        excelCell(targetSheetName, 'L17', companyBlock, true),
-        excelCell(targetSheetName, 'L19', basis, true),
-        excelCell(targetSheetName, 'AX25', purchase.id),
-        excelCell(targetSheetName, 'BI25', formatDateRuNumeric(purchaseDate)),
-        excelCell(targetSheetName, 'BY21', purchase.использовать_доставку ? 'по транспортной накладной' : ''),
-        excelCell(targetSheetName, 'BY22', purchase.использовать_доставку ? formatDateRuNumeric(purchaseDate) : ''),
+        ...clearCells(targetSheetName, ['AN70', 'AN71', 'AN72', 'AN73']),
+        excelCell(targetSheetName, 'A7', supplierLine, true),
+        excelCell(targetSheetName, 'A9', 'главный офис', true),
+
+        excelCell(targetSheetName, 'L12', companyLine, true),
+        excelCell(targetSheetName, 'I14', supplierLine, true),
+        excelCell(targetSheetName, 'I16', companyLine, true),
+        excelCell(targetSheetName, 'I18', 'Закупка', true),
+        excelCell(targetSheetName, 'CF7', purchase.поставщик_окпо || ''),
+        excelCell(targetSheetName, 'CF10', TORG_ACTIVITY_CODE),
+        excelCell(targetSheetName, 'CF12', companyProfile.okpo),
+        excelCell(targetSheetName, 'CF13', purchase.поставщик_окпо || ''),
+        excelCell(targetSheetName, 'CF15', companyProfile.okpo),
+        excelCell(targetSheetName, 'CF23', 'Поступление товаров'),
+        excelCell(targetSheetName, 'AX26', purchase.id),
+        excelCell(targetSheetName, 'BI26', formatDateRuNumeric(receiptDate)),
+        excelCell(targetSheetName, 'CF17', purchase.id),
+        excelCell(targetSheetName, 'CF19', formatDateRuNumeric(purchaseDate)),
+        excelCell(targetSheetName, 'CF21', purchase.использовать_доставку ? purchase.id : ''),
+        excelCell(targetSheetName, 'CF22', purchase.использовать_доставку ? formatDateRuNumeric(receiptDate) : ''),
         excelCell(targetSheetName, 'BB42', Number(sumBy(firstPagePositions, (position) => position.количество).toFixed(3))),
         excelCell(targetSheetName, 'BQ42', Number(sumBy(firstPagePositions, (position) => position.сумма_без_ндс).toFixed(2))),
         excelCell(targetSheetName, 'CB42', Number(sumBy(firstPagePositions, (position) => position.сумма_ндс).toFixed(2))),
@@ -908,13 +1210,25 @@ const buildPurchaseTorg12Payload = async (purchaseId: number): Promise<PurchaseD
         excelCell(targetSheetName, 'BQ63', Number(totalNet.toFixed(2))),
         excelCell(targetSheetName, 'CB63', Number(totalTax.toFixed(2))),
         excelCell(targetSheetName, 'CI63', Number(totalAmount.toFixed(2))),
-        excelCell(targetSheetName, 'D66', positions.length),
-        excelCell(targetSheetName, 'AC70', Number(totalQty.toFixed(3))),
-        excelCell(targetSheetName, 'D72', positions.length),
-        excelCell(targetSheetName, 'AC72', Number(totalQty.toFixed(3))),
-        excelCell(targetSheetName, 'N78', amountToWordsRub(totalAmount), true),
-        excelCell(targetSheetName, 'AJ79', Math.floor(totalAmount + 1e-9)),
-        excelCell(targetSheetName, 'AT79', Math.round((totalAmount - Math.floor(totalAmount + 1e-9)) * 100)),
+        excelCell(targetSheetName, 'Y65', pageCountWords, true),
+        excelCell(targetSheetName, 'K66', recordsCountWords, true),
+        excelCell(targetSheetName, 'K72', totalPlacesWords, true),
+        excelCell(targetSheetName, 'AN70', ''),
+        excelCell(targetSheetName, 'AN71', ''),
+        excelCell(targetSheetName, 'AN72', ''),
+        excelCell(targetSheetName, 'AN73', ''),
+        excelCell(targetSheetName, 'N77', amountToWordsRub(totalAmount), true),
+        excelCell(targetSheetName, 'A79', totalAmountRubles),
+        excelCell(targetSheetName, 'AM79', String(totalAmountKopecks).padStart(2, '0')),
+        excelCell(targetSheetName, 'L81', directorPosition, true),
+        excelCell(targetSheetName, 'AG81', directorShortName, true),
+        excelCell(targetSheetName, 'AG83', chiefAccountantShortName, true),
+        excelCell(targetSheetName, 'N88', issueDateParts.day),
+        excelCell(targetSheetName, 'R88', issueDateParts.month),
+        excelCell(targetSheetName, 'AA88', issueDateParts.year),
+        excelCell(targetSheetName, 'BE88', issueDateParts.day),
+        excelCell(targetSheetName, 'BI88', issueDateParts.month),
+        excelCell(targetSheetName, 'BR88', issueDateParts.year),
     ];
 
     positions.forEach((position, index) => {
@@ -922,7 +1236,7 @@ const buildPurchaseTorg12Payload = async (purchaseId: number): Promise<PurchaseD
         const vatRateLabel = position.ндс_ставка > 0 ? `${position.ндс_ставка}%` : 'без НДС';
         cells.push(
             excelCell(targetSheetName, `A${row}`, index + 1),
-            excelCell(targetSheetName, `D${row}`, position.товар_название, true),
+            excelLeftCell(targetSheetName, `D${row}`, position.товар_название, true),
             excelCell(targetSheetName, `T${row}`, position.товар_артикул || ''),
             excelCell(targetSheetName, `X${row}`, position.товар_единица_измерения || 'шт'),
             excelCell(targetSheetName, `AC${row}`, getUnitCode(position.товар_единица_измерения)),
@@ -944,6 +1258,8 @@ const buildPurchaseTorg12Payload = async (purchaseId: number): Promise<PurchaseD
         template,
         fileBaseName: buildFileBaseName(definition.title, purchase.id),
         cells,
+        rowVisibility,
+        rowBreaks,
         sheetCopies: [{
             sourceSheetName,
             targetSheetName,

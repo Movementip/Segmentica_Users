@@ -1,6 +1,7 @@
 import io
 import base64
 import hashlib
+import json
 import os
 import posixpath
 import shutil
@@ -10,7 +11,7 @@ import traceback
 import unicodedata
 import xml.etree.ElementTree as ET
 import zipfile
-from copy import copy
+from copy import copy, deepcopy
 from pathlib import Path
 from urllib.parse import quote
 from flask import Flask, jsonify, request, send_file
@@ -22,6 +23,7 @@ from openpyxl.utils import (
     get_column_letter,
     range_boundaries,
 )
+from openpyxl.worksheet.pagebreak import Break, RowBreak
 from openpyxl.worksheet.properties import PageSetupProperties
 
 app = Flask(__name__)
@@ -38,8 +40,10 @@ OFFICE_DOCUMENT_REL_NS = "http://schemas.openxmlformats.org/officeDocument/2006/
 PACKAGE_REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
 XML_NS = "http://www.w3.org/XML/1998/namespace"
 WORD_PARAGRAPH_TAG = f"{{{WORDPROCESSING_NS}}}p"
+WORD_PARAGRAPH_PROPERTIES_TAG = f"{{{WORDPROCESSING_NS}}}pPr"
 WORD_RUN_TAG = f"{{{WORDPROCESSING_NS}}}r"
 WORD_RUN_PROPERTIES_TAG = f"{{{WORDPROCESSING_NS}}}rPr"
+WORD_JUSTIFICATION_TAG = f"{{{WORDPROCESSING_NS}}}jc"
 WORD_TEXT_TAG = f"{{{WORDPROCESSING_NS}}}t"
 WORD_TAB_TAG = f"{{{WORDPROCESSING_NS}}}tab"
 WORD_BREAK_TAG = f"{{{WORDPROCESSING_NS}}}br"
@@ -264,6 +268,7 @@ def apply_cells_to_workbook(
     cells: list[dict],
     row_visibility: list[dict],
     row_heights: list[dict],
+    row_breaks: list[dict],
     print_areas: list[dict],
     range_copies: list[dict],
     sheet_copies: list[dict],
@@ -345,6 +350,25 @@ def apply_cells_to_workbook(
             continue
         worksheet = workbook[sheet_name] if sheet_name and sheet_name in workbook.sheetnames else workbook[workbook.sheetnames[0]]
         worksheet.row_dimensions[row].height = float(height)
+
+    for item in row_breaks:
+        sheet_name = str(item.get("sheetName") or "").strip()
+        worksheet = workbook[sheet_name] if sheet_name and sheet_name in workbook.sheetnames else workbook[workbook.sheetnames[0]]
+        if bool(item.get("clearExisting")):
+            worksheet.row_breaks = RowBreak()
+
+        breaks = item.get("breaks") or []
+        if not isinstance(breaks, list):
+            continue
+
+        for row in breaks:
+            try:
+                row_number = int(row)
+            except (TypeError, ValueError):
+                continue
+            if row_number <= 0:
+                continue
+            worksheet.row_breaks.append(Break(id=row_number))
 
     for item in print_areas:
         sheet_name = str(item.get("sheetName") or "").strip()
@@ -548,6 +572,434 @@ def _set_run_text(run, text: str) -> None:
             run.append(ET.Element(WORD_BREAK_TAG))
 
 
+def _set_paragraph_text(paragraph, text: str) -> None:
+    runs = [run for run in paragraph.iter(WORD_RUN_TAG)]
+    if not runs:
+        run = ET.Element(WORD_RUN_TAG)
+        paragraph.append(run)
+        runs = [run]
+
+    parent_map = _build_parent_map(paragraph)
+    first_run = runs[0]
+    _set_run_text(first_run, text)
+
+    for run in runs[1:]:
+        parent = parent_map.get(run)
+        if parent is not None:
+            parent.remove(run)
+
+
+def _set_paragraph_alignment(paragraph, alignment: str | None) -> None:
+    paragraph_properties = paragraph.find(WORD_PARAGRAPH_PROPERTIES_TAG)
+    if paragraph_properties is None:
+        paragraph_properties = ET.Element(WORD_PARAGRAPH_PROPERTIES_TAG)
+        paragraph.insert(0, paragraph_properties)
+
+    justification = paragraph_properties.find(WORD_JUSTIFICATION_TAG)
+    if alignment:
+        if justification is None:
+            justification = ET.Element(WORD_JUSTIFICATION_TAG)
+            paragraph_properties.append(justification)
+        justification.set(f"{{{WORDPROCESSING_NS}}}val", alignment)
+    elif justification is not None:
+        paragraph_properties.remove(justification)
+
+
+def _force_paragraph_alignment(paragraph, alignment: str | None) -> None:
+    paragraph_properties = paragraph.find(WORD_PARAGRAPH_PROPERTIES_TAG)
+    if paragraph_properties is not None:
+        paragraph.remove(paragraph_properties)
+    paragraph_properties = ET.Element(WORD_PARAGRAPH_PROPERTIES_TAG)
+    paragraph.insert(0, paragraph_properties)
+    if alignment:
+        justification = ET.Element(WORD_JUSTIFICATION_TAG)
+        justification.set(f"{{{WORDPROCESSING_NS}}}val", alignment)
+        paragraph_properties.append(justification)
+
+
+def _copy_paragraph_properties(source_paragraph, target_paragraph) -> None:
+    source_properties = source_paragraph.find(WORD_PARAGRAPH_PROPERTIES_TAG)
+    target_properties = target_paragraph.find(WORD_PARAGRAPH_PROPERTIES_TAG)
+    if target_properties is not None:
+        target_paragraph.remove(target_properties)
+    if source_properties is not None:
+        target_paragraph.insert(0, deepcopy(source_properties))
+
+
+def _replace_paragraph_with_source(source_paragraph, target_paragraph, text: str, alignment: str = None) -> None:
+    _copy_paragraph_properties(source_paragraph, target_paragraph)
+    _set_paragraph_text(target_paragraph, text)
+    if alignment is not None:
+        _force_paragraph_alignment(target_paragraph, alignment)
+
+
+def _run_contains_drawing(run) -> bool:
+    return any(child.tag == f"{{{WORDPROCESSING_NS}}}drawing" for child in list(run))
+
+
+def _set_paragraph_text_preserving_drawings(paragraph, text: str) -> None:
+    runs = [child for child in list(paragraph) if child.tag == WORD_RUN_TAG]
+    if not runs:
+        _set_paragraph_text(paragraph, text)
+        return
+
+    target_run = next((run for run in runs if not _run_contains_drawing(run)), None)
+    if target_run is None:
+        target_run = ET.Element(WORD_RUN_TAG)
+        paragraph_properties = paragraph.find(WORD_PARAGRAPH_PROPERTIES_TAG)
+        insert_index = 1 if paragraph_properties is not None else 0
+        paragraph.insert(insert_index, target_run)
+        runs = [child for child in list(paragraph) if child.tag == WORD_RUN_TAG]
+
+    removable_runs = []
+    for run in runs:
+        if _run_contains_drawing(run):
+            continue
+        if run is target_run:
+            continue
+        removable_runs.append(run)
+
+    _set_run_text(target_run, text)
+    for run in removable_runs:
+        paragraph.remove(run)
+
+
+def _remove_drawing_runs(paragraph) -> None:
+    for run in [child for child in list(paragraph) if child.tag == WORD_RUN_TAG]:
+        if _run_contains_drawing(run):
+            paragraph.remove(run)
+
+
+def _set_table_cell_text(cell, text: str, paragraph_index: int = 0) -> None:
+    paragraphs = [child for child in list(cell) if child.tag == WORD_PARAGRAPH_TAG]
+    if not paragraphs:
+        paragraph = ET.Element(WORD_PARAGRAPH_TAG)
+        cell.append(paragraph)
+        paragraphs = [paragraph]
+
+    while len(paragraphs) <= paragraph_index:
+        paragraph = ET.Element(WORD_PARAGRAPH_TAG)
+        cell.append(paragraph)
+        paragraphs.append(paragraph)
+
+    _set_paragraph_text(paragraphs[paragraph_index], text)
+
+    for extra in paragraphs[paragraph_index + 1:]:
+        _set_paragraph_text(extra, "")
+
+
+def _set_table_cell_alignment(cell, alignment: str | None, paragraph_index: int = 0) -> None:
+    paragraphs = [child for child in list(cell) if child.tag == WORD_PARAGRAPH_TAG]
+    if not paragraphs:
+        paragraph = ET.Element(WORD_PARAGRAPH_TAG)
+        cell.append(paragraph)
+        paragraphs = [paragraph]
+
+    while len(paragraphs) <= paragraph_index:
+        paragraph = ET.Element(WORD_PARAGRAPH_TAG)
+        cell.append(paragraph)
+        paragraphs.append(paragraph)
+
+    _set_paragraph_alignment(paragraphs[paragraph_index], alignment)
+
+
+def _force_table_cell_alignment(cell, alignment: str | None, paragraph_index: int = 0) -> None:
+    paragraphs = [child for child in list(cell) if child.tag == WORD_PARAGRAPH_TAG]
+    if not paragraphs:
+        paragraph = ET.Element(WORD_PARAGRAPH_TAG)
+        cell.append(paragraph)
+        paragraphs = [paragraph]
+
+    while len(paragraphs) <= paragraph_index:
+        paragraph = ET.Element(WORD_PARAGRAPH_TAG)
+        cell.append(paragraph)
+        paragraphs.append(paragraph)
+
+    _force_paragraph_alignment(paragraphs[paragraph_index], alignment)
+
+
+def _copy_table_cell_paragraph_properties(source_cell, target_cell, source_paragraph_index: int = 0, target_paragraph_index: int = 0) -> None:
+    source_paragraphs = [child for child in list(source_cell) if child.tag == WORD_PARAGRAPH_TAG]
+    target_paragraphs = [child for child in list(target_cell) if child.tag == WORD_PARAGRAPH_TAG]
+    if not source_paragraphs:
+        return
+    while len(target_paragraphs) <= target_paragraph_index:
+        paragraph = ET.Element(WORD_PARAGRAPH_TAG)
+        target_cell.append(paragraph)
+        target_paragraphs.append(paragraph)
+    _copy_paragraph_properties(source_paragraphs[source_paragraph_index], target_paragraphs[target_paragraph_index])
+
+
+def apply_order_supply_specification_template(
+    template_path: Path,
+    output_path: Path,
+    replacements: dict[str, str],
+) -> None:
+    rows_json = str(replacements.get("__SPECIFICATION_ROWS_JSON__") or "[]")
+    try:
+        rows = json.loads(rows_json)
+    except json.JSONDecodeError as error:
+        raise RuntimeError(f"Invalid specification rows payload: {error}") from error
+
+    with zipfile.ZipFile(template_path, "r") as template_zip, zipfile.ZipFile(
+        output_path, "w", compression=zipfile.ZIP_DEFLATED
+    ) as output_zip:
+        for entry in template_zip.infolist():
+            data = template_zip.read(entry.filename)
+            if entry.filename == "word/document.xml":
+                root = ET.fromstring(data)
+                body = root.find(f"{{{WORDPROCESSING_NS}}}body")
+                if body is None:
+                    raise RuntimeError("Specification template has no document body")
+
+                paragraphs = [
+                    child for child in list(body)
+                    if child.tag == WORD_PARAGRAPH_TAG
+                ]
+                non_empty_paragraphs = []
+                for paragraph in paragraphs:
+                    text = "".join(
+                        text_node.text or ""
+                        for text_node in paragraph.iter(WORD_TEXT_TAG)
+                    ).strip()
+                    if text:
+                        non_empty_paragraphs.append(paragraph)
+
+                if len(non_empty_paragraphs) >= 5:
+                    _set_paragraph_text(non_empty_paragraphs[2], str(replacements.get("__SPECIFICATION_HEADER_BASIS__") or ""))
+                    _force_paragraph_alignment(non_empty_paragraphs[2], "right")
+                    _set_paragraph_text(non_empty_paragraphs[3], str(replacements.get("__SPECIFICATION_TITLE__") or ""))
+                    _force_paragraph_alignment(non_empty_paragraphs[3], "center")
+                    _set_paragraph_text(non_empty_paragraphs[4], str(replacements.get("__SPECIFICATION_DATE_LONG__") or ""))
+                    _force_paragraph_alignment(non_empty_paragraphs[4], "right")
+
+                tables = root.findall(f".//{{{WORDPROCESSING_NS}}}tbl")
+                if len(tables) < 2:
+                    raise RuntimeError("Specification template structure was not recognized")
+
+                items_table = tables[0]
+                item_rows = items_table.findall(f"./{{{WORDPROCESSING_NS}}}tr")
+                if len(item_rows) < 3:
+                    raise RuntimeError("Specification items table is too short")
+
+                header_row = item_rows[0]
+                sample_row = item_rows[1]
+                total_row = item_rows[-1]
+
+                for row in item_rows[1:-1]:
+                    items_table.remove(row)
+
+                insert_at = list(items_table).index(total_row)
+                normalized_rows = rows if isinstance(rows, list) and rows else []
+                if not normalized_rows:
+                    normalized_rows = [{
+                        "number": "1",
+                        "name": "—",
+                        "quantity": "0",
+                        "price": "0,00",
+                    }]
+
+                for row_data in normalized_rows:
+                    new_row = deepcopy(sample_row)
+                    cells = new_row.findall(f"./{{{WORDPROCESSING_NS}}}tc")
+                    if len(cells) >= 4:
+                        _set_table_cell_text(cells[0], str(row_data.get("number") or ""))
+                        _set_table_cell_text(cells[1], str(row_data.get("name") or ""))
+                        _set_table_cell_text(cells[2], str(row_data.get("quantity") or ""))
+                        _set_table_cell_text(cells[3], str(row_data.get("price") or ""))
+                    items_table.insert(insert_at, new_row)
+                    insert_at += 1
+
+                total_cells = total_row.findall(f"./{{{WORDPROCESSING_NS}}}tc")
+                if len(total_cells) >= 2:
+                    _set_table_cell_text(total_cells[0], "Итого:")
+                    _force_table_cell_alignment(total_cells[0], "right")
+                    _force_table_cell_alignment(total_cells[1], "left")
+                    sample_cells = sample_row.findall(f"./{{{WORDPROCESSING_NS}}}tc")
+                    if len(sample_cells) >= 3:
+                        source_paragraphs = sample_cells[2].findall(f"./{{{WORDPROCESSING_NS}}}p")
+                        target_paragraphs = total_cells[1].findall(f"./{{{WORDPROCESSING_NS}}}p")
+                        if source_paragraphs and target_paragraphs:
+                            _replace_paragraph_with_source(
+                                source_paragraphs[0],
+                                target_paragraphs[0],
+                                str(replacements.get("__SPECIFICATION_TOTAL__") or ""),
+                                "left",
+                            )
+                        else:
+                            _set_table_cell_text(total_cells[1], str(replacements.get("__SPECIFICATION_TOTAL__") or ""))
+                            _force_table_cell_alignment(total_cells[1], "left")
+                    else:
+                        _set_table_cell_text(total_cells[1], str(replacements.get("__SPECIFICATION_TOTAL__") or ""))
+                        _force_table_cell_alignment(total_cells[1], "left")
+
+                parties_table = tables[1]
+                parties_rows = parties_table.findall(f"./{{{WORDPROCESSING_NS}}}tr")
+                if parties_rows:
+                    parties_cells = parties_rows[0].findall(f"./{{{WORDPROCESSING_NS}}}tc")
+                    if len(parties_cells) >= 2:
+                        _set_table_cell_text(parties_cells[0], "Поставщик:", 0)
+                        supplier_name = str(replacements.get("__SPECIFICATION_SUPPLIER_NAME__") or "")
+                        supplier_position = str(replacements.get("__SPECIFICATION_SUPPLIER_POSITION__") or "")
+                        supplier_fio = str(replacements.get("__SPECIFICATION_SUPPLIER_FIO__") or "")
+                        supplier_line = supplier_position
+                        if supplier_line:
+                            supplier_line += " "
+                        supplier_line += "__________"
+                        if supplier_fio:
+                            supplier_line += f" {supplier_fio}"
+                        _set_table_cell_text(parties_cells[0], f"{supplier_name}\n{supplier_line}", 1)
+                        _set_table_cell_text(parties_cells[0], "М.П.", 2)
+                        _force_table_cell_alignment(parties_cells[0], None, 0)
+                        _force_table_cell_alignment(parties_cells[0], None, 1)
+                        _force_table_cell_alignment(parties_cells[0], "center", 2)
+
+                        _set_table_cell_text(parties_cells[1], str(replacements.get("__SPECIFICATION_BUYER_LABEL__") or "Покупатель:"), 0)
+                        buyer_name = str(replacements.get("__SPECIFICATION_BUYER_NAME__") or "")
+                        buyer_position = str(replacements.get("__SPECIFICATION_BUYER_POSITION__") or "")
+                        buyer_fio = str(replacements.get("__SPECIFICATION_BUYER_FIO__") or "")
+                        buyer_line = buyer_position
+                        if buyer_line:
+                            buyer_line += " "
+                        buyer_line += "__________"
+                        if buyer_fio:
+                            buyer_line += f" {buyer_fio}"
+                        _set_table_cell_text(parties_cells[1], f"{buyer_name}\n{buyer_line}", 1)
+                        _set_table_cell_text(parties_cells[1], "М.П.", 2)
+                        _force_table_cell_alignment(parties_cells[1], None, 0)
+                        _force_table_cell_alignment(parties_cells[1], None, 1)
+                        _force_table_cell_alignment(parties_cells[1], "center", 2)
+
+                data = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+            output_zip.writestr(entry, data)
+
+
+def apply_structured_invoice_template(
+    template_path: Path,
+    output_path: Path,
+    replacements: dict[str, str],
+    replace_first_image_bytes: bytes = None,
+) -> None:
+    rows_json = str(replacements.get("__ALT_INVOICE_ROWS_JSON__") or "[]")
+    try:
+        rows = json.loads(rows_json)
+    except json.JSONDecodeError as error:
+        raise RuntimeError(f"Invalid structured invoice rows payload: {error}") from error
+
+    with zipfile.ZipFile(template_path, "r") as template_zip, zipfile.ZipFile(
+        output_path, "w", compression=zipfile.ZIP_DEFLATED
+    ) as output_zip:
+        first_image_entry_name = _resolve_first_image_entry_name(template_zip)
+
+        for entry in template_zip.infolist():
+            data = template_zip.read(entry.filename)
+            if replace_first_image_bytes and entry.filename == first_image_entry_name:
+                data = replace_first_image_bytes
+            elif entry.filename == "word/document.xml":
+                root = ET.fromstring(data)
+                body = root.find(f"{{{WORDPROCESSING_NS}}}body")
+                if body is None:
+                    raise RuntimeError("Invoice template has no document body")
+
+                body_children = list(body)
+                if len(body_children) < 15:
+                    raise RuntimeError("Invoice template structure was not recognized")
+
+                company_name = str(replacements.get("__ALT_INVOICE_COMPANY_NAME__") or "")
+                company_address = str(replacements.get("__ALT_INVOICE_COMPANY_ADDRESS__") or "")
+                company_contacts = str(replacements.get("__ALT_INVOICE_COMPANY_CONTACTS__") or "")
+
+                first_paragraph = body_children[0]
+                if replace_first_image_bytes:
+                    _set_paragraph_text_preserving_drawings(first_paragraph, company_name)
+                else:
+                    _remove_drawing_runs(first_paragraph)
+                    _set_paragraph_text(first_paragraph, company_name)
+
+                _set_paragraph_text(body_children[1], company_address)
+                _set_paragraph_text(body_children[2], company_contacts)
+                _set_paragraph_text(body_children[6], str(replacements.get("__ALT_INVOICE_TITLE__") or ""))
+                _force_paragraph_alignment(body_children[6], "center")
+                _set_paragraph_text(body_children[10], str(replacements.get("__ALT_INVOICE_TOTAL_LINE__") or ""))
+                _force_paragraph_alignment(body_children[10], "right")
+                _set_paragraph_text(body_children[11], str(replacements.get("__ALT_INVOICE_TOTAL_WORDS__") or ""))
+
+                bank_table = body_children[4]
+                bank_rows = bank_table.findall(f"./{{{WORDPROCESSING_NS}}}tr")
+                if len(bank_rows) >= 6:
+                    row0 = bank_rows[0].findall(f"./{{{WORDPROCESSING_NS}}}tc")
+                    row1 = bank_rows[1].findall(f"./{{{WORDPROCESSING_NS}}}tc")
+                    row3 = bank_rows[3].findall(f"./{{{WORDPROCESSING_NS}}}tc")
+                    row4 = bank_rows[4].findall(f"./{{{WORDPROCESSING_NS}}}tc")
+                    if len(row0) >= 3:
+                        _set_table_cell_text(row0[0], str(replacements.get("__ALT_INVOICE_BANK_NAME__") or ""))
+                        _set_table_cell_text(row0[2], str(replacements.get("__ALT_INVOICE_BIK__") or ""))
+                    if len(row1) >= 3:
+                        _set_table_cell_text(row1[2], str(replacements.get("__ALT_INVOICE_CORR_ACCOUNT__") or ""))
+                    if len(row3) >= 6:
+                        _set_table_cell_text(row3[1], str(replacements.get("__ALT_INVOICE_INN__") or ""))
+                        _set_table_cell_text(row3[3], str(replacements.get("__ALT_INVOICE_KPP__") or ""))
+                        _set_table_cell_text(row3[5], str(replacements.get("__ALT_INVOICE_SETTLEMENT_ACCOUNT__") or ""))
+                    if len(row4) >= 1:
+                        _set_table_cell_text(row4[0], str(replacements.get("__ALT_INVOICE_RECIPIENT__") or ""))
+
+                counterparties_table = body_children[7]
+                counterparty_rows = counterparties_table.findall(f"./{{{WORDPROCESSING_NS}}}tr")
+                if len(counterparty_rows) >= 2:
+                    supplier_cells = counterparty_rows[0].findall(f"./{{{WORDPROCESSING_NS}}}tc")
+                    buyer_cells = counterparty_rows[1].findall(f"./{{{WORDPROCESSING_NS}}}tc")
+                    if len(supplier_cells) >= 2:
+                        _set_table_cell_text(supplier_cells[1], str(replacements.get("__ALT_INVOICE_SUPPLIER_NAME__") or ""))
+                    if len(buyer_cells) >= 2:
+                        _set_table_cell_text(buyer_cells[1], str(replacements.get("__ALT_INVOICE_BUYER_TEXT__") or ""))
+
+                items_sdt = body_children[9]
+                sdt_content = items_sdt.find(f"./{{{WORDPROCESSING_NS}}}sdtContent")
+                if sdt_content is not None:
+                    items_table = sdt_content.find(f"./{{{WORDPROCESSING_NS}}}tbl")
+                    if items_table is not None:
+                        item_rows = items_table.findall(f"./{{{WORDPROCESSING_NS}}}tr")
+                        if len(item_rows) >= 2:
+                            header_row = item_rows[0]
+                            sample_row = item_rows[1]
+                            for row in item_rows[1:]:
+                                items_table.remove(row)
+
+                            normalized_rows = rows if isinstance(rows, list) and rows else [{
+                                "number": "1",
+                                "name": "—",
+                                "unit": "",
+                                "quantity": "",
+                                "price": "0,00",
+                                "sum": "0,00",
+                            }]
+
+                            for row_data in normalized_rows:
+                                new_row = deepcopy(sample_row)
+                                cells = new_row.findall(f"./{{{WORDPROCESSING_NS}}}tc")
+                                if len(cells) >= 6:
+                                    _set_table_cell_text(cells[0], str(row_data.get("number") or ""))
+                                    _set_table_cell_text(cells[1], str(row_data.get("name") or ""))
+                                    _set_table_cell_text(cells[2], str(row_data.get("unit") or ""))
+                                    _set_table_cell_text(cells[3], str(row_data.get("quantity") or ""))
+                                    _set_table_cell_text(cells[4], str(row_data.get("price") or ""))
+                                    _set_table_cell_text(cells[5], str(row_data.get("sum") or ""))
+                                items_table.append(new_row)
+
+                signature_table = body_children[14]
+                signature_rows = signature_table.findall(f"./{{{WORDPROCESSING_NS}}}tr")
+                if signature_rows:
+                    signature_cells = signature_rows[0].findall(f"./{{{WORDPROCESSING_NS}}}tc")
+                    if len(signature_cells) >= 5:
+                        _set_table_cell_text(signature_cells[0], str(replacements.get("__ALT_INVOICE_SIGN_LABEL__") or "Поставщик"))
+                        _set_table_cell_text(signature_cells[1], str(replacements.get("__ALT_INVOICE_SIGN_POSITION__") or ""))
+                        _set_table_cell_text(signature_cells[4], str(replacements.get("__ALT_INVOICE_SIGN_FIO__") or ""))
+
+                data = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+
+            output_zip.writestr(entry, data)
+
+
 def _replace_placeholders_in_paragraph(paragraph, replacements: dict[str, str]) -> bool:
     runs = [run for run in paragraph.iter(WORD_RUN_TAG)]
     if not runs:
@@ -734,6 +1186,7 @@ def render_xlsx_template():
     cells = payload.get("cells") or []
     row_visibility = payload.get("rowVisibility") or []
     row_heights = payload.get("rowHeights") or []
+    row_breaks = payload.get("rowBreaks") or []
     print_areas = payload.get("printAreas") or []
     range_copies = payload.get("rangeCopies") or []
     sheet_copies = payload.get("sheetCopies") or []
@@ -752,6 +1205,8 @@ def render_xlsx_template():
         return jsonify({"error": "rowVisibility must be an array"}), 400
     if not isinstance(row_heights, list):
         return jsonify({"error": "rowHeights must be an array"}), 400
+    if not isinstance(row_breaks, list):
+        return jsonify({"error": "rowBreaks must be an array"}), 400
     if not isinstance(print_areas, list):
         return jsonify({"error": "printAreas must be an array"}), 400
     if not isinstance(range_copies, list):
@@ -774,6 +1229,7 @@ def render_xlsx_template():
             cells,
             row_visibility,
             row_heights,
+            row_breaks,
             print_areas,
             range_copies,
             sheet_copies,
@@ -857,12 +1313,27 @@ def render_docx_template():
         template_path = ensure_template_path(template_name)
         normalized_template_path = convert_word_template_to_docx(template_path, temp_dir)
         generated_docx = temp_dir / f"{file_base_name}.docx"
-        apply_replacements_to_docx(
-            normalized_template_path,
-            generated_docx,
-            {str(key): "" if value is None else str(value) for key, value in replacements.items()},
-            replace_first_image_bytes,
-        )
+        normalized_replacements = {str(key): "" if value is None else str(value) for key, value in replacements.items()}
+        if template_name == "Specifikacia_k_dogovoru_postavki.docx":
+            apply_order_supply_specification_template(
+                normalized_template_path,
+                generated_docx,
+                normalized_replacements,
+            )
+        elif template_name == "Счет_образец.docx":
+            apply_structured_invoice_template(
+                normalized_template_path,
+                generated_docx,
+                normalized_replacements,
+                replace_first_image_bytes,
+            )
+        else:
+            apply_replacements_to_docx(
+                normalized_template_path,
+                generated_docx,
+                normalized_replacements,
+                replace_first_image_bytes,
+            )
         generated_docx_bytes = generated_docx.read_bytes()
 
         if output_format == "word":
