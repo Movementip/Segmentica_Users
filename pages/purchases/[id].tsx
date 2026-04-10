@@ -206,10 +206,7 @@ function PurchaseDetailPage(): JSX.Element {
     const canPrint = Boolean(user?.permissions?.includes('purchases.print'));
     const canExportPdf = Boolean(user?.permissions?.includes('purchases.export.pdf'));
     const canExportExcel = Boolean(user?.permissions?.includes('purchases.export.excel'));
-    const canExportWord = Boolean(
-        user?.permissions?.includes('purchases.export.word')
-        || user?.permissions?.includes('purchases.export.excel')
-    );
+    const canExportWord = Boolean(user?.permissions?.includes('purchases.export.word'));
     const canAttachmentsView = Boolean(user?.permissions?.includes('purchases.attachments.view'));
     const canAttachmentsUpload = Boolean(user?.permissions?.includes('purchases.attachments.upload'));
     const canAttachmentsDelete = Boolean(user?.permissions?.includes('purchases.attachments.delete'));
@@ -220,8 +217,13 @@ function PurchaseDetailPage(): JSX.Element {
         if (!purchase) return [];
         return getAvailablePurchaseDocumentDefinitions({
             nomenclatureTypes: (purchase.позиции || []).map((position) => position.товар_тип_номенклатуры || ''),
+        }).filter((documentDefinition) => {
+            const canPreviewDocument = documentDefinition.outputFormats.includes('pdf') && canPreviewPurchaseDocuments;
+            const canDownloadExcel = documentDefinition.outputFormats.includes('excel') && canExportExcel;
+            const canDownloadWord = documentDefinition.outputFormats.includes('word') && canExportWord;
+            return canPreviewDocument || canDownloadExcel || canDownloadWord;
         });
-    }, [purchase]);
+    }, [purchase, canPreviewPurchaseDocuments, canExportExcel, canExportWord]);
 
     const buildPurchaseDocumentUrl = useCallback(
         (

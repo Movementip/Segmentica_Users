@@ -232,8 +232,12 @@ function OrderDetailPage(): JSX.Element {
         if (!order) return [];
         return getAvailableOrderDocumentDefinitions({
             nomenclatureTypes: (order.позиции || []).map((position) => position.товар_тип_номенклатуры || ''),
+        }).filter((documentDefinition) => {
+            const canPreviewDocument = documentDefinition.outputFormats.includes('pdf') && canPreviewOrderDocuments;
+            const canDownloadWord = documentDefinition.outputFormats.includes('word') && canExportWord;
+            return canPreviewDocument || canDownloadWord;
         });
-    }, [order]);
+    }, [order, canPreviewOrderDocuments, canExportWord]);
 
     const buildOrderDocumentFileNameBase = useCallback((documentDefinition: OrderDocumentDefinition) => {
         const orderId = Number(order?.id);

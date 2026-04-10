@@ -221,7 +221,6 @@ function ShipmentDetailPage(): JSX.Element {
     const canShipmentOrderView = Boolean(user?.permissions?.includes('shipments.order.view'));
     const canShipmentTrack = Boolean(user?.permissions?.includes('shipments.track'));
     const canShipmentPrint = Boolean(user?.permissions?.includes('shipments.print'));
-    const canShipmentExportPdf = Boolean(user?.permissions?.includes('shipments.export.pdf'));
     const canShipmentExportExcel = Boolean(user?.permissions?.includes('shipments.export.excel'));
 
     const canShipmentsAttachmentsView = Boolean(user?.permissions?.includes('shipments.attachments.view'));
@@ -231,7 +230,7 @@ function ShipmentDetailPage(): JSX.Element {
     const canShipmentsPositionsView = Boolean(user?.permissions?.includes('shipments.positions.view'));
 
     const canGoToOrder = canOrdersView && canShipmentOrderView;
-    const canPreviewShipmentDocuments = canShipmentPrint || canShipmentExportPdf;
+    const canPreviewShipmentDocuments = canShipmentPrint;
     const canUseShipmentDocumentCenter = canPreviewShipmentDocuments || canShipmentExportExcel;
 
     const availableShipmentDocuments = useMemo<ShipmentDocumentDefinition[]>(() => {
@@ -239,8 +238,12 @@ function ShipmentDetailPage(): JSX.Element {
         return getAvailableShipmentDocumentDefinitions({
             nomenclatureTypes: (positions || []).map((position) => position.товар_тип_номенклатуры || ''),
             usesDelivery: shipment.использовать_доставку !== false,
+        }).filter((documentDefinition) => {
+            const canPreviewDocument = documentDefinition.outputFormats.includes('pdf') && canPreviewShipmentDocuments;
+            const canDownloadExcel = documentDefinition.outputFormats.includes('excel') && canShipmentExportExcel;
+            return canPreviewDocument || canDownloadExcel;
         });
-    }, [positions, shipment]);
+    }, [positions, shipment, canPreviewShipmentDocuments, canShipmentExportExcel]);
 
     const buildShipmentDocumentUrl = useCallback(
         (
@@ -822,7 +825,7 @@ function ShipmentDetailPage(): JSX.Element {
         if (!documentPreview) return;
 
         if (format === 'pdf') {
-            if (!canShipmentPrint && !canShipmentExportPdf) {
+            if (!canShipmentPrint) {
                 setDocumentPreviewError('Нет доступа');
                 return;
             }

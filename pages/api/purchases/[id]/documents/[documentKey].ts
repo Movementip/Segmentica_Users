@@ -54,7 +54,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const canPrintPurchases = hasPermission(user, 'purchases.print');
     const canExportPdf = hasPermission(user, 'purchases.export.pdf');
     const canExportExcel = hasPermission(user, 'purchases.export.excel');
-    const canExportWord = hasPermission(user, 'purchases.export.word') || canExportExcel;
+    const canExportWord = hasPermission(user, 'purchases.export.word');
 
     if (!canViewPurchases) {
         return res.status(403).json({ error: 'Forbidden' });

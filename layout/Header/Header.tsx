@@ -56,7 +56,7 @@ export function Header(): JSX.Element {
     const canViewScheduleBoard = can('admin.schedule_board') || (can('managers.list') && can('schedule.manage'));
     const canViewAdminSettings = can('admin.settings');
     const canViewAdminAudit = can('admin.audit');
-    const canViewAdminRbac = can('admin.users') || can('admin.roles');
+    const canViewAdminRbac = Boolean(user?.roles?.includes('director'));
     const canViewAdminDataExchange = canUseAdminDataExchangePage(user?.permissions);
     const canViewDocuments = can('documents.view');
 

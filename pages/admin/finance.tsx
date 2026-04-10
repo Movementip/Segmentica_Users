@@ -442,6 +442,11 @@ function AdminFinancePage(): JSX.Element {
     }, [previewZoom, statementPreview]);
 
     const canViewFinance = Boolean(user?.permissions?.includes('admin.finance'));
+    const canFinancePrint = Boolean(user?.permissions?.includes('finance.print'));
+    const canFinanceExportPdf = Boolean(user?.permissions?.includes('finance.export.pdf'));
+    const canFinanceExportExcel = Boolean(user?.permissions?.includes('finance.export.excel'));
+    const canPreviewFinanceDocuments = canFinancePrint || canFinanceExportPdf;
+    const canUseFinanceDocumentCenter = canPreviewFinanceDocuments || canFinanceExportExcel;
 
     const loadData = useCallback(async () => {
         try {
@@ -827,6 +832,31 @@ function AdminFinancePage(): JSX.Element {
 
     const openBatchPayrollPreview = () => {
         if (!selectedEmployeeIds.length) return;
+        const fileNameBase = buildPreviewFileNameBase('batch-payroll', selectedEmployeeIds);
+
+        if (!canPreviewFinanceDocuments) {
+            if (canFinanceExportExcel) {
+                void downloadStatementFile(
+                    buildStatementUrl({
+                        sourceType: 'current_batch',
+                        documentKind: 'statement',
+                        employeeIds: selectedEmployeeIds,
+                        month: monthKey,
+                        format: 'excel',
+                        disposition: 'attachment',
+                        fileNameBase,
+                    }),
+                    `${fileNameBase}.xlsx`
+                ).catch((downloadError) => {
+                    setError(downloadError instanceof Error ? downloadError.message : 'Не удалось скачать документ');
+                });
+                return;
+            }
+
+            setError('Нет доступа');
+            return;
+        }
+
         openPreview({
             title: 'Предпросмотр 1 документа',
             description: 'Расчетная ведомость по выбранному месяцу и выбранным сотрудникам.',
@@ -837,9 +867,9 @@ function AdminFinancePage(): JSX.Element {
                 month: monthKey,
                 format: 'pdf',
                 disposition: 'inline',
-                fileNameBase: buildPreviewFileNameBase('batch-payroll', selectedEmployeeIds),
+                fileNameBase,
             }),
-            fileNameBase: buildPreviewFileNameBase('batch-payroll', selectedEmployeeIds),
+            fileNameBase,
             kind: 'batch-payroll',
             employeeIds: selectedEmployeeIds,
         });
@@ -847,6 +877,8 @@ function AdminFinancePage(): JSX.Element {
 
     const openSelectedStatements = (format: 'excel' | 'pdf') => {
         if (!selectedEmployeeIds.length) return;
+        if (format === 'pdf' && !canPreviewFinanceDocuments) return;
+        if (format === 'excel' && !canFinanceExportExcel) return;
 
         window.open(
             buildStatementUrl({
@@ -865,6 +897,30 @@ function AdminFinancePage(): JSX.Element {
 
     const openSelectedStatementsPreview = () => {
         if (!selectedEmployeeIds.length) return;
+        const fileNameBase = buildPreviewFileNameBase('selected-statements', selectedEmployeeIds);
+
+        if (!canPreviewFinanceDocuments) {
+            if (canFinanceExportExcel) {
+                void downloadStatementFile(
+                    buildStatementUrl({
+                        sourceType: 'current_batch',
+                        documentKind: 'payslip',
+                        employeeIds: selectedEmployeeIds,
+                        month: monthKey,
+                        format: 'excel',
+                        disposition: 'attachment',
+                        fileNameBase,
+                    }),
+                    `${fileNameBase}.xlsx`
+                ).catch((downloadError) => {
+                    setError(downloadError instanceof Error ? downloadError.message : 'Не удалось скачать документ');
+                });
+                return;
+            }
+
+            setError('Нет доступа');
+            return;
+        }
 
         openPreview({
             title: `Предпросмотр ${selectedEmployeeIds.length} ${selectedEmployeeIds.length === 1 ? 'документа' : 'документов'}`,
@@ -878,9 +934,9 @@ function AdminFinancePage(): JSX.Element {
                 month: monthKey,
                 format: 'pdf',
                 disposition: 'inline',
-                fileNameBase: buildPreviewFileNameBase('selected-statements', selectedEmployeeIds),
+                fileNameBase,
             }),
-            fileNameBase: buildPreviewFileNameBase('selected-statements', selectedEmployeeIds),
+            fileNameBase,
             kind: 'selected-statements',
             employeeIds: selectedEmployeeIds,
         });
@@ -888,6 +944,30 @@ function AdminFinancePage(): JSX.Element {
 
     const openTimesheetPreview = () => {
         if (!selectedEmployeeIds.length) return;
+        const fileNameBase = buildPreviewFileNameBase('timesheet', selectedEmployeeIds);
+
+        if (!canPreviewFinanceDocuments) {
+            if (canFinanceExportExcel) {
+                void downloadStatementFile(
+                    buildStatementUrl({
+                        sourceType: 'current_batch',
+                        documentKind: 'timesheet',
+                        employeeIds: selectedEmployeeIds,
+                        month: monthKey,
+                        format: 'excel',
+                        disposition: 'attachment',
+                        fileNameBase,
+                    }),
+                    `${fileNameBase}.xlsx`
+                ).catch((downloadError) => {
+                    setError(downloadError instanceof Error ? downloadError.message : 'Не удалось скачать документ');
+                });
+                return;
+            }
+
+            setError('Нет доступа');
+            return;
+        }
 
         openPreview({
             title: 'Предпросмотр 1 документа',
@@ -901,9 +981,9 @@ function AdminFinancePage(): JSX.Element {
                 month: monthKey,
                 format: 'pdf',
                 disposition: 'inline',
-                fileNameBase: buildPreviewFileNameBase('timesheet', selectedEmployeeIds),
+                fileNameBase,
             }),
-            fileNameBase: buildPreviewFileNameBase('timesheet', selectedEmployeeIds),
+            fileNameBase,
             kind: 'timesheet',
             employeeIds: selectedEmployeeIds,
         });
@@ -911,6 +991,10 @@ function AdminFinancePage(): JSX.Element {
 
     const handlePrintPreview = () => {
         if (!statementPreview || !previewPdfObjectUrl) return;
+        if (!canFinancePrint) {
+            setPreviewError('Нет доступа');
+            return;
+        }
 
         if (previewPrintFrameRef.current) {
             const frame = previewPrintFrameRef.current;
@@ -937,6 +1021,17 @@ function AdminFinancePage(): JSX.Element {
 
     const handlePreviewDownload = (format: 'pdf' | 'excel') => {
         if (!statementPreview) return;
+
+        if (format === 'pdf' && !canFinanceExportPdf) {
+            setPreviewError('Нет доступа');
+            return;
+        }
+
+        if (format === 'excel' && !canFinanceExportExcel) {
+            setPreviewError('Нет доступа');
+            return;
+        }
+
         const previewDownloadName = buildPreviewDownloadFileName(statementPreview.kind, statementPreview.employeeIds, format);
         const handleDownloadError = (error: unknown) => {
             setPreviewError(error instanceof Error ? error.message : 'Не удалось скачать документ');
@@ -1259,33 +1354,35 @@ function AdminFinancePage(): JSX.Element {
                                 Ручная выплата
                             </Button>
 
-                            <DropdownMenu.Root>
-                                <DropdownMenu.Trigger>
-                                    <Button
-                                        variant="surface"
-                                        color="gray"
-                                        highContrast
-                                        className={`${styles.actionButton} ${styles.surfaceButton}`}
-                                        disabled={!selectedEmployeeIds.length}
-                                    >
-                                        <FiPrinter className={styles.icon} />
-                                        Напечатать
-                                    </Button>
-                                </DropdownMenu.Trigger>
-                                <DropdownMenu.Content align="end" className={styles.printMenu}>
-                                    <DropdownMenu.Label>
-                                        Выбрано {selectedEmployeeIds.length} {selectedEmployeeIds.length === 1 ? 'сотрудник' : selectedEmployeeIds.length < 5 ? 'сотрудника' : 'сотрудников'}
-                                    </DropdownMenu.Label>
-                                    <DropdownMenu.Separator />
-                                    <DropdownMenu.Item onSelect={openBatchPayrollPreview}>Расчетно платежная ведомость</DropdownMenu.Item>
-                                    <DropdownMenu.Item onSelect={openSelectedStatementsPreview}>
-                                        {selectedEmployeeIds.length === 1 ? 'Расчетный лист' : 'Расчетные листы'}
-                                    </DropdownMenu.Item>
-                                    <DropdownMenu.Item onSelect={openTimesheetPreview}>
-                                        {selectedEmployeeIds.length === 1 ? 'Табель учета рабочего времени' : 'Табели учета рабочего времени'}
-                                    </DropdownMenu.Item>
-                                </DropdownMenu.Content>
-                            </DropdownMenu.Root>
+                            {canUseFinanceDocumentCenter ? (
+                                <DropdownMenu.Root>
+                                    <DropdownMenu.Trigger>
+                                        <Button
+                                            variant="surface"
+                                            color="gray"
+                                            highContrast
+                                            className={`${styles.actionButton} ${styles.surfaceButton}`}
+                                            disabled={!selectedEmployeeIds.length}
+                                        >
+                                            <FiPrinter className={styles.icon} />
+                                            Напечатать
+                                        </Button>
+                                    </DropdownMenu.Trigger>
+                                    <DropdownMenu.Content align="end" className={styles.printMenu}>
+                                        <DropdownMenu.Label>
+                                            Выбрано {selectedEmployeeIds.length} {selectedEmployeeIds.length === 1 ? 'сотрудник' : selectedEmployeeIds.length < 5 ? 'сотрудника' : 'сотрудников'}
+                                        </DropdownMenu.Label>
+                                        <DropdownMenu.Separator />
+                                        <DropdownMenu.Item onSelect={openBatchPayrollPreview}>Расчетно платежная ведомость</DropdownMenu.Item>
+                                        <DropdownMenu.Item onSelect={openSelectedStatementsPreview}>
+                                            {selectedEmployeeIds.length === 1 ? 'Расчетный лист' : 'Расчетные листы'}
+                                        </DropdownMenu.Item>
+                                        <DropdownMenu.Item onSelect={openTimesheetPreview}>
+                                            {selectedEmployeeIds.length === 1 ? 'Табель учета рабочего времени' : 'Табели учета рабочего времени'}
+                                        </DropdownMenu.Item>
+                                    </DropdownMenu.Content>
+                                </DropdownMenu.Root>
+                            ) : null}
 
                             <Button
                                 variant="surface"
@@ -1460,46 +1557,54 @@ function AdminFinancePage(): JSX.Element {
                         </div>
 
                         <div className={styles.previewToolbar}>
-                            <Button
-                                variant="surface"
-                                color="gray"
-                                highContrast
-                                className={`${styles.previewActionButton} ${styles.surfaceButton}`}
-                                onClick={handlePrintPreview}
-                            >
-                                <FiPrinter className={styles.icon} />
-                                Напечатать
-                            </Button>
-                            <Button
-                                variant="surface"
-                                color="gray"
-                                highContrast
-                                className={`${styles.previewActionButton} ${styles.surfaceButton}`}
-                                onClick={() => handlePreviewDownload('pdf')}
-                            >
-                                <BsFillFileEarmarkPdfFill className={`${styles.icon} ${styles.pdfIcon}`} />
-                                PDF
-                            </Button>
-                            <Button
-                                variant="surface"
-                                color="gray"
-                                highContrast
-                                className={`${styles.previewActionButton} ${styles.surfaceButton}`}
-                                onClick={() => handlePreviewDownload('excel')}
-                            >
-                                <BsFillFileEarmarkExcelFill className={`${styles.icon} ${styles.excelIcon}`} />
-                                Excel
-                            </Button>
-                            <Button
-                                variant="surface"
-                                color="gray"
-                                highContrast
-                                className={`${styles.previewActionButton} ${styles.surfaceButton}`}
-                                onClick={() => window.open(statementPreview.previewUrl, '_blank', 'noopener,noreferrer')}
-                            >
-                                <FiExternalLink className={styles.icon} />
-                                Открыть
-                            </Button>
+                            {canFinancePrint ? (
+                                <Button
+                                    variant="surface"
+                                    color="gray"
+                                    highContrast
+                                    className={`${styles.previewActionButton} ${styles.surfaceButton}`}
+                                    onClick={handlePrintPreview}
+                                >
+                                    <FiPrinter className={styles.icon} />
+                                    Напечатать
+                                </Button>
+                            ) : null}
+                            {canFinanceExportPdf ? (
+                                <Button
+                                    variant="surface"
+                                    color="gray"
+                                    highContrast
+                                    className={`${styles.previewActionButton} ${styles.surfaceButton}`}
+                                    onClick={() => handlePreviewDownload('pdf')}
+                                >
+                                    <BsFillFileEarmarkPdfFill className={`${styles.icon} ${styles.pdfIcon}`} />
+                                    PDF
+                                </Button>
+                            ) : null}
+                            {canFinanceExportExcel ? (
+                                <Button
+                                    variant="surface"
+                                    color="gray"
+                                    highContrast
+                                    className={`${styles.previewActionButton} ${styles.surfaceButton}`}
+                                    onClick={() => handlePreviewDownload('excel')}
+                                >
+                                    <BsFillFileEarmarkExcelFill className={`${styles.icon} ${styles.excelIcon}`} />
+                                    Excel
+                                </Button>
+                            ) : null}
+                            {canPreviewFinanceDocuments ? (
+                                <Button
+                                    variant="surface"
+                                    color="gray"
+                                    highContrast
+                                    className={`${styles.previewActionButton} ${styles.surfaceButton}`}
+                                    onClick={() => window.open(statementPreview.previewUrl, '_blank', 'noopener,noreferrer')}
+                                >
+                                    <FiExternalLink className={styles.icon} />
+                                    Открыть
+                                </Button>
+                            ) : null}
                             <div className={styles.previewZoomControls}>
                                 <button
                                     type="button"

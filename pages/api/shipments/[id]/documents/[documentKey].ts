@@ -51,14 +51,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const canViewShipments = hasPermission(user, 'shipments.view');
     const canPrintShipments = hasPermission(user, 'shipments.print');
-    const canExportPdf = hasPermission(user, 'shipments.export.pdf');
     const canExportExcel = hasPermission(user, 'shipments.export.excel');
 
     if (!canViewShipments) {
         return res.status(403).json({ error: 'Forbidden' });
     }
 
-    if (format === 'pdf' && !canPrintShipments && !canExportPdf) {
+    if (format === 'pdf' && !canPrintShipments) {
         return res.status(403).json({ error: 'Forbidden' });
     }
 

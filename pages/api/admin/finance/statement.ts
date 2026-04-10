@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import path from 'path';
 import { promises as fs } from 'fs';
-import { requirePermission } from '../../../../lib/auth';
+import { hasPermission, requirePermission } from '../../../../lib/auth';
 import {
     buildFinanceStatementBatchTemplatePayload,
     buildFinanceStatementFiles,
@@ -327,6 +327,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         const documentKind = resolveDocumentKind(normalizeQueryValue(req.query.documentKind));
         const disposition = normalizeQueryValue(req.query.disposition) === 'inline' ? 'inline' : 'attachment';
         const format = resolveFormat(normalizeQueryValue(req.query.format));
+        const canFinancePrint = hasPermission(actor, 'finance.print');
+        const canFinanceExportPdf = hasPermission(actor, 'finance.export.pdf');
+        const canFinanceExportExcel = hasPermission(actor, 'finance.export.excel');
+
+        if ((format === 'pdf' || format === 'html') && !canFinancePrint && !canFinanceExportPdf) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
+
+        if (format === 'excel' && !canFinanceExportExcel) {
+            return res.status(403).json({ error: 'Forbidden' });
+        }
 
         const isBatchCurrent = sourceType === 'current_batch';
 
