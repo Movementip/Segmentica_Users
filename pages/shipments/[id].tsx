@@ -113,6 +113,7 @@ type ShipmentDocumentPreviewState = {
     key: ShipmentDocumentKey;
     title: string;
     description: string;
+    fileNameBase: string;
     previewUrl: string;
     excelUrl: string;
 };
@@ -145,6 +146,13 @@ type PdfJsModule = {
 const PREVIEW_ZOOM_MIN = 0.6;
 const PREVIEW_ZOOM_MAX = 2;
 const PREVIEW_ZOOM_STEP = 0.2;
+
+const formatDateRu = (value: Date): string => {
+    const day = String(value.getDate()).padStart(2, '0');
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const year = value.getFullYear();
+    return `${day}.${month}.${year}`;
+};
 
 const createEmptyManualShipmentPosition = (): ManualShipmentPosition => ({
     товар_id: 0,
@@ -235,14 +243,33 @@ function ShipmentDetailPage(): JSX.Element {
     }, [positions, shipment]);
 
     const buildShipmentDocumentUrl = useCallback(
-        (documentKey: ShipmentDocumentKey, format: 'pdf' | 'excel', disposition: 'inline' | 'attachment') => {
+        (
+            documentKey: ShipmentDocumentKey,
+            format: 'pdf' | 'excel',
+            disposition: 'inline' | 'attachment',
+            fileNameBase?: string
+        ) => {
             const shipmentId = Number(shipment?.id);
             if (!Number.isInteger(shipmentId) || shipmentId <= 0) return '';
             const params = new URLSearchParams({ format, disposition });
-            return `/api/shipments/${shipmentId}/documents/${documentKey}?${params.toString()}`;
+            const extension = format === 'excel' ? 'xlsx' : 'pdf';
+            const readableTail = fileNameBase
+                ? `/${encodeURIComponent(`${fileNameBase}.${extension}`)}`
+                : '';
+            return `/api/shipments/${shipmentId}/documents/${documentKey}${readableTail}?${params.toString()}`;
         },
         [shipment?.id]
     );
+
+    const buildShipmentDocumentFileNameBase = useCallback((documentDefinition: ShipmentDocumentDefinition) => {
+        const shipmentId = Number(shipment?.id);
+        if (!Number.isInteger(shipmentId) || shipmentId <= 0) {
+            return documentDefinition.title;
+        }
+
+        const shipmentDate = shipment?.дата_отгрузки ? new Date(shipment.дата_отгрузки) : new Date();
+        return `${documentDefinition.title} № ${shipmentId} от ${formatDateRu(shipmentDate)}`;
+    }, [shipment?.id, shipment?.дата_отгрузки]);
 
     const formatDateTime = (dateString: string) => {
         if (!dateString) return '-';
@@ -702,11 +729,16 @@ function ShipmentDetailPage(): JSX.Element {
     }, []);
 
     const openShipmentDocumentPreview = (documentDefinition: ShipmentDocumentDefinition) => {
+        const fileNameBase = buildShipmentDocumentFileNameBase(documentDefinition);
+
         if (!canPreviewShipmentDocuments) {
             if (canShipmentExportExcel) {
-                const excelUrl = buildShipmentDocumentUrl(documentDefinition.key, 'excel', 'attachment');
+                const excelUrl = buildShipmentDocumentUrl(documentDefinition.key, 'excel', 'attachment', fileNameBase);
                 if (excelUrl) {
-                    window.open(excelUrl, '_blank', 'noopener,noreferrer');
+                    void downloadDocumentFile(excelUrl, `${fileNameBase}.xlsx`)
+                        .catch((downloadError) => {
+                            setError(downloadError instanceof Error ? downloadError.message : 'Не удалось скачать Excel-документ');
+                        });
                 }
                 return;
             }
@@ -714,8 +746,8 @@ function ShipmentDetailPage(): JSX.Element {
             return;
         }
 
-        const previewUrl = buildShipmentDocumentUrl(documentDefinition.key, 'pdf', 'inline');
-        const excelUrl = buildShipmentDocumentUrl(documentDefinition.key, 'excel', 'attachment');
+        const previewUrl = buildShipmentDocumentUrl(documentDefinition.key, 'pdf', 'inline', fileNameBase);
+        const excelUrl = buildShipmentDocumentUrl(documentDefinition.key, 'excel', 'attachment', fileNameBase);
         if (!previewUrl || !excelUrl) return;
 
         setDocumentPreviewZoom(1);
@@ -723,6 +755,7 @@ function ShipmentDetailPage(): JSX.Element {
             key: documentDefinition.key,
             title: 'Предпросмотр документа',
             description: documentDefinition.title,
+            fileNameBase,
             previewUrl,
             excelUrl,
         });
@@ -797,14 +830,17 @@ function ShipmentDetailPage(): JSX.Element {
             if (documentPreviewPdfObjectUrl) {
                 const link = document.createElement('a');
                 link.href = documentPreviewPdfObjectUrl;
-                link.download = `${documentPreview.description}.pdf`;
+                link.download = `${documentPreview.fileNameBase}.pdf`;
                 document.body.appendChild(link);
                 link.click();
                 link.remove();
                 return;
             }
 
-            void downloadDocumentFile(buildShipmentDocumentUrl(documentPreview.key, 'pdf', 'attachment'))
+            void downloadDocumentFile(
+                buildShipmentDocumentUrl(documentPreview.key, 'pdf', 'attachment', documentPreview.fileNameBase),
+                `${documentPreview.fileNameBase}.pdf`
+            )
                 .catch((downloadError) => {
                     setDocumentPreviewError(downloadError instanceof Error ? downloadError.message : 'Не удалось скачать PDF');
                 });
@@ -816,7 +852,7 @@ function ShipmentDetailPage(): JSX.Element {
             return;
         }
 
-        void downloadDocumentFile(documentPreview.excelUrl)
+        void downloadDocumentFile(documentPreview.excelUrl, `${documentPreview.fileNameBase}.xlsx`)
             .catch((downloadError) => {
                 setDocumentPreviewError(downloadError instanceof Error ? downloadError.message : 'Не удалось скачать Excel-документ');
             });
@@ -1563,7 +1599,7 @@ function ShipmentDetailPage(): JSX.Element {
                                     Напечатать
                                 </Button>
                             ) : null}
-                            {canShipmentExportPdf ? (
+                            {canPreviewShipmentDocuments ? (
                                 <Button
                                     variant="surface"
                                     color="gray"
@@ -1592,7 +1628,7 @@ function ShipmentDetailPage(): JSX.Element {
                                 color="gray"
                                 highContrast
                                 className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
-                                onClick={() => window.open(documentPreviewPdfObjectUrl || documentPreview.previewUrl, '_blank', 'noopener,noreferrer')}
+                                onClick={() => window.open(documentPreview.previewUrl, '_blank', 'noopener,noreferrer')}
                                 disabled={!documentPreview.previewUrl}
                             >
                                 <FiExternalLink className={styles.icon} />

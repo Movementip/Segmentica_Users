@@ -110,6 +110,7 @@ type FinancePayload = {
 type StatementPreviewState = {
     title: string;
     description: string;
+    fileNameBase: string;
     previewUrl: string;
     kind: 'batch-payroll' | 'single-statement' | 'selected-statements' | 'timesheet';
     employeeIds: number[];
@@ -251,6 +252,7 @@ const buildStatementUrl = (params: {
     sourceKey?: string | null;
     paymentId?: string | null;
     disposition?: 'inline' | 'attachment';
+    fileNameBase?: string;
 }): string => {
     const search = new URLSearchParams();
     search.set('sourceType', params.sourceType);
@@ -269,7 +271,11 @@ const buildStatementUrl = (params: {
 
     if (params.sourceKey) search.set('sourceKey', params.sourceKey);
     if (params.paymentId) search.set('paymentId', params.paymentId);
-    return `/api/admin/finance/statement?${search.toString()}`;
+    const extension = params.format === 'excel' ? 'xlsx' : 'pdf';
+    const readableTail = params.fileNameBase
+        ? `/${encodeURIComponent(`${params.fileNameBase}.${extension}`)}`
+        : '';
+    return `/api/admin/finance/statement${readableTail}?${search.toString()}`;
 };
 
 function AdminFinancePage(): JSX.Element {
@@ -768,7 +774,6 @@ function AdminFinancePage(): JSX.Element {
         employeeIds: number[],
         format: 'pdf' | 'excel'
     ): string => {
-        const extension = format === 'pdf' ? 'pdf' : 'xlsx';
         const monthLabel = formatMonthFileLabel(monthKey);
         const selectedEmployees = payload?.employees.filter((employee) => employeeIds.includes(employee.id)) || [];
         const singleEmployee = selectedEmployees.length === 1 ? selectedEmployees[0] : null;
@@ -778,20 +783,28 @@ function AdminFinancePage(): JSX.Element {
             const base = employeeLabel
                 ? `Расчетно платежная ведомость ${employeeLabel} ${monthLabel}`
                 : `Расчетно платежная ведомость ${monthLabel}`;
-            return `${base}.${extension}`;
+            return `${base}.${format === 'pdf' ? 'pdf' : 'xlsx'}`;
         }
 
         if (kind === 'timesheet') {
             const base = employeeLabel
                 ? `Табель учета рабочего времени ${employeeLabel} ${monthLabel}`
                 : `Табели учета рабочего времени ${monthLabel}`;
-            return `${base}.${extension}`;
+            return `${base}.${format === 'pdf' ? 'pdf' : 'xlsx'}`;
         }
 
         const base = employeeLabel
             ? `Расчетный листок ${employeeLabel} ${monthLabel}`
             : `Расчетные листки ${monthLabel}`;
-        return `${base}.${extension}`;
+        return `${base}.${format === 'pdf' ? 'pdf' : 'xlsx'}`;
+    };
+
+    const buildPreviewFileNameBase = (
+        kind: StatementPreviewState['kind'],
+        employeeIds: number[],
+    ): string => {
+        const fileName = buildPreviewDownloadFileName(kind, employeeIds, 'pdf');
+        return fileName.replace(/\.pdf$/i, '');
     };
 
     const downloadStatementFile = async (url: string, fileName: string) => {
@@ -824,7 +837,9 @@ function AdminFinancePage(): JSX.Element {
                 month: monthKey,
                 format: 'pdf',
                 disposition: 'inline',
+                fileNameBase: buildPreviewFileNameBase('batch-payroll', selectedEmployeeIds),
             }),
+            fileNameBase: buildPreviewFileNameBase('batch-payroll', selectedEmployeeIds),
             kind: 'batch-payroll',
             employeeIds: selectedEmployeeIds,
         });
@@ -841,6 +856,7 @@ function AdminFinancePage(): JSX.Element {
                 month: monthKey,
                 format,
                 disposition: format === 'pdf' ? 'inline' : 'attachment',
+                fileNameBase: buildPreviewFileNameBase('selected-statements', selectedEmployeeIds),
             }),
             '_blank',
             'noopener,noreferrer'
@@ -862,7 +878,9 @@ function AdminFinancePage(): JSX.Element {
                 month: monthKey,
                 format: 'pdf',
                 disposition: 'inline',
+                fileNameBase: buildPreviewFileNameBase('selected-statements', selectedEmployeeIds),
             }),
+            fileNameBase: buildPreviewFileNameBase('selected-statements', selectedEmployeeIds),
             kind: 'selected-statements',
             employeeIds: selectedEmployeeIds,
         });
@@ -883,7 +901,9 @@ function AdminFinancePage(): JSX.Element {
                 month: monthKey,
                 format: 'pdf',
                 disposition: 'inline',
+                fileNameBase: buildPreviewFileNameBase('timesheet', selectedEmployeeIds),
             }),
+            fileNameBase: buildPreviewFileNameBase('timesheet', selectedEmployeeIds),
             kind: 'timesheet',
             employeeIds: selectedEmployeeIds,
         });
@@ -941,6 +961,7 @@ function AdminFinancePage(): JSX.Element {
                     month: monthKey,
                     format,
                     disposition: 'attachment',
+                    fileNameBase: statementPreview.fileNameBase,
                 }),
                 previewDownloadName
             ).catch(handleDownloadError);
@@ -956,6 +977,7 @@ function AdminFinancePage(): JSX.Element {
                     month: monthKey,
                     format,
                     disposition: 'attachment',
+                    fileNameBase: statementPreview.fileNameBase,
                 }),
                 previewDownloadName
             ).catch(handleDownloadError);
@@ -971,6 +993,7 @@ function AdminFinancePage(): JSX.Element {
                     month: monthKey,
                     format,
                     disposition: 'attachment',
+                    fileNameBase: statementPreview.fileNameBase,
                 }),
                 previewDownloadName
             ).catch(handleDownloadError);
@@ -1441,7 +1464,7 @@ function AdminFinancePage(): JSX.Element {
                                 variant="surface"
                                 color="gray"
                                 highContrast
-                                className={`${styles.actionButton} ${styles.surfaceButton}`}
+                                className={`${styles.previewActionButton} ${styles.surfaceButton}`}
                                 onClick={handlePrintPreview}
                             >
                                 <FiPrinter className={styles.icon} />
@@ -1451,7 +1474,7 @@ function AdminFinancePage(): JSX.Element {
                                 variant="surface"
                                 color="gray"
                                 highContrast
-                                className={`${styles.actionButton} ${styles.surfaceButton}`}
+                                className={`${styles.previewActionButton} ${styles.surfaceButton}`}
                                 onClick={() => handlePreviewDownload('pdf')}
                             >
                                 <BsFillFileEarmarkPdfFill className={`${styles.icon} ${styles.pdfIcon}`} />
@@ -1461,7 +1484,7 @@ function AdminFinancePage(): JSX.Element {
                                 variant="surface"
                                 color="gray"
                                 highContrast
-                                className={`${styles.actionButton} ${styles.surfaceButton}`}
+                                className={`${styles.previewActionButton} ${styles.surfaceButton}`}
                                 onClick={() => handlePreviewDownload('excel')}
                             >
                                 <BsFillFileEarmarkExcelFill className={`${styles.icon} ${styles.excelIcon}`} />
@@ -1471,8 +1494,8 @@ function AdminFinancePage(): JSX.Element {
                                 variant="surface"
                                 color="gray"
                                 highContrast
-                                className={`${styles.actionButton} ${styles.surfaceButton}`}
-                                onClick={() => window.open(previewPdfObjectUrl || statementPreview.previewUrl, '_blank', 'noopener,noreferrer')}
+                                className={`${styles.previewActionButton} ${styles.surfaceButton}`}
+                                onClick={() => window.open(statementPreview.previewUrl, '_blank', 'noopener,noreferrer')}
                             >
                                 <FiExternalLink className={styles.icon} />
                                 Открыть

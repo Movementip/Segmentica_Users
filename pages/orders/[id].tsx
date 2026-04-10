@@ -126,6 +126,7 @@ type OrderDocumentPreviewState = {
     key: OrderDocumentKey;
     title: string;
     description: string;
+    fileNameBase: string;
     previewUrl: string;
     wordUrl: string;
 };
@@ -153,6 +154,13 @@ type PdfJsModule = {
             }>;
         }>;
     };
+};
+
+const formatDateRu = (value: Date): string => {
+    const day = String(value.getDate()).padStart(2, '0');
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const year = value.getFullYear();
+    return `${day}.${month}.${year}`;
 };
 
 const PREVIEW_ZOOM_MIN = 0.6;
@@ -227,15 +235,33 @@ function OrderDetailPage(): JSX.Element {
         });
     }, [order]);
 
+    const buildOrderDocumentFileNameBase = useCallback((documentDefinition: OrderDocumentDefinition) => {
+        const orderId = Number(order?.id);
+        if (!Number.isInteger(orderId) || orderId <= 0) {
+            return documentDefinition.title;
+        }
+
+        return `${documentDefinition.title} № ${orderId} от ${formatDateRu(new Date())}`;
+    }, [order?.id]);
+
     const buildOrderDocumentUrl = useCallback(
-        (documentKey: OrderDocumentKey, format: 'pdf' | 'word', disposition: 'inline' | 'attachment') => {
+        (
+            documentKey: OrderDocumentKey,
+            format: 'pdf' | 'word',
+            disposition: 'inline' | 'attachment',
+            fileNameBase?: string
+        ) => {
             const orderId = Number(order?.id);
             if (!Number.isInteger(orderId) || orderId <= 0) return '';
             const params = new URLSearchParams({
                 format,
                 disposition,
             });
-            return `/api/orders/${orderId}/documents/${documentKey}?${params.toString()}`;
+            const extension = format === 'word' ? 'docx' : 'pdf';
+            const readableTail = fileNameBase
+                ? `/${encodeURIComponent(`${fileNameBase}.${extension}`)}`
+                : '';
+            return `/api/orders/${orderId}/documents/${documentKey}${readableTail}?${params.toString()}`;
         },
         [order?.id]
     );
@@ -849,7 +875,10 @@ function OrderDetailPage(): JSX.Element {
             if (canExportWord) {
                 const wordUrl = buildOrderDocumentUrl(documentDefinition.key, 'word', 'attachment');
                 if (wordUrl) {
-                    window.open(wordUrl, '_blank', 'noopener,noreferrer');
+                    void downloadDocumentFile(wordUrl, `${buildOrderDocumentFileNameBase(documentDefinition)}.docx`)
+                        .catch((downloadError) => {
+                            setError(downloadError instanceof Error ? downloadError.message : 'Не удалось скачать Word-документ');
+                        });
                 }
                 return;
             }
@@ -857,8 +886,9 @@ function OrderDetailPage(): JSX.Element {
             return;
         }
 
-        const previewUrl = buildOrderDocumentUrl(documentDefinition.key, 'pdf', 'inline');
-        const wordUrl = buildOrderDocumentUrl(documentDefinition.key, 'word', 'attachment');
+        const fileNameBase = buildOrderDocumentFileNameBase(documentDefinition);
+        const previewUrl = buildOrderDocumentUrl(documentDefinition.key, 'pdf', 'inline', fileNameBase);
+        const wordUrl = buildOrderDocumentUrl(documentDefinition.key, 'word', 'attachment', fileNameBase);
         if (!previewUrl || !wordUrl) return;
 
         setDocumentPreviewZoom(1);
@@ -866,6 +896,7 @@ function OrderDetailPage(): JSX.Element {
             key: documentDefinition.key,
             title: 'Предпросмотр 1 документа',
             description: documentDefinition.title,
+            fileNameBase,
             previewUrl,
             wordUrl,
         });
@@ -940,14 +971,17 @@ function OrderDetailPage(): JSX.Element {
             if (documentPreviewPdfObjectUrl) {
                 const link = document.createElement('a');
                 link.href = documentPreviewPdfObjectUrl;
-                link.download = `${documentPreview.description}.pdf`;
+                link.download = `${documentPreview.fileNameBase}.pdf`;
                 document.body.appendChild(link);
                 link.click();
                 link.remove();
                 return;
             }
 
-            void downloadDocumentFile(buildOrderDocumentUrl(documentPreview.key, 'pdf', 'attachment'))
+            void downloadDocumentFile(
+                buildOrderDocumentUrl(documentPreview.key, 'pdf', 'attachment'),
+                `${documentPreview.fileNameBase}.pdf`
+            )
                 .catch((downloadError) => {
                     setDocumentPreviewError(downloadError instanceof Error ? downloadError.message : 'Не удалось скачать PDF');
                 });
@@ -959,7 +993,7 @@ function OrderDetailPage(): JSX.Element {
             return;
         }
 
-        void downloadDocumentFile(documentPreview.wordUrl)
+        void downloadDocumentFile(documentPreview.wordUrl, `${documentPreview.fileNameBase}.docx`)
             .catch((downloadError) => {
                 setDocumentPreviewError(downloadError instanceof Error ? downloadError.message : 'Не удалось скачать Word-документ');
             });
@@ -1724,7 +1758,7 @@ function OrderDetailPage(): JSX.Element {
                                 color="gray"
                                 highContrast
                                 className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
-                                onClick={() => window.open(documentPreviewPdfObjectUrl || documentPreview.previewUrl, '_blank', 'noopener,noreferrer')}
+                                onClick={() => window.open(documentPreview.previewUrl, '_blank', 'noopener,noreferrer')}
                                 disabled={!documentPreview.previewUrl}
                             >
                                 <FiExternalLink className={styles.icon} />

@@ -124,6 +124,7 @@ type PurchaseDocumentPreviewState = {
     key: PurchaseDocumentKey;
     title: string;
     description: string;
+    fileNameBase: string;
     previewUrl: string;
     downloadUrl: string;
     downloadFormat: 'excel' | 'word';
@@ -157,6 +158,13 @@ type PdfJsModule = {
 const PREVIEW_ZOOM_MIN = 0.6;
 const PREVIEW_ZOOM_MAX = 2;
 const PREVIEW_ZOOM_STEP = 0.2;
+
+const formatDateRu = (value: Date): string => {
+    const day = String(value.getDate()).padStart(2, '0');
+    const month = String(value.getMonth() + 1).padStart(2, '0');
+    const year = value.getFullYear();
+    return `${day}.${month}.${year}`;
+};
 
 function PurchaseDetailPage(): JSX.Element {
     const router = useRouter();
@@ -216,17 +224,36 @@ function PurchaseDetailPage(): JSX.Element {
     }, [purchase]);
 
     const buildPurchaseDocumentUrl = useCallback(
-        (documentKey: PurchaseDocumentKey, format: 'pdf' | 'excel' | 'word', disposition: 'inline' | 'attachment') => {
+        (
+            documentKey: PurchaseDocumentKey,
+            format: 'pdf' | 'excel' | 'word',
+            disposition: 'inline' | 'attachment',
+            fileNameBase?: string
+        ) => {
             const purchaseId = Number(purchase?.id);
             if (!Number.isInteger(purchaseId) || purchaseId <= 0) return '';
             const params = new URLSearchParams({
                 format,
                 disposition,
             });
-            return `/api/purchases/${purchaseId}/documents/${documentKey}?${params.toString()}`;
+            const extension = format === 'word' ? 'docx' : format === 'excel' ? 'xlsx' : 'pdf';
+            const readableTail = fileNameBase
+                ? `/${encodeURIComponent(`${fileNameBase}.${extension}`)}`
+                : '';
+            return `/api/purchases/${purchaseId}/documents/${documentKey}${readableTail}?${params.toString()}`;
         },
         [purchase?.id]
     );
+
+    const buildPurchaseDocumentFileNameBase = useCallback((documentDefinition: PurchaseDocumentDefinition) => {
+        const purchaseId = Number(purchase?.id);
+        if (!Number.isInteger(purchaseId) || purchaseId <= 0) {
+            return documentDefinition.title;
+        }
+
+        const purchaseDate = purchase?.дата_заказа ? new Date(purchase.дата_заказа) : new Date();
+        return `${documentDefinition.title} № ${purchaseId} от ${formatDateRu(purchaseDate)}`;
+    }, [purchase?.id, purchase?.дата_заказа]);
 
     const fetchPurchase = useCallback(async () => {
         try {
@@ -596,12 +623,16 @@ function PurchaseDetailPage(): JSX.Element {
 
     const openPurchaseDocumentPreview = (documentDefinition: PurchaseDocumentDefinition) => {
         const downloadFormat: 'excel' | 'word' = documentDefinition.outputFormats.includes('word') ? 'word' : 'excel';
+        const fileNameBase = buildPurchaseDocumentFileNameBase(documentDefinition);
 
         if (!canPreviewPurchaseDocuments) {
             if ((downloadFormat === 'word' && canExportWord) || (downloadFormat === 'excel' && canExportExcel)) {
-                const downloadUrl = buildPurchaseDocumentUrl(documentDefinition.key, downloadFormat, 'attachment');
+                const downloadUrl = buildPurchaseDocumentUrl(documentDefinition.key, downloadFormat, 'attachment', fileNameBase);
                 if (downloadUrl) {
-                    window.open(downloadUrl, '_blank', 'noopener,noreferrer');
+                    void downloadDocumentFile(downloadUrl, `${fileNameBase}.${downloadFormat === 'word' ? 'docx' : 'xlsx'}`)
+                        .catch((downloadError) => {
+                            setError(downloadError instanceof Error ? downloadError.message : 'Не удалось скачать документ');
+                        });
                 }
                 return;
             }
@@ -609,8 +640,8 @@ function PurchaseDetailPage(): JSX.Element {
             return;
         }
 
-        const previewUrl = buildPurchaseDocumentUrl(documentDefinition.key, 'pdf', 'inline');
-        const downloadUrl = buildPurchaseDocumentUrl(documentDefinition.key, downloadFormat, 'attachment');
+        const previewUrl = buildPurchaseDocumentUrl(documentDefinition.key, 'pdf', 'inline', fileNameBase);
+        const downloadUrl = buildPurchaseDocumentUrl(documentDefinition.key, downloadFormat, 'attachment', fileNameBase);
         if (!previewUrl || !downloadUrl) return;
 
         setDocumentPreviewZoom(1);
@@ -618,6 +649,7 @@ function PurchaseDetailPage(): JSX.Element {
             key: documentDefinition.key,
             title: 'Предпросмотр документа',
             description: documentDefinition.title,
+            fileNameBase,
             previewUrl,
             downloadUrl,
             downloadFormat,
@@ -693,14 +725,17 @@ function PurchaseDetailPage(): JSX.Element {
             if (documentPreviewPdfObjectUrl) {
                 const link = document.createElement('a');
                 link.href = documentPreviewPdfObjectUrl;
-                link.download = `${documentPreview.description}.pdf`;
+                link.download = `${documentPreview.fileNameBase}.pdf`;
                 document.body.appendChild(link);
                 link.click();
                 link.remove();
                 return;
             }
 
-            void downloadDocumentFile(buildPurchaseDocumentUrl(documentPreview.key, 'pdf', 'attachment'))
+            void downloadDocumentFile(
+                buildPurchaseDocumentUrl(documentPreview.key, 'pdf', 'attachment', documentPreview.fileNameBase),
+                `${documentPreview.fileNameBase}.pdf`
+            )
                 .catch((downloadError) => {
                     setDocumentPreviewError(downloadError instanceof Error ? downloadError.message : 'Не удалось скачать PDF');
                 });
@@ -717,7 +752,10 @@ function PurchaseDetailPage(): JSX.Element {
             return;
         }
 
-        void downloadDocumentFile(documentPreview.downloadUrl)
+        void downloadDocumentFile(
+            documentPreview.downloadUrl,
+            `${documentPreview.fileNameBase}.${format === 'word' ? 'docx' : 'xlsx'}`
+        )
             .catch((downloadError) => {
                 setDocumentPreviewError(
                     downloadError instanceof Error
@@ -1483,7 +1521,7 @@ function PurchaseDetailPage(): JSX.Element {
                                 color="gray"
                                 highContrast
                                 className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
-                                onClick={() => window.open(documentPreviewPdfObjectUrl || documentPreview.previewUrl, '_blank', 'noopener,noreferrer')}
+                                onClick={() => window.open(documentPreview.previewUrl, '_blank', 'noopener,noreferrer')}
                                 disabled={!documentPreview.previewUrl}
                             >
                                 <FiExternalLink className={styles.icon} />

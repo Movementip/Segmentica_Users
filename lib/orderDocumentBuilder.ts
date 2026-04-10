@@ -511,8 +511,7 @@ const buildOrderSpecificationTotal = (positions: OrderDocumentPosition[]): strin
 const buildOrderBasis = (orderId: number, documentDate: Date): string =>
     `Заявка № ${orderId} от ${formatDateRu(documentDate)}`;
 
-const buildFileBaseName = (title: string, orderId: number): string =>
-    `${title} Заявка ${orderId}`;
+const buildFileBaseName = (title: string): string => title;
 
 const getOrderInvoiceLogoBase64 = async (): Promise<string | undefined> => {
     try {
@@ -681,7 +680,7 @@ export const buildOrderDocumentPayload = async (
     return {
         documentTitle: definition.title,
         template,
-        fileBaseName: buildFileBaseName(definition.title, order.id),
+        fileBaseName: buildFileBaseName(definition.title),
         replacements,
         replaceFirstImageBase64,
     };
