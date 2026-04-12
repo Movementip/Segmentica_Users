@@ -133,6 +133,15 @@
     line-height: 1.4;
 }
 
+.previewSuccess {
+    padding: 10px 12px;
+    border: 1px solid #b7dfc2;
+    background: #f2fbf5;
+    color: #1f7a3d;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
 .previewZoomControls {
     margin-left: auto;
     display: inline-flex;

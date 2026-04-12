@@ -812,6 +812,8 @@ function ManagerDetailPage(): JSX.Element {
                             <RecordDocumentCenter
                                 documents={managerPrintDocuments}
                                 buttonClassName={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
+                                saveTarget={canAttachmentsUpload ? { entityType: 'manager', entityId: managerId } : undefined}
+                                onSaved={() => fetchAttachments(managerId)}
                             />
                             <Button
                                 variant="surface"
@@ -1247,7 +1249,13 @@ function ManagerDetailPage(): JSX.Element {
         <div className={styles.container}>
             <ManagerHrWorkspace
                 manager={manager}
-                extraActions={<RecordDocumentCenter documents={managerPrintDocuments} />}
+                extraActions={
+                    <RecordDocumentCenter
+                        documents={managerPrintDocuments}
+                        saveTarget={canAttachmentsUpload ? { entityType: 'manager', entityId: managerId } : undefined}
+                        onSaved={() => fetchAttachments(managerId)}
+                    />
+                }
                 canEdit={canEdit || isOwnProfile}
                 canScheduleEdit={canScheduleManage}
                 canScheduleApplyPattern={canScheduleManage}

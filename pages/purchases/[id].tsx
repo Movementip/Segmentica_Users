@@ -20,6 +20,7 @@ import {
     FiPaperclip,
     FiPlus,
     FiPrinter,
+    FiSave,
     FiTrash2,
     FiUploadCloud,
     FiX,
@@ -32,6 +33,7 @@ import { getClientContragentTypeLabel, normalizeClientContragentType } from '../
 import { getSupplierContragentTypeLabel, normalizeSupplierContragentType } from '../../lib/supplierContragents';
 import { getPurchaseDeliveryLabel } from '../../lib/logisticsDeliveryLabels';
 import { lockBodyScroll } from '../../utils/bodyScrollLock';
+import { fetchGeneratedBlob, saveGeneratedAttachments, type GeneratedAttachmentFile } from '../../utils/generatedAttachments';
 import {
     getAvailablePurchaseDocumentDefinitions,
     type PurchaseDocumentDefinition,
@@ -191,6 +193,8 @@ function PurchaseDetailPage(): JSX.Element {
     const [documentPreviewPages, setDocumentPreviewPages] = useState<PreviewPageImage[]>([]);
     const [documentPreviewLoading, setDocumentPreviewLoading] = useState(false);
     const [documentPreviewError, setDocumentPreviewError] = useState<string | null>(null);
+    const [documentPreviewSaveMessage, setDocumentPreviewSaveMessage] = useState<string | null>(null);
+    const [documentPreviewSaving, setDocumentPreviewSaving] = useState(false);
     const [documentPreviewPdfObjectUrl, setDocumentPreviewPdfObjectUrl] = useState<string | null>(null);
     const [documentPreviewZoom, setDocumentPreviewZoom] = useState(1);
     const [isPurchasePrintMenuOpen, setIsPurchasePrintMenuOpen] = useState(false);
@@ -296,6 +300,8 @@ function PurchaseDetailPage(): JSX.Element {
             setDocumentPreviewPages([]);
             setDocumentPreviewLoading(false);
             setDocumentPreviewError(null);
+            setDocumentPreviewSaveMessage(null);
+            setDocumentPreviewSaving(false);
             setDocumentPreviewZoom(1);
             if (documentPreviewPrintFrameRef.current) {
                 documentPreviewPrintFrameRef.current.removeAttribute('src');
@@ -317,6 +323,7 @@ function PurchaseDetailPage(): JSX.Element {
             try {
                 setDocumentPreviewLoading(true);
                 setDocumentPreviewError(null);
+                setDocumentPreviewSaveMessage(null);
                 setDocumentPreviewPages([]);
 
                 const loadPdfJs = Function('return import("/pdfjs/pdf.mjs")') as () => Promise<PdfJsModule>;
@@ -765,6 +772,78 @@ function PurchaseDetailPage(): JSX.Element {
                 );
             });
     };
+
+    const handleDocumentPreviewSave = async () => {
+        if (!documentPreview || !purchase?.id) return;
+
+        if (!canAttachmentsUpload) {
+            setDocumentPreviewError('Нет доступа на сохранение документов закупки');
+            return;
+        }
+
+        try {
+            setDocumentPreviewSaving(true);
+            setDocumentPreviewError(null);
+            setDocumentPreviewSaveMessage(null);
+
+            const files: GeneratedAttachmentFile[] = [];
+
+            if (canPrint || canExportPdf) {
+                const pdfBlob = documentPreviewPdfBytesRef.current
+                    ? new Blob([
+                        documentPreviewPdfBytesRef.current.buffer.slice(
+                            documentPreviewPdfBytesRef.current.byteOffset,
+                            documentPreviewPdfBytesRef.current.byteOffset + documentPreviewPdfBytesRef.current.byteLength
+                        ),
+                    ], { type: 'application/pdf' })
+                    : await fetchGeneratedBlob(
+                        buildPurchaseDocumentUrl(documentPreview.key, 'pdf', 'attachment', documentPreview.fileNameBase)
+                    );
+
+                files.push({
+                    blob: pdfBlob,
+                    fileName: `${documentPreview.fileNameBase}.pdf`,
+                    mimeType: 'application/pdf',
+                });
+            }
+
+            if (documentPreview.downloadFormat === 'excel' && canExportExcel) {
+                files.push({
+                    blob: await fetchGeneratedBlob(documentPreview.downloadUrl),
+                    fileName: `${documentPreview.fileNameBase}.xlsx`,
+                    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                });
+            }
+
+            if (documentPreview.downloadFormat === 'word' && canExportWord) {
+                files.push({
+                    blob: await fetchGeneratedBlob(documentPreview.downloadUrl),
+                    fileName: `${documentPreview.fileNameBase}.docx`,
+                    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                });
+            }
+
+            if (!files.length) {
+                throw new Error('Нет доступных форматов для сохранения');
+            }
+
+            const savedCount = await saveGeneratedAttachments(
+                { entityType: 'purchase', entityId: purchase.id },
+                files
+            );
+
+            if (canAttachmentsView) {
+                await fetchAttachments(Number(purchase.id));
+            }
+
+            setDocumentPreviewSaveMessage(`Сохранено в документы закупки: ${savedCount}`);
+        } catch (saveError) {
+            setDocumentPreviewError(saveError instanceof Error ? saveError.message : 'Не удалось сохранить документы');
+        } finally {
+            setDocumentPreviewSaving(false);
+        }
+    };
+
     const handleEditPurchase = async (purchaseData: any) => {
         if (!canEdit) return;
         try {
@@ -1526,6 +1605,19 @@ function PurchaseDetailPage(): JSX.Element {
                                 <FiExternalLink className={styles.icon} />
                                 Открыть
                             </Button>
+                            {canAttachmentsUpload ? (
+                                <Button
+                                    variant="surface"
+                                    color="gray"
+                                    highContrast
+                                    className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
+                                    onClick={handleDocumentPreviewSave}
+                                    disabled={documentPreviewSaving}
+                                >
+                                    <FiSave className={styles.icon} />
+                                    {documentPreviewSaving ? 'Сохранение...' : 'Сохранить'}
+                                </Button>
+                            ) : null}
                             <div className={styles.previewZoomControls}>
                                 <button
                                     type="button"
@@ -1556,6 +1648,9 @@ function PurchaseDetailPage(): JSX.Element {
                                 </button>
                             </div>
                         </div>
+                        {documentPreviewSaveMessage ? (
+                            <div className={styles.previewSaveMessage}>{documentPreviewSaveMessage}</div>
+                        ) : null}
 
                         <div className={styles.previewCanvas}>
                             <div className={styles.previewStage} ref={documentPreviewStageRef}>

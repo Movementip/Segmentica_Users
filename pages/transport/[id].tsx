@@ -622,6 +622,8 @@ export default function TransportDetail() {
                         <RecordDocumentCenter
                             documents={transportPrintDocuments}
                             buttonClassName={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
+                            saveTarget={canTransportAttachmentsUpload ? { entityType: 'transport', entityId: transport.id } : undefined}
+                            onSaved={() => fetchAttachments(Number(transport.id))}
                         />
                         <Button
                             type="button"

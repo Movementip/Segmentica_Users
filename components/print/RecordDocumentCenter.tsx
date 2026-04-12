@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, DropdownMenu, Text } from '@radix-ui/themes';
 import { BsFillFileEarmarkPdfFill } from 'react-icons/bs';
-import { FiChevronDown, FiExternalLink, FiMinus, FiPlus, FiPrinter, FiX } from 'react-icons/fi';
+import { FiChevronDown, FiExternalLink, FiMinus, FiPlus, FiPrinter, FiSave, FiX } from 'react-icons/fi';
 import { lockBodyScroll } from '../../utils/bodyScrollLock';
+import { saveGeneratedAttachments, type GeneratedAttachmentTarget } from '../../utils/generatedAttachments';
 import styles from './RecordDocumentCenter.module.css';
 
 export type RecordPrintField = {
@@ -33,6 +34,8 @@ export type RecordPrintDocument = {
 type RecordDocumentCenterProps = {
     documents: RecordPrintDocument[];
     buttonClassName?: string;
+    saveTarget?: GeneratedAttachmentTarget;
+    onSaved?: () => void | Promise<void>;
 };
 
 const PRINT_STYLES = `
@@ -128,13 +131,15 @@ export const RecordPrintSheet = ({
     </div>
 );
 
-export const RecordDocumentCenter = ({ documents, buttonClassName }: RecordDocumentCenterProps): JSX.Element | null => {
+export const RecordDocumentCenter = ({ documents, buttonClassName, saveTarget, onSaved }: RecordDocumentCenterProps): JSX.Element | null => {
     const [selectedDocument, setSelectedDocument] = useState<RecordPrintDocument | null>(null);
     const [previewZoom, setPreviewZoom] = useState(1);
     const [pdfObjectUrl, setPdfObjectUrl] = useState<string | null>(null);
     const [pdfOpenUrl, setPdfOpenUrl] = useState<string | null>(null);
     const [pdfLoading, setPdfLoading] = useState(false);
     const [pdfError, setPdfError] = useState<string | null>(null);
+    const [saveLoading, setSaveLoading] = useState(false);
+    const [saveMessage, setSaveMessage] = useState<string | null>(null);
     const contentRef = useRef<HTMLDivElement | null>(null);
     const printFrameRef = useRef<HTMLIFrameElement | null>(null);
     const pdfBlobRef = useRef<Blob | null>(null);
@@ -149,6 +154,8 @@ export const RecordDocumentCenter = ({ documents, buttonClassName }: RecordDocum
         setPdfOpenUrl(null);
         setPdfLoading(false);
         setPdfError(null);
+        setSaveLoading(false);
+        setSaveMessage(null);
 
         if (printFrameRef.current) {
             printFrameRef.current.removeAttribute('src');
@@ -363,6 +370,38 @@ export const RecordDocumentCenter = ({ documents, buttonClassName }: RecordDocum
         }
     };
 
+    const saveDocument = async () => {
+        if (!selectedDocument || !saveTarget) return;
+
+        try {
+            setSaveLoading(true);
+            setSaveMessage(null);
+            setPdfError(null);
+
+            const objectUrl = await ensurePdfObjectUrl();
+            const blob = pdfBlobRef.current;
+            if (!objectUrl || !blob) return;
+
+            const savedCount = await saveGeneratedAttachments(saveTarget, [
+                {
+                    blob,
+                    fileName: documentFileName,
+                    mimeType: 'application/pdf',
+                },
+            ]);
+
+            if (onSaved) {
+                await onSaved();
+            }
+
+            setSaveMessage(`Сохранено в документы: ${savedCount}`);
+        } catch (error) {
+            setPdfError(error instanceof Error ? error.message : 'Не удалось сохранить документ');
+        } finally {
+            setSaveLoading(false);
+        }
+    };
+
     const printDocument = async () => {
         const objectUrl = await ensurePdfObjectUrl();
         if (!objectUrl) return;
@@ -469,6 +508,19 @@ export const RecordDocumentCenter = ({ documents, buttonClassName }: RecordDocum
                                 <FiExternalLink />
                                 Открыть
                             </Button>
+                            {saveTarget ? (
+                                <Button
+                                    type="button"
+                                    variant="surface"
+                                    color="gray"
+                                    highContrast
+                                    onClick={saveDocument}
+                                    disabled={saveLoading}
+                                >
+                                    <FiSave />
+                                    {saveLoading ? 'Сохранение...' : 'Сохранить'}
+                                </Button>
+                            ) : null}
                             <div className={styles.previewZoomControls} aria-label="Масштаб предпросмотра">
                                 <button
                                     type="button"
@@ -499,6 +551,7 @@ export const RecordDocumentCenter = ({ documents, buttonClassName }: RecordDocum
                             </div>
                         </div>
                         {pdfError ? <div className={styles.previewError}>{pdfError}</div> : null}
+                        {saveMessage ? <div className={styles.previewSuccess}>{saveMessage}</div> : null}
 
                         <div className={styles.previewStage}>
                             <div

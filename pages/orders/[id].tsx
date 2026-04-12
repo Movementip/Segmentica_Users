@@ -22,6 +22,7 @@ import {
     FiPaperclip,
     FiPlus,
     FiPrinter,
+    FiSave,
     FiShoppingCart,
     FiTrash2,
     FiTruck,
@@ -35,6 +36,7 @@ import { NoAccessPage } from '../../components/NoAccessPage';
 import { calculateVatAmountsFromLine, getVatRateOption } from '../../lib/vat';
 import { getClientContragentTypeLabel, normalizeClientContragentType } from '../../lib/clientContragents';
 import { lockBodyScroll } from '../../utils/bodyScrollLock';
+import { fetchGeneratedBlob, saveGeneratedAttachments, type GeneratedAttachmentFile } from '../../utils/generatedAttachments';
 import {
     getAvailableOrderDocumentDefinitions,
     type OrderDocumentDefinition,
@@ -196,6 +198,8 @@ function OrderDetailPage(): JSX.Element {
     const [documentPreviewPages, setDocumentPreviewPages] = useState<PreviewPageImage[]>([]);
     const [documentPreviewLoading, setDocumentPreviewLoading] = useState(false);
     const [documentPreviewError, setDocumentPreviewError] = useState<string | null>(null);
+    const [documentPreviewSaveMessage, setDocumentPreviewSaveMessage] = useState<string | null>(null);
+    const [documentPreviewSaving, setDocumentPreviewSaving] = useState(false);
     const [documentPreviewPdfObjectUrl, setDocumentPreviewPdfObjectUrl] = useState<string | null>(null);
     const [documentPreviewZoom, setDocumentPreviewZoom] = useState(1);
     const [isOrderPrintMenuOpen, setIsOrderPrintMenuOpen] = useState(false);
@@ -281,6 +285,8 @@ function OrderDetailPage(): JSX.Element {
             setDocumentPreviewPages([]);
             setDocumentPreviewLoading(false);
             setDocumentPreviewError(null);
+            setDocumentPreviewSaveMessage(null);
+            setDocumentPreviewSaving(false);
             setDocumentPreviewZoom(1);
             if (documentPreviewPrintFrameRef.current) {
                 documentPreviewPrintFrameRef.current.removeAttribute('src');
@@ -302,6 +308,7 @@ function OrderDetailPage(): JSX.Element {
             try {
                 setDocumentPreviewLoading(true);
                 setDocumentPreviewError(null);
+                setDocumentPreviewSaveMessage(null);
                 setDocumentPreviewPages([]);
 
                 const loadPdfJs = Function('return import("/pdfjs/pdf.mjs")') as () => Promise<PdfJsModule>;
@@ -998,6 +1005,69 @@ function OrderDetailPage(): JSX.Element {
             .catch((downloadError) => {
                 setDocumentPreviewError(downloadError instanceof Error ? downloadError.message : 'Не удалось скачать Word-документ');
             });
+    };
+
+    const handleDocumentPreviewSave = async () => {
+        if (!documentPreview || !order?.id) return;
+
+        if (!canAttachmentsUpload) {
+            setDocumentPreviewError('Нет доступа на сохранение документов заявки');
+            return;
+        }
+
+        try {
+            setDocumentPreviewSaving(true);
+            setDocumentPreviewError(null);
+            setDocumentPreviewSaveMessage(null);
+
+            const files: GeneratedAttachmentFile[] = [];
+
+            if (canPrint || canExportPdf) {
+                const pdfBlob = documentPreviewPdfBytesRef.current
+                    ? new Blob([
+                        documentPreviewPdfBytesRef.current.buffer.slice(
+                            documentPreviewPdfBytesRef.current.byteOffset,
+                            documentPreviewPdfBytesRef.current.byteOffset + documentPreviewPdfBytesRef.current.byteLength
+                        ),
+                    ], { type: 'application/pdf' })
+                    : await fetchGeneratedBlob(
+                        buildOrderDocumentUrl(documentPreview.key, 'pdf', 'attachment', documentPreview.fileNameBase)
+                    );
+
+                files.push({
+                    blob: pdfBlob,
+                    fileName: `${documentPreview.fileNameBase}.pdf`,
+                    mimeType: 'application/pdf',
+                });
+            }
+
+            if (canExportWord && documentPreview.wordUrl) {
+                files.push({
+                    blob: await fetchGeneratedBlob(documentPreview.wordUrl),
+                    fileName: `${documentPreview.fileNameBase}.docx`,
+                    mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                });
+            }
+
+            if (!files.length) {
+                throw new Error('Нет доступных форматов для сохранения');
+            }
+
+            const savedCount = await saveGeneratedAttachments(
+                { entityType: 'order', entityId: order.id },
+                files
+            );
+
+            if (canAttachmentsView) {
+                await fetchAttachments(Number(order.id));
+            }
+
+            setDocumentPreviewSaveMessage(`Сохранено в документы заявки: ${savedCount}`);
+        } catch (saveError) {
+            setDocumentPreviewError(saveError instanceof Error ? saveError.message : 'Не удалось сохранить документы');
+        } finally {
+            setDocumentPreviewSaving(false);
+        }
     };
 
     if (loading) {
@@ -1765,6 +1835,19 @@ function OrderDetailPage(): JSX.Element {
                                 <FiExternalLink className={styles.icon} />
                                 Открыть
                             </Button>
+                            {canAttachmentsUpload ? (
+                                <Button
+                                    variant="surface"
+                                    color="gray"
+                                    highContrast
+                                    className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
+                                    onClick={handleDocumentPreviewSave}
+                                    disabled={documentPreviewSaving}
+                                >
+                                    <FiSave className={styles.icon} />
+                                    {documentPreviewSaving ? 'Сохранение...' : 'Сохранить'}
+                                </Button>
+                            ) : null}
                             <div className={styles.previewZoomControls}>
                                 <button
                                     type="button"
@@ -1795,6 +1878,9 @@ function OrderDetailPage(): JSX.Element {
                                 </button>
                             </div>
                         </div>
+                        {documentPreviewSaveMessage ? (
+                            <div className={styles.previewSaveMessage}>{documentPreviewSaveMessage}</div>
+                        ) : null}
 
                         <div className={styles.previewCanvas}>
                             <div className={styles.previewStage} ref={documentPreviewStageRef}>

@@ -641,6 +641,8 @@ function SupplierDetailPage(): JSX.Element {
                     <RecordDocumentCenter
                         documents={supplierPrintDocuments}
                         buttonClassName={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
+                        saveTarget={canAttachmentsUpload ? { entityType: 'supplier', entityId: supplier.id } : undefined}
+                        onSaved={() => fetchAttachments(Number(supplier.id))}
                     />
                     <Button
                         type="button"

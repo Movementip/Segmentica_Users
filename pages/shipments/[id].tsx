@@ -21,6 +21,7 @@ import {
     FiPaperclip,
     FiPlus,
     FiPrinter,
+    FiSave,
     FiTrash2,
     FiUploadCloud,
     FiX,
@@ -31,6 +32,7 @@ import { calculateVatAmountsFromLine, DEFAULT_VAT_RATE_ID, getVatRateOption, VAT
 import modalStyles from '../../components/Modal.module.css';
 import { getShipmentDeliveryLabel } from '../../lib/logisticsDeliveryLabels';
 import { lockBodyScroll } from '../../utils/bodyScrollLock';
+import { fetchGeneratedBlob, saveGeneratedAttachments, type GeneratedAttachmentFile } from '../../utils/generatedAttachments';
 import OrderSearchSelect from '../../components/OrderSearchSelect';
 import {
     getAvailableShipmentDocumentDefinitions,
@@ -191,6 +193,8 @@ function ShipmentDetailPage(): JSX.Element {
     const [documentPreviewPages, setDocumentPreviewPages] = useState<PreviewPageImage[]>([]);
     const [documentPreviewLoading, setDocumentPreviewLoading] = useState(false);
     const [documentPreviewError, setDocumentPreviewError] = useState<string | null>(null);
+    const [documentPreviewSaveMessage, setDocumentPreviewSaveMessage] = useState<string | null>(null);
+    const [documentPreviewSaving, setDocumentPreviewSaving] = useState(false);
     const [documentPreviewPdfObjectUrl, setDocumentPreviewPdfObjectUrl] = useState<string | null>(null);
     const [documentPreviewZoom, setDocumentPreviewZoom] = useState(1);
     const [isShipmentPrintMenuOpen, setIsShipmentPrintMenuOpen] = useState(false);
@@ -862,6 +866,69 @@ function ShipmentDetailPage(): JSX.Element {
             });
     };
 
+    const handleDocumentPreviewSave = async () => {
+        if (!documentPreview || !shipment?.id) return;
+
+        if (!canShipmentsAttachmentsUpload) {
+            setDocumentPreviewError('Нет доступа на сохранение документов отгрузки');
+            return;
+        }
+
+        try {
+            setDocumentPreviewSaving(true);
+            setDocumentPreviewError(null);
+            setDocumentPreviewSaveMessage(null);
+
+            const files: GeneratedAttachmentFile[] = [];
+
+            if (canShipmentPrint) {
+                const pdfBlob = documentPreviewPdfBytesRef.current
+                    ? new Blob([
+                        documentPreviewPdfBytesRef.current.buffer.slice(
+                            documentPreviewPdfBytesRef.current.byteOffset,
+                            documentPreviewPdfBytesRef.current.byteOffset + documentPreviewPdfBytesRef.current.byteLength
+                        ),
+                    ], { type: 'application/pdf' })
+                    : await fetchGeneratedBlob(
+                        buildShipmentDocumentUrl(documentPreview.key, 'pdf', 'attachment', documentPreview.fileNameBase)
+                    );
+
+                files.push({
+                    blob: pdfBlob,
+                    fileName: `${documentPreview.fileNameBase}.pdf`,
+                    mimeType: 'application/pdf',
+                });
+            }
+
+            if (canShipmentExportExcel && documentPreview.excelUrl) {
+                files.push({
+                    blob: await fetchGeneratedBlob(documentPreview.excelUrl),
+                    fileName: `${documentPreview.fileNameBase}.xlsx`,
+                    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                });
+            }
+
+            if (!files.length) {
+                throw new Error('Нет доступных форматов для сохранения');
+            }
+
+            const savedCount = await saveGeneratedAttachments(
+                { entityType: 'shipment', entityId: shipment.id },
+                files
+            );
+
+            if (canShipmentsAttachmentsView) {
+                await fetchAttachments(Number(shipment.id));
+            }
+
+            setDocumentPreviewSaveMessage(`Сохранено в документы отгрузки: ${savedCount}`);
+        } catch (saveError) {
+            setDocumentPreviewError(saveError instanceof Error ? saveError.message : 'Не удалось сохранить документы');
+        } finally {
+            setDocumentPreviewSaving(false);
+        }
+    };
+
     const fetchShipment = useCallback(async () => {
         if (!id) return;
         try {
@@ -931,6 +998,8 @@ function ShipmentDetailPage(): JSX.Element {
             setDocumentPreviewPages([]);
             setDocumentPreviewLoading(false);
             setDocumentPreviewError(null);
+            setDocumentPreviewSaveMessage(null);
+            setDocumentPreviewSaving(false);
             setDocumentPreviewZoom(1);
             if (documentPreviewPrintFrameRef.current) {
                 documentPreviewPrintFrameRef.current.removeAttribute('src');
@@ -952,6 +1021,7 @@ function ShipmentDetailPage(): JSX.Element {
             try {
                 setDocumentPreviewLoading(true);
                 setDocumentPreviewError(null);
+                setDocumentPreviewSaveMessage(null);
                 setDocumentPreviewPages([]);
 
                 const loadPdfJs = Function('return import("/pdfjs/pdf.mjs")') as () => Promise<PdfJsModule>;
@@ -1634,6 +1704,19 @@ function ShipmentDetailPage(): JSX.Element {
                                 <FiExternalLink className={styles.icon} />
                                 Открыть
                             </Button>
+                            {canShipmentsAttachmentsUpload ? (
+                                <Button
+                                    variant="surface"
+                                    color="gray"
+                                    highContrast
+                                    className={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
+                                    onClick={handleDocumentPreviewSave}
+                                    disabled={documentPreviewSaving}
+                                >
+                                    <FiSave className={styles.icon} />
+                                    {documentPreviewSaving ? 'Сохранение...' : 'Сохранить'}
+                                </Button>
+                            ) : null}
                             <div className={styles.previewZoomControls}>
                                 <button
                                     type="button"
@@ -1664,6 +1747,9 @@ function ShipmentDetailPage(): JSX.Element {
                                 </button>
                             </div>
                         </div>
+                        {documentPreviewSaveMessage ? (
+                            <div className={styles.previewSaveMessage}>{documentPreviewSaveMessage}</div>
+                        ) : null}
 
                         <div className={styles.previewCanvas}>
                             <div className={styles.previewStage} ref={documentPreviewStageRef}>

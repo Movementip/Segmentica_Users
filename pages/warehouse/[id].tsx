@@ -695,6 +695,12 @@ export default function WarehouseDetail() {
                         <RecordDocumentCenter
                             documents={warehousePrintDocuments}
                             buttonClassName={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
+                            saveTarget={canWarehouseProductAttachmentsUpload && item.товар_id ? {
+                                entityType: 'product',
+                                entityId: item.товар_id,
+                                permScope: 'warehouse',
+                            } : undefined}
+                            onSaved={() => item.товар_id ? fetchAttachments(Number(item.товар_id)) : undefined}
                         />
 
                         {canEdit ? (

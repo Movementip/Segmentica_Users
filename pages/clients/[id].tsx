@@ -601,6 +601,8 @@ function ClientDetailPage(): JSX.Element {
                         <RecordDocumentCenter
                             documents={clientPrintDocuments}
                             buttonClassName={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
+                            saveTarget={canAttachmentsUpload ? { entityType: 'client', entityId: client.id } : undefined}
+                            onSaved={() => fetchAttachments(Number(client.id))}
                         />
                         {canEdit ? (
                             <Button

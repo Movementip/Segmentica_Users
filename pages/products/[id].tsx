@@ -499,6 +499,8 @@ function ProductDetailPage(): JSX.Element {
                         <RecordDocumentCenter
                             documents={productPrintDocuments}
                             buttonClassName={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
+                            saveTarget={canAttachmentsUpload ? { entityType: 'product', entityId: product.id } : undefined}
+                            onSaved={() => fetchAttachments(Number(product.id))}
                         />
                         {canEdit ? (
                             <Button
