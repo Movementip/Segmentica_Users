@@ -9,7 +9,7 @@ import { Box, Button, Card, Dialog, Flex, Grid, Separator, Table, Text } from '@
 import { FiArrowLeft, FiDownload, FiEdit2, FiFile, FiPaperclip, FiRefreshCw, FiTrash2, FiUploadCloud } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
-import { RecordPrintCenter, RecordPrintSheet, type RecordPrintDocument } from '../../components/print/RecordPrintCenter';
+import { RecordDocumentCenter, RecordPrintSheet, type RecordPrintDocument } from '../../components/print/RecordDocumentCenter';
 
 const PRODUCT_TYPE_LABELS: Record<string, string> = {
     товар: 'Товар',
@@ -311,13 +311,14 @@ function ProductDetailPage(): JSX.Element {
     const vatLabel = product ? PRODUCT_VAT_LABELS[product.ндс_id || 5] || '22%' : '22%';
     const accountingAccountLabel = product?.счет_учета ? ACCOUNT_LABELS[product.счет_учета] || product.счет_учета : null;
     const expenseAccountLabel = product?.счет_затрат ? ACCOUNT_LABELS[product.счет_затрат] || product.счет_затрат : null;
-    const productPrintDocuments = useMemo<RecordPrintDocument[]>(() => {
+    const productPrintDocuments: RecordPrintDocument[] = (() => {
         if (!product) return [];
 
         const documents: RecordPrintDocument[] = [
             {
                 key: 'product-card',
                 title: 'Карточка товара',
+                fileName: `Карточка товара № ${product.id} от ${new Date().toLocaleDateString('ru-RU')}`,
                 content: (
                     <RecordPrintSheet
                         title={`Карточка товара #${product.id}`}
@@ -366,6 +367,7 @@ function ProductDetailPage(): JSX.Element {
             documents.push({
                 key: 'product-price-history',
                 title: 'История цен',
+                fileName: `История цен товара № ${product.id} от ${new Date().toLocaleDateString('ru-RU')}`,
                 content: (
                     <RecordPrintSheet
                         title={`История цен товара #${product.id}`}
@@ -397,16 +399,7 @@ function ProductDetailPage(): JSX.Element {
         }
 
         return documents;
-    }, [
-        accountingAccountLabel,
-        expenseAccountLabel,
-        formatCurrency,
-        formatDate,
-        formatDateTime,
-        product,
-        productTypeLabel,
-        vatLabel,
-    ]);
+    })();
 
     const goBack = () => {
         router.push('/products');
@@ -503,7 +496,7 @@ function ProductDetailPage(): JSX.Element {
                             <FiArrowLeft className={styles.icon} />
                             Назад
                         </Button>
-                        <RecordPrintCenter
+                        <RecordDocumentCenter
                             documents={productPrintDocuments}
                             buttonClassName={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
                         />

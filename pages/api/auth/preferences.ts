@@ -10,13 +10,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (!user) return;
 
         const theme = req.body?.theme === 'dark' ? 'dark' : req.body?.theme === 'light' ? 'light' : null;
-        if (!theme) return res.status(400).json({ error: 'Некорректная тема' });
+        const patch = req.body?.patch && typeof req.body.patch === 'object' && !Array.isArray(req.body.patch)
+            ? req.body.patch as Record<string, unknown>
+            : null;
+
+        const nextPreferences = {
+            ...(theme ? { theme } : {}),
+            ...(patch || {}),
+        };
+
+        if (Object.keys(nextPreferences).length === 0) {
+            return res.status(400).json({ error: 'Некорректные настройки' });
+        }
 
         await query(
             `UPDATE public.users
-             SET preferences = jsonb_set(COALESCE(preferences, '{}'::jsonb), '{theme}', to_jsonb($2::text), true)
+             SET preferences = COALESCE(preferences, '{}'::jsonb) || $2::jsonb
              WHERE id = $1`,
-            [user.userId, theme]
+            [user.userId, JSON.stringify(nextPreferences)]
         );
 
         return res.status(200).json({ ok: true });

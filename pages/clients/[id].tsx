@@ -10,7 +10,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
 import { getClientContragentTypeLabel, getClientContragentTypeTheme, normalizeClientContragentType, type ClientContragent } from '../../lib/clientContragents';
-import { RecordPrintCenter, RecordPrintSheet, type RecordPrintDocument } from '../../components/print/RecordPrintCenter';
+import { RecordDocumentCenter, RecordPrintSheet, type RecordPrintDocument } from '../../components/print/RecordDocumentCenter';
 
 const MotionTableRow = motion(Table.Row);
 
@@ -360,7 +360,7 @@ function ClientDetailPage(): JSX.Element {
         return 'Адрес по ФИАС';
     };
 
-    const clientPrintDocuments = useMemo<RecordPrintDocument[]>(() => {
+    const clientPrintDocuments: RecordPrintDocument[] = (() => {
         if (!client) return [];
 
         const identity = getClientIdentity(client);
@@ -377,6 +377,7 @@ function ClientDetailPage(): JSX.Element {
             {
                 key: 'client-card',
                 title: 'Карточка клиента',
+                fileName: `Карточка клиента № ${client.id} от ${new Date().toLocaleDateString('ru-RU')}`,
                 content: (
                     <RecordPrintSheet
                         title={`Карточка клиента #${client.id}`}
@@ -452,6 +453,7 @@ function ClientDetailPage(): JSX.Element {
             documents.push({
                 key: 'client-orders',
                 title: 'История заявок клиента',
+                fileName: `История заявок клиента № ${client.id} от ${new Date().toLocaleDateString('ru-RU')}`,
                 content: (
                     <RecordPrintSheet
                         title={`История заявок клиента #${client.id}`}
@@ -494,17 +496,7 @@ function ClientDetailPage(): JSX.Element {
         }
 
         return documents;
-    }, [
-        client,
-        formatCurrency,
-        formatDate,
-        formatDateTime,
-        formatTextValue,
-        getClientIdentity,
-        getRegistrationLabel,
-        orders,
-        ordersTotal,
-    ]);
+    })();
 
     const statusBadge = (statusRaw: string) => {
         const status = (statusRaw || '').toLowerCase();
@@ -606,7 +598,7 @@ function ClientDetailPage(): JSX.Element {
                             <FiArrowLeft className={styles.icon} />
                             Назад
                         </Button>
-                        <RecordPrintCenter
+                        <RecordDocumentCenter
                             documents={clientPrintDocuments}
                             buttonClassName={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
                         />

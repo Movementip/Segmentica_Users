@@ -1,5 +1,6 @@
 services:
   app:
+    image: segmentica-app:local
     build:
       context: .
       dockerfile: Dockerfile

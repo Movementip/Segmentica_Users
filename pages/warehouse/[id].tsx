@@ -8,7 +8,7 @@ import { Box, Button, Card, Dialog, Flex, Table, Tabs, Text, TextField } from '@
 import { FiArrowLeft, FiDownload, FiEdit2, FiFile, FiPaperclip, FiSearch, FiTrash2, FiUploadCloud } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
-import { RecordPrintCenter, RecordPrintSheet, type RecordPrintDocument } from '../../components/print/RecordPrintCenter';
+import { RecordDocumentCenter, RecordPrintSheet, type RecordPrintDocument } from '../../components/print/RecordDocumentCenter';
 
 const PRODUCT_TYPE_LABELS: Record<string, string> = {
     товар: 'Товар',
@@ -121,6 +121,10 @@ interface AttachmentItem {
     size_bytes: number;
     created_at: string;
 }
+
+const EMPTY_MOVEMENTS: Movement[] = [];
+const EMPTY_WAITING_ORDERS: WaitingOrder[] = [];
+const EMPTY_PENDING_PURCHASES: PendingPurchase[] = [];
 
 export default function WarehouseDetail() {
     const [data, setData] = useState<WarehouseDetailData | null>(null);
@@ -371,28 +375,28 @@ export default function WarehouseDetail() {
         setIsEditModalOpen(false);
     };
 
-    const formatDate = (dateString: string) => {
+    const formatDate = useCallback((dateString: string) => {
         return new Date(dateString).toLocaleDateString('ru-RU');
-    };
+    }, []);
 
-    const formatDateTime = (dateString: string) => {
+    const formatDateTime = useCallback((dateString: string) => {
         return new Date(dateString).toLocaleString('ru-RU');
-    };
+    }, []);
 
-    const formatCurrency = (amount: number) => {
+    const formatCurrency = useCallback((amount: number) => {
         return new Intl.NumberFormat('ru-RU', {
             style: 'currency',
             currency: 'RUB'
         }).format(amount);
-    };
+    }, []);
 
-    const getStockStatusText = (status: string) => {
+    const getStockStatusText = useCallback((status: string) => {
         switch (status) {
             case 'critical': return 'Критический';
             case 'low': return 'Низкий';
             default: return 'Нормальный';
         }
-    };
+    }, []);
 
     const getOperationTypeColor = (type: string) => {
         switch (type) {
@@ -416,41 +420,20 @@ export default function WarehouseDetail() {
         return styles.docStatusDefault;
     };
 
-    if (authLoading) {
-        return (
-            <Layout>
-                <Box p="5">
-                    <Text>Загрузка…</Text>
-                </Box>
-            </Layout>
-        );
-    }
-
-    if (!canView) {
-        return (
-            <Layout>
-                <NoAccessPage />
-            </Layout>
-        );
-    }
-
-    if (loading) {
-        return (
-            <Layout>
-                <div className={styles.loading}>Загрузка...</div>
-            </Layout>
-        );
-    }
-
-    if (!data) {
-        return (
-            <Layout>
-                <div className={styles.error}>Товар не найден</div>
-            </Layout>
-        );
-    }
-
-    const { item, movements, waitingOrders, pendingPurchases } = data;
+    const item = data?.item;
+    const movements = data?.movements ?? EMPTY_MOVEMENTS;
+    const waitingOrders = data?.waitingOrders ?? EMPTY_WAITING_ORDERS;
+    const pendingPurchases = data?.pendingPurchases ?? EMPTY_PENDING_PURCHASES;
+    const productTypeLabel = item
+        ? PRODUCT_TYPE_LABELS[item.товар_тип_номенклатуры || 'товар'] || item.товар_тип_номенклатуры || 'Товар'
+        : 'Товар';
+    const vatLabel = item ? PRODUCT_VAT_LABELS[item.товар_ндс_id || 5] || '22%' : '22%';
+    const accountingAccountLabel = item?.товар_счет_учета
+        ? ACCOUNT_LABELS[item.товар_счет_учета] || item.товар_счет_учета
+        : null;
+    const expenseAccountLabel = item?.товар_счет_затрат
+        ? ACCOUNT_LABELS[item.товар_счет_затрат] || item.товар_счет_затрат
+        : null;
 
     const filteredMovements = movements.filter((m) => {
         const q = search.trim().toLowerCase();
@@ -486,17 +469,14 @@ export default function WarehouseDetail() {
     const movementsCount = movements.length;
     const waitingCount = waitingOrders.length;
     const pendingCount = pendingPurchases.length;
-    const productTypeLabel = PRODUCT_TYPE_LABELS[item.товар_тип_номенклатуры || 'товар'] || item.товар_тип_номенклатуры || 'Товар';
-    const vatLabel = PRODUCT_VAT_LABELS[item.товар_ндс_id || 5] || '22%';
-    const accountingAccountLabel = item.товар_счет_учета ? ACCOUNT_LABELS[item.товар_счет_учета] || item.товар_счет_учета : null;
-    const expenseAccountLabel = item.товар_счет_затрат ? ACCOUNT_LABELS[item.товар_счет_затрат] || item.товар_счет_затрат : null;
     const warehousePrintDocuments = useMemo<RecordPrintDocument[]>(() => {
-        if (!data) return [];
+        if (!item) return [];
 
         const result: RecordPrintDocument[] = [
             {
                 key: 'warehouse-card',
                 title: 'Карточка складской позиции',
+                fileName: `Карточка складской позиции № ${item.id} от ${new Date().toLocaleDateString('ru-RU')}`,
                 content: (
                     <RecordPrintSheet
                         title={`Карточка складской позиции #${item.id}`}
@@ -543,6 +523,7 @@ export default function WarehouseDetail() {
             result.push({
                 key: 'warehouse-movements',
                 title: 'История движений',
+                fileName: `История движений складской позиции № ${item.id} от ${new Date().toLocaleDateString('ru-RU')}`,
                 content: (
                     <RecordPrintSheet
                         title={`История движений по позиции #${item.id}`}
@@ -584,6 +565,7 @@ export default function WarehouseDetail() {
             result.push({
                 key: 'warehouse-demand',
                 title: 'Резервы и ожидания',
+                fileName: `Резервы и ожидания складской позиции № ${item.id} от ${new Date().toLocaleDateString('ru-RU')}`,
                 content: (
                     <RecordPrintSheet
                         title={`Резервы и ожидания по позиции #${item.id}`}
@@ -642,7 +624,6 @@ export default function WarehouseDetail() {
         return result;
     }, [
         accountingAccountLabel,
-        data,
         expenseAccountLabel,
         formatCurrency,
         formatDate,
@@ -655,6 +636,40 @@ export default function WarehouseDetail() {
         vatLabel,
         waitingOrders,
     ]);
+
+    if (authLoading) {
+        return (
+            <Layout>
+                <Box p="5">
+                    <Text>Загрузка…</Text>
+                </Box>
+            </Layout>
+        );
+    }
+
+    if (!canView) {
+        return (
+            <Layout>
+                <NoAccessPage />
+            </Layout>
+        );
+    }
+
+    if (loading) {
+        return (
+            <Layout>
+                <div className={styles.loading}>Загрузка...</div>
+            </Layout>
+        );
+    }
+
+    if (!data || !item) {
+        return (
+            <Layout>
+                <div className={styles.error}>Товар не найден</div>
+            </Layout>
+        );
+    }
 
     return (
         <Layout>
@@ -677,7 +692,7 @@ export default function WarehouseDetail() {
                         >
                             <FiArrowLeft className={styles.icon} /> Назад
                         </Button>
-                        <RecordPrintCenter
+                        <RecordDocumentCenter
                             documents={warehousePrintDocuments}
                             buttonClassName={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
                         />

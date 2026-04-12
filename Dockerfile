@@ -3,7 +3,8 @@ FROM node:20-bookworm-slim AS deps
 WORKDIR /app
 
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm ci \
+    && npm cache clean --force
 
 FROM node:20-bookworm-slim AS builder
 
@@ -14,7 +15,8 @@ COPY . .
 
 ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN npm run build
+RUN npm run build \
+    && rm -rf .next/cache .next/trace ~/.npm
 
 FROM node:20-bookworm-slim AS runner
 
@@ -34,7 +36,8 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev \
+    && npm cache clean --force
 
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/public ./public

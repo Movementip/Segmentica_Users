@@ -12,7 +12,7 @@ import { FiArrowLeft, FiDownload, FiEdit2, FiFile, FiPaperclip, FiPlus, FiRefres
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
 import { getSupplierContragentTypeLabel, getSupplierContragentTypeTheme, normalizeSupplierContragentType, type SupplierBankAccount, type SupplierContragent } from '../../lib/supplierContragents';
-import { RecordPrintCenter, RecordPrintSheet, type RecordPrintDocument } from '../../components/print/RecordPrintCenter';
+import { RecordDocumentCenter, RecordPrintSheet, type RecordPrintDocument } from '../../components/print/RecordDocumentCenter';
 
 interface SupplierProduct {
     id: number;
@@ -459,7 +459,7 @@ function SupplierDetailPage(): JSX.Element {
     const purchasesInTransit = supplier.закупки.filter((p) => (p.статус || '').toLowerCase() === 'в пути').length;
     const purchasesSum = supplier.закупки.reduce((sum, p) => sum + (Number(p.общая_сумма) || 0), 0);
     const supplierTypeTheme = getSupplierContragentTypeTheme(supplier.тип);
-    const supplierPrintDocuments = useMemo<RecordPrintDocument[]>(() => {
+    const supplierPrintDocuments: RecordPrintDocument[] = (() => {
         if (!supplier) return [];
 
         const normalizedType = normalizeSupplierContragentType(supplier.тип);
@@ -468,6 +468,7 @@ function SupplierDetailPage(): JSX.Element {
             {
                 key: 'supplier-card',
                 title: 'Карточка поставщика',
+                fileName: `Карточка поставщика № ${supplier.id} от ${new Date().toLocaleDateString('ru-RU')}`,
                 content: (
                     <RecordPrintSheet
                         title={`Карточка поставщика #${supplier.id}`}
@@ -534,6 +535,7 @@ function SupplierDetailPage(): JSX.Element {
             documents.push({
                 key: 'supplier-assortment',
                 title: 'Ассортимент поставщика',
+                fileName: `Ассортимент поставщика № ${supplier.id} от ${new Date().toLocaleDateString('ru-RU')}`,
                 content: (
                     <RecordPrintSheet
                         title={`Ассортимент поставщика #${supplier.id}`}
@@ -569,6 +571,7 @@ function SupplierDetailPage(): JSX.Element {
             documents.push({
                 key: 'supplier-purchases',
                 title: 'История закупок',
+                fileName: `История закупок поставщика № ${supplier.id} от ${new Date().toLocaleDateString('ru-RU')}`,
                 content: (
                     <RecordPrintSheet
                         title={`История закупок поставщика #${supplier.id}`}
@@ -609,17 +612,7 @@ function SupplierDetailPage(): JSX.Element {
         }
 
         return documents;
-    }, [
-        formatCurrency,
-        formatDate,
-        formatTextValue,
-        getRegistrationLabel,
-        getSupplierIdentity,
-        purchasesCount,
-        purchasesInTransit,
-        purchasesSum,
-        supplier,
-    ]);
+    })();
 
     return (
         <div className={styles.container}>
@@ -645,7 +638,7 @@ function SupplierDetailPage(): JSX.Element {
                     >
                         <FiArrowLeft className={styles.icon} /> Назад
                     </Button>
-                    <RecordPrintCenter
+                    <RecordDocumentCenter
                         documents={supplierPrintDocuments}
                         buttonClassName={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
                     />

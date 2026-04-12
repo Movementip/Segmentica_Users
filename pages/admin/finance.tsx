@@ -16,6 +16,7 @@ import {
 import { BsFillFileEarmarkExcelFill, BsFillFileEarmarkPdfFill } from 'react-icons/bs';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { lockBodyScroll } from '../../utils/bodyScrollLock';
 import styles from './AdminFinance.module.css';
 
 type FinanceSettings = {
@@ -311,11 +312,7 @@ function AdminFinancePage(): JSX.Element {
 
     useEffect(() => {
         if (!statementPreview) return undefined;
-        const previousOverflow = document.body.style.overflow;
-        document.body.style.overflow = 'hidden';
-        return () => {
-            document.body.style.overflow = previousOverflow;
-        };
+        return lockBodyScroll();
     }, [statementPreview]);
 
     useEffect(() => {

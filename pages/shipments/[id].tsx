@@ -30,6 +30,7 @@ import { NoAccessPage } from '../../components/NoAccessPage';
 import { calculateVatAmountsFromLine, DEFAULT_VAT_RATE_ID, getVatRateOption, VAT_RATE_OPTIONS } from '../../lib/vat';
 import modalStyles from '../../components/Modal.module.css';
 import { getShipmentDeliveryLabel } from '../../lib/logisticsDeliveryLabels';
+import { lockBodyScroll } from '../../utils/bodyScrollLock';
 import OrderSearchSelect from '../../components/OrderSearchSelect';
 import {
     getAvailableShipmentDocumentDefinitions,
@@ -922,11 +923,7 @@ function ShipmentDetailPage(): JSX.Element {
 
     useEffect(() => {
         if (!documentPreview) return undefined;
-        const previousOverflow = document.body.style.overflow;
-        document.body.style.overflow = 'hidden';
-        return () => {
-            document.body.style.overflow = previousOverflow;
-        };
+        return lockBodyScroll();
     }, [documentPreview]);
 
     useEffect(() => {

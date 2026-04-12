@@ -10,7 +10,7 @@ import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
 import { ManagerHrWorkspace } from '../../components/ManagerHrWorkspace';
 import { EmployeeSchedulePanel } from '../../components/EmployeeSchedulePanel';
-import { RecordPrintCenter, RecordPrintSheet, type RecordPrintDocument } from '../../components/print/RecordPrintCenter';
+import { RecordDocumentCenter, RecordPrintSheet, type RecordPrintDocument } from '../../components/print/RecordDocumentCenter';
 
 interface ManagerDetail {
     id: number;
@@ -449,6 +449,7 @@ function ManagerDetailPage(): JSX.Element {
             {
                 key: 'manager-card',
                 title: 'Карточка сотрудника',
+                fileName: `Карточка сотрудника № ${manager.id} от ${new Date().toLocaleDateString('ru-RU')}`,
                 content: (
                     <RecordPrintSheet
                         title={`Карточка сотрудника #${manager.id}`}
@@ -498,6 +499,7 @@ function ManagerDetailPage(): JSX.Element {
             documents.push({
                 key: 'manager-payroll',
                 title: 'Сводка по выплатам',
+                fileName: `Сводка по выплатам сотрудника № ${manager.id} от ${new Date().toLocaleDateString('ru-RU')}`,
                 content: (
                     <RecordPrintSheet
                         title={`Сводка по выплатам сотрудника #${manager.id}`}
@@ -807,7 +809,7 @@ function ManagerDetailPage(): JSX.Element {
                                 <FiArrowLeft className={styles.icon} />
                                 На дашборд
                             </Button>
-                            <RecordPrintCenter
+                            <RecordDocumentCenter
                                 documents={managerPrintDocuments}
                                 buttonClassName={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
                             />
@@ -1245,7 +1247,7 @@ function ManagerDetailPage(): JSX.Element {
         <div className={styles.container}>
             <ManagerHrWorkspace
                 manager={manager}
-                extraActions={<RecordPrintCenter documents={managerPrintDocuments} />}
+                extraActions={<RecordDocumentCenter documents={managerPrintDocuments} />}
                 canEdit={canEdit || isOwnProfile}
                 canScheduleEdit={canScheduleManage}
                 canScheduleApplyPattern={canScheduleManage}

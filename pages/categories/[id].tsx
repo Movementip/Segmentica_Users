@@ -8,7 +8,7 @@ import { Badge, Box, Button, Card, Dialog, Flex, Grid, Separator, Text } from '@
 import { FiArrowLeft, FiEdit3, FiRefreshCw, FiSlash, FiTrash2 } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
-import { RecordPrintCenter, RecordPrintSheet, type RecordPrintDocument } from '../../components/print/RecordPrintCenter';
+import { RecordDocumentCenter, RecordPrintSheet, type RecordPrintDocument } from '../../components/print/RecordDocumentCenter';
 
 interface CategoryDetail {
     id: number;
@@ -89,13 +89,14 @@ function CategoryDetailPage(): JSX.Element {
         });
     };
 
-    const categoryPrintDocuments = useMemo<RecordPrintDocument[]>(() => {
+    const categoryPrintDocuments: RecordPrintDocument[] = (() => {
         if (!category) return [];
 
         const documents: RecordPrintDocument[] = [
             {
                 key: 'category-card',
                 title: 'Карточка категории',
+                fileName: `Карточка категории № ${category.id} от ${new Date().toLocaleDateString('ru-RU')}`,
                 content: (
                     <RecordPrintSheet
                         title={`Карточка категории #${category.id}`}
@@ -136,6 +137,7 @@ function CategoryDetailPage(): JSX.Element {
             documents.push({
                 key: 'category-children',
                 title: 'Подкатегории',
+                fileName: `Подкатегории категории № ${category.id} от ${new Date().toLocaleDateString('ru-RU')}`,
                 content: (
                     <RecordPrintSheet
                         title={`Подкатегории категории #${category.id}`}
@@ -166,7 +168,7 @@ function CategoryDetailPage(): JSX.Element {
         }
 
         return documents;
-    }, [category, formatDate]);
+    })();
 
     const handleToggleCategoryActive = async () => {
         if (!category) {
@@ -269,7 +271,7 @@ function CategoryDetailPage(): JSX.Element {
                     <Button type="button" variant="surface" color="gray" className={`${styles.button} ${styles.surfaceButton}`} onClick={() => router.push('/categories')}>
                         <FiArrowLeft /> К дереву
                     </Button>
-                    <RecordPrintCenter
+                    <RecordDocumentCenter
                         documents={categoryPrintDocuments}
                         buttonClassName={`${styles.button} ${styles.surfaceButton}`}
                     />

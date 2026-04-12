@@ -34,6 +34,7 @@ import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
 import { calculateVatAmountsFromLine, getVatRateOption } from '../../lib/vat';
 import { getClientContragentTypeLabel, normalizeClientContragentType } from '../../lib/clientContragents';
+import { lockBodyScroll } from '../../utils/bodyScrollLock';
 import {
     getAvailableOrderDocumentDefinitions,
     type OrderDocumentDefinition,
@@ -272,11 +273,7 @@ function OrderDetailPage(): JSX.Element {
 
     useEffect(() => {
         if (!documentPreview) return undefined;
-        const previousOverflow = document.body.style.overflow;
-        document.body.style.overflow = 'hidden';
-        return () => {
-            document.body.style.overflow = previousOverflow;
-        };
+        return lockBodyScroll();
     }, [documentPreview]);
 
     useEffect(() => {

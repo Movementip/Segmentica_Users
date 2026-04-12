@@ -1,5 +1,6 @@
 services:
   libreoffice:
+    image: segmentica-libreoffice:local
     build:
       context: .
       dockerfile: services/document-renderer/Dockerfile

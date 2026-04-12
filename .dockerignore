@@ -8,3 +8,9 @@ tsconfig.tsbuildinfo
 coverage
 dist
 tmp
+.cache
+.turbo
+*.log
+*.zip
+*.tar
+*.tgz

@@ -10,7 +10,7 @@ import { Box, Button, Dialog, Flex, Card, DropdownMenu, Table, Tabs, Text, TextF
 import { FiArrowLeft, FiDownload, FiEdit2, FiFile, FiMoreHorizontal, FiPaperclip, FiPlus, FiRefreshCw, FiSearch, FiTrash2, FiUploadCloud } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
-import { RecordPrintCenter, RecordPrintSheet, type RecordPrintDocument } from '../../components/print/RecordPrintCenter';
+import { RecordDocumentCenter, RecordPrintSheet, type RecordPrintDocument } from '../../components/print/RecordDocumentCenter';
 
 interface TransportCompany {
     id: number;
@@ -475,13 +475,14 @@ export default function TransportDetail() {
     }
 
     const transportSafe = data.transport;
-    const transportPrintDocuments = useMemo<RecordPrintDocument[]>(() => {
+    const transportPrintDocuments: RecordPrintDocument[] = (() => {
         if (!data) return [];
 
         const documents: RecordPrintDocument[] = [
             {
                 key: 'transport-card',
                 title: 'Карточка транспортной компании',
+                fileName: `Карточка транспортной компании № ${transportSafe.id} от ${new Date().toLocaleDateString('ru-RU')}`,
                 content: (
                     <RecordPrintSheet
                         title={`Карточка ТК #${transportSafe.id}`}
@@ -525,6 +526,7 @@ export default function TransportDetail() {
             documents.push({
                 key: 'transport-shipments',
                 title: 'История отгрузок',
+                fileName: `История отгрузок транспортной компании № ${transportSafe.id} от ${new Date().toLocaleDateString('ru-RU')}`,
                 content: (
                     <RecordPrintSheet
                         title={`История отгрузок ТК #${transportSafe.id}`}
@@ -560,6 +562,7 @@ export default function TransportDetail() {
             documents.push({
                 key: 'transport-performance',
                 title: 'Помесячная эффективность',
+                fileName: `Помесячная эффективность транспортной компании № ${transportSafe.id} от ${new Date().toLocaleDateString('ru-RU')}`,
                 content: (
                     <RecordPrintSheet
                         title={`Помесячная эффективность ТК #${transportSafe.id}`}
@@ -591,16 +594,7 @@ export default function TransportDetail() {
         }
 
         return documents;
-    }, [
-        data,
-        filteredShipments,
-        formatCurrency,
-        formatDate,
-        formatDateTime,
-        getStatusText,
-        summary.successRate,
-        transportSafe,
-    ]);
+    })();
 
     return (
         <Layout>
@@ -625,7 +619,7 @@ export default function TransportDetail() {
                         >
                             <FiArrowLeft className={styles.icon} /> Назад к ТК
                         </Button>
-                        <RecordPrintCenter
+                        <RecordDocumentCenter
                             documents={transportPrintDocuments}
                             buttonClassName={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
                         />
