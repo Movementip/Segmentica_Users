@@ -16,6 +16,7 @@ import {
 import { BsFillFileEarmarkExcelFill, BsFillFileEarmarkPdfFill } from 'react-icons/bs';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { PageLoader } from '../../components/PageLoader';
 import { lockBodyScroll } from '../../utils/bodyScrollLock';
 import styles from './AdminFinance.module.css';
 
@@ -1186,11 +1187,7 @@ function AdminFinancePage(): JSX.Element {
     const isNextMonthDisabled = monthKey >= currentMonthKey;
 
     if (authLoading || loading) {
-        return (
-            <Box p="5">
-                <Text>Загрузка…</Text>
-            </Box>
-        );
+        return <PageLoader label="Загрузка..." fullPage />;
     }
 
     if (!canViewFinance) {

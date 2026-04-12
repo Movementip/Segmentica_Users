@@ -10,6 +10,7 @@ import { Badge, Button, Card, Dialog, DropdownMenu, Flex, Select, Table, Text, T
 import { FiEdit2, FiEye, FiMoreHorizontal, FiPlus, FiRefreshCw, FiSearch, FiTrash2 } from 'react-icons/fi';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
+import { PageLoader } from '../../components/PageLoader';
 
 interface Manager {
     id: number;
@@ -270,13 +271,7 @@ function ManagersPage(): JSX.Element {
     };
 
     if (authLoading) {
-        return (
-            <div className={styles.container}>
-                <div className={styles.pageShell}>
-                    <div className={styles.emptyState}>Загрузка…</div>
-                </div>
-            </div>
-        );
+        return <PageLoader label="Загрузка..." fullPage />;
     }
 
     if (!canList) {
@@ -284,16 +279,6 @@ function ManagersPage(): JSX.Element {
             <div className={styles.container}>
                 <div className={styles.pageShell}>
                     <div className={styles.emptyState}>Нет доступа</div>
-                </div>
-            </div>
-        );
-    }
-
-    if (loading && isInitialLoad) {
-        return (
-            <div className={styles.container}>
-                <div className={styles.pageShell}>
-                    <div className={styles.emptyState}>Загрузка сотрудников...</div>
                 </div>
             </div>
         );
@@ -425,6 +410,9 @@ function ManagersPage(): JSX.Element {
 
                     <Card className={styles.tableCard}>
                         <div className={styles.tableContainer}>
+                            {loading && isInitialLoad ? (
+                                <PageLoader label="Загрузка сотрудников..." />
+                            ) : (
                             <Table.Root key={tableKey} variant="surface" className={styles.table}>
                                 <Table.Header>
                                     <Table.Row>
@@ -547,6 +535,7 @@ function ManagersPage(): JSX.Element {
                                     )}
                                 </Table.Body>
                             </Table.Root>
+                            )}
                         </div>
                     </Card>
                 </div>

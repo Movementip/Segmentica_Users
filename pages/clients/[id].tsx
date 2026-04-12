@@ -9,6 +9,7 @@ import EditClientModal from '../../components/EditClientModal';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { PageLoader } from '../../components/PageLoader';
 import { getClientContragentTypeLabel, getClientContragentTypeTheme, normalizeClientContragentType, type ClientContragent } from '../../lib/clientContragents';
 import { RecordDocumentCenter, RecordPrintSheet, type RecordPrintDocument } from '../../components/print/RecordDocumentCenter';
 
@@ -80,11 +81,7 @@ function ClientDetailPage(): JSX.Element {
     }, [authLoading, canView, id]);
 
     if (authLoading) {
-        return (
-            <Box p="5">
-                <Text>Загрузка…</Text>
-            </Box>
-        );
+        return <PageLoader label="Загрузка..." fullPage />;
     }
 
     if (!canView) {
@@ -548,11 +545,7 @@ function ClientDetailPage(): JSX.Element {
     };
 
     if (loading) {
-        return (
-            <div className={styles.container}>
-                <div className={styles.header} />
-            </div>
-        );
+        return <PageLoader label="Загрузка контрагента..." fullPage />;
     }
 
     if (error || !client) {

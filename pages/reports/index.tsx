@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { withLayout } from '../../layout';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { PageLoader } from '../../components/PageLoader';
 import {
     FiCalendar,
     FiDollarSign,
@@ -661,7 +662,7 @@ const ReportsPage = () => {
                             {isLoading ? (
                                 <Table.Row>
                                     <Table.Cell colSpan={Math.max(1, visibleCols.length)}>
-                                        <Text size="2" color="gray">Загрузка...</Text>
+                                        <PageLoader label="Загрузка отчета..." />
                                     </Table.Cell>
                                 </Table.Row>
                             ) : visibleRows.length ? (
@@ -688,12 +689,8 @@ const ReportsPage = () => {
         );
     };
 
-    if (authLoading) {
-        return (
-            <div className={styles.container}>
-                <div className={styles.loading}>Загрузка...</div>
-            </div>
-        );
+    if (authLoading || loading) {
+        return <PageLoader label="Загрузка..." fullPage />;
     }
 
     if (!canReports) {
@@ -789,7 +786,7 @@ const ReportsPage = () => {
                                     </Flex>
                                     <div className={styles.chartBox}>
                                         {overviewLoading || !overviewData ? (
-                                            <Text size="2" color="gray">Загрузка...</Text>
+                                            <PageLoader label="Загрузка отчета..." />
                                         ) : (
                                             <ResponsiveContainerAny width="100%" height={260}>
                                                 <LineChart data={overviewData.byMonth} margin={{ left: 12, right: 12, top: 8, bottom: 8 }}>
@@ -816,7 +813,7 @@ const ReportsPage = () => {
                                     </Flex>
                                     <div className={styles.chartBox}>
                                         {overviewLoading || !overviewData ? (
-                                            <Text size="2" color="gray">Загрузка...</Text>
+                                            <PageLoader label="Загрузка отчета..." />
                                         ) : (
                                             <ResponsiveContainerAny width="100%" height={260}>
                                                 <PieChart>
@@ -844,7 +841,7 @@ const ReportsPage = () => {
                                     </Flex>
                                     <div className={styles.chartBox}>
                                         {overviewLoading || !overviewData ? (
-                                            <Text size="2" color="gray">Загрузка...</Text>
+                                            <PageLoader label="Загрузка отчета..." />
                                         ) : (
                                             <ResponsiveContainerAny width="100%" height={240}>
                                                 <BarChart data={overviewData.byMonth} margin={{ left: 12, right: 12, top: 8, bottom: 8 }}>
@@ -889,7 +886,7 @@ const ReportsPage = () => {
                                                 {accountsLoading ? (
                                                     <Table.Row>
                                                         <Table.Cell colSpan={5}>
-                                                            <Text size="2" color="gray">Загрузка...</Text>
+                                                            <PageLoader label="Загрузка отчета..." />
                                                         </Table.Cell>
                                                     </Table.Row>
                                                 ) : accountsData?.inventoryByAccount?.length ? (
@@ -947,7 +944,7 @@ const ReportsPage = () => {
                                                 {accountsLoading ? (
                                                     <Table.Row>
                                                         <Table.Cell colSpan={9}>
-                                                            <Text size="2" color="gray">Загрузка...</Text>
+                                                            <PageLoader label="Загрузка отчета..." />
                                                         </Table.Cell>
                                                     </Table.Row>
                                                 ) : accountsData?.accountingMovement?.length ? (
@@ -1007,7 +1004,7 @@ const ReportsPage = () => {
                                                 {accountsLoading ? (
                                                     <Table.Row>
                                                         <Table.Cell colSpan={5}>
-                                                            <Text size="2" color="gray">Загрузка...</Text>
+                                                            <PageLoader label="Загрузка отчета..." />
                                                         </Table.Cell>
                                                     </Table.Row>
                                                 ) : accountsData?.expenseByAccount?.length ? (
@@ -1040,7 +1037,7 @@ const ReportsPage = () => {
                                     </Flex>
                                     <div className={styles.chartBox}>
                                         {accountsLoading ? (
-                                            <Text size="2" color="gray">Загрузка...</Text>
+                                            <PageLoader label="Загрузка отчета..." />
                                         ) : expenseStructureChartData.length ? (
                                             <ResponsiveContainerAny width="100%" height={280}>
                                                 <BarChart data={expenseStructureChartData} margin={{ left: 12, right: 12, top: 8, bottom: 8 }}>
@@ -1101,7 +1098,7 @@ const ReportsPage = () => {
                                                 {accountsLoading ? (
                                                     <Table.Row>
                                                         <Table.Cell colSpan={7}>
-                                                            <Text size="2" color="gray">Загрузка...</Text>
+                                                            <PageLoader label="Загрузка отчета..." />
                                                         </Table.Cell>
                                                     </Table.Row>
                                                 ) : accountsData?.expenseDetails?.length ? (
@@ -1145,7 +1142,7 @@ const ReportsPage = () => {
                                     </Flex>
                                     <div className={styles.chartBox}>
                                         {overviewLoading || !overviewData ? (
-                                            <Text size="2" color="gray">Загрузка...</Text>
+                                            <PageLoader label="Загрузка отчета..." />
                                         ) : (
                                             <ResponsiveContainerAny width="100%" height={260}>
                                                 <LineChart data={overviewData.byMonth} margin={{ left: 12, right: 12, top: 8, bottom: 8 }}>
@@ -1168,7 +1165,7 @@ const ReportsPage = () => {
                                     </Flex>
                                     <div className={styles.profitabilityList}>
                                         {overviewLoading || !overviewData ? (
-                                            <Text size="2" color="gray">Загрузка...</Text>
+                                            <PageLoader label="Загрузка отчета..." />
                                         ) : overviewData.byCategory.length ? (
                                             <Flex direction="column" gap="4">
                                                 {overviewData.byCategory.map((c, idx) => {
@@ -1227,7 +1224,7 @@ const ReportsPage = () => {
                                             {topProductsLoading ? (
                                                 <Table.Row>
                                                     <Table.Cell colSpan={5}>
-                                                        <Text size="2" color="gray">Загрузка...</Text>
+                                                        <PageLoader label="Загрузка отчета..." />
                                                     </Table.Cell>
                                                 </Table.Row>
                                             ) : topProducts && topProducts.length ? (
@@ -1299,7 +1296,7 @@ const ReportsPage = () => {
                                             {topClientsLoading ? (
                                                 <Table.Row>
                                                     <Table.Cell colSpan={5}>
-                                                        <Text size="2" color="gray">Загрузка...</Text>
+                                                        <PageLoader label="Загрузка отчета..." />
                                                     </Table.Cell>
                                                 </Table.Row>
                                             ) : topClients && topClients.length ? (
@@ -1359,7 +1356,7 @@ const ReportsPage = () => {
                                             {transportPerfLoading ? (
                                                 <Table.Row>
                                                     <Table.Cell colSpan={5}>
-                                                        <Text size="2" color="gray">Загрузка...</Text>
+                                                        <PageLoader label="Загрузка отчета..." />
                                                     </Table.Cell>
                                                 </Table.Row>
                                             ) : transportPerf && transportPerf.length ? (

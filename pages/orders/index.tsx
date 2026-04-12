@@ -14,6 +14,7 @@ import { Badge, Box, Button, Dialog, DropdownMenu, Flex, Select, Table, Tabs, Te
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
 import { getOrderExecutionModeLabel, type OrderExecutionMode } from '../../lib/orderModes';
+import { PageLoader } from '../../components/PageLoader';
 
 const MotionTableRow = motion(Table.Row);
 
@@ -579,11 +580,7 @@ function OrdersPage(): JSX.Element {
     }, [authLoading, canList, debouncedSearchQuery, filters]);
 
     if (authLoading) {
-        return (
-            <Box p="5">
-                <Text>Загрузка…</Text>
-            </Box>
-        );
+        return <PageLoader label="Загрузка..." fullPage />;
     }
 
     if (!canList) {
@@ -862,16 +859,6 @@ function OrdersPage(): JSX.Element {
         setSelectedOrder(order);
         setIsDeleteConfirmOpen(true);
     };
-
-    if (loading) {
-        return (
-            <>
-                <div className={styles.card}>
-                    <p>Загрузка заявок...</p>
-                </div>
-            </>
-        );
-    }
 
     return (
         <div className={styles.container}>
@@ -1218,9 +1205,8 @@ function OrdersPage(): JSX.Element {
                 </div>
 
                 {loading ? (
-                    <div className={styles.loadingState}>
-                        <div className={styles.loadingSpinner}></div>
-                        <p>Загрузка заявок...</p>
+                    <div className={styles.tableContainer} key={tableKey}>
+                        <PageLoader label="Загрузка заявок..." />
                     </div>
                 ) : error && !deleteBlockedInfo ? (
                     <div className={styles.errorState}>

@@ -11,6 +11,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { FiEdit2, FiEye, FiFilter, FiMail, FiMoreHorizontal, FiPhone, FiPlus, FiRefreshCw, FiSearch, FiTrash2, FiTruck } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { PageLoader } from '../../components/PageLoader';
 import {
     SUPPLIER_CONTRAGENT_TYPES,
     getSupplierContragentTypeLabel,
@@ -467,31 +468,14 @@ function SuppliersPage(): JSX.Element {
     };
 
     if (authLoading) {
-        return (
-            <Box p="5">
-                <Text>Загрузка…</Text>
-            </Box>
-        );
+        return <PageLoader label="Загрузка..." fullPage />;
     }
 
     if (!canList) {
         return <NoAccessPage />;
     }
 
-    if (loading) {
-        return (
-            <div className={styles.container}>
-                <div className={styles.pageShell}>
-                    <div className={styles.loadingState}>
-                        <div className={styles.loadingSpinner}></div>
-                        <Text as="div" size="3" color="gray">Загрузка поставщиков...</Text>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    if (error) {
+    if (!loading && error) {
         return (
             <div className={styles.container}>
                 <div className={styles.pageShell}>
@@ -792,6 +776,9 @@ function SuppliersPage(): JSX.Element {
                     </div>
 
                     <div className={styles.tableContainer} key={tableKey}>
+                        {loading ? (
+                            <PageLoader label="Загрузка поставщиков..." />
+                        ) : (
                         <Table.Root variant="surface" className={styles.table}>
                             <Table.Header>
                                 <Table.Row>
@@ -929,6 +916,7 @@ function SuppliersPage(): JSX.Element {
                                 )}
                             </Table.Body>
                         </Table.Root>
+                        )}
                     </div>
                 </div>
             </div>

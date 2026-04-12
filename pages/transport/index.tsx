@@ -5,6 +5,7 @@ import { CreateTransportModalNew } from '../../components/CreateTransportModalNe
 import { EditTransportModalNew } from '../../components/EditTransportModalNew';
 import { ReferenceDataActions } from '../../components/ReferenceDataActions';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { PageLoader } from '../../components/PageLoader';
 import styles from './Transport.module.css';
 import deleteConfirmStyles from '../../components/DeleteConfirmation.module.css';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -772,9 +773,7 @@ export default function Transport() {
     if (authLoading) {
         return (
             <Layout>
-                <Box p="5">
-                    <Text>Загрузка…</Text>
-                </Box>
+                <PageLoader label="Загрузка..." fullPage />
             </Layout>
         );
     }
@@ -787,15 +786,7 @@ export default function Transport() {
         );
     }
 
-    if (loading) {
-        return (
-            <Layout>
-                <div className={styles.loading}>Загрузка...</div>
-            </Layout>
-        );
-    }
-
-    if (!data) {
+    if (!loading && !data) {
         return (
             <Layout>
                 <div className={styles.error}>Ошибка загрузки данных</div>
@@ -1109,6 +1100,9 @@ export default function Transport() {
 
                         <Tabs.Content value="companies">
                             <div className={styles.tableContainer}>
+                                {loading ? (
+                                    <PageLoader label="Загрузка транспортных компаний..." />
+                                ) : (
                                 <Table.Root key={tableKey} variant="surface" className={styles.table}>
                                     <Table.Header>
                                         <Table.Row>
@@ -1220,6 +1214,7 @@ export default function Transport() {
                                         )}
                                     </Table.Body>
                                 </Table.Root>
+                                )}
                             </div>
                         </Tabs.Content>
 
@@ -1493,7 +1488,7 @@ export default function Transport() {
 
                                         {statsLoading ? (
                                             <Box mt="2">
-                                                <Text size="2" color="gray">Загрузка…</Text>
+                                                <PageLoader label="Загрузка статистики..." />
                                             </Box>
                                         ) : statsError ? (
                                             <Box mt="2">
@@ -1540,7 +1535,7 @@ export default function Transport() {
 
                                         {statsLoading ? (
                                             <Box mt="2">
-                                                <Text size="2" color="gray">Загрузка…</Text>
+                                                <PageLoader label="Загрузка статистики..." />
                                             </Box>
                                         ) : statsError ? (
                                             <Box mt="2">
@@ -1617,7 +1612,7 @@ export default function Transport() {
                                                                             <Table.Row>
                                                                                 <Table.Cell colSpan={6}>
                                                                                     {monthShipmentsLoading ? (
-                                                                                        <Text size="2" color="gray">Загрузка отгрузок…</Text>
+                                                                                        <PageLoader label="Загрузка отгрузок..." />
                                                                                     ) : monthShipmentsError ? (
                                                                                         <Text size="2" color="red">{monthShipmentsError}</Text>
                                                                                     ) : (

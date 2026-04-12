@@ -618,6 +618,7 @@ border-radius: 9999px !important;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     border-bottom: 1px solid #e7e7e7;
+    background: #ffffff;
 }
 
 .table :global(.rt-TableCell) {

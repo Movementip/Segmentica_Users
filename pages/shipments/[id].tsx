@@ -28,6 +28,7 @@ import {
 } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { PageLoader } from '../../components/PageLoader';
 import { calculateVatAmountsFromLine, DEFAULT_VAT_RATE_ID, getVatRateOption, VAT_RATE_OPTIONS } from '../../lib/vat';
 import modalStyles from '../../components/Modal.module.css';
 import { getShipmentDeliveryLabel } from '../../lib/logisticsDeliveryLabels';
@@ -882,16 +883,18 @@ function ShipmentDetailPage(): JSX.Element {
             const files: GeneratedAttachmentFile[] = [];
 
             if (canShipmentPrint) {
-                const pdfBlob = documentPreviewPdfBytesRef.current
-                    ? new Blob([
-                        documentPreviewPdfBytesRef.current.buffer.slice(
-                            documentPreviewPdfBytesRef.current.byteOffset,
-                            documentPreviewPdfBytesRef.current.byteOffset + documentPreviewPdfBytesRef.current.byteLength
-                        ),
-                    ], { type: 'application/pdf' })
-                    : await fetchGeneratedBlob(
+                const sourcePdfBytes = documentPreviewPdfBytesRef.current;
+                let pdfBlob: Blob;
+
+                if (sourcePdfBytes) {
+                    const pdfArrayBuffer = new ArrayBuffer(sourcePdfBytes.byteLength);
+                    new Uint8Array(pdfArrayBuffer).set(sourcePdfBytes);
+                    pdfBlob = new Blob([pdfArrayBuffer], { type: 'application/pdf' });
+                } else {
+                    pdfBlob = await fetchGeneratedBlob(
                         buildShipmentDocumentUrl(documentPreview.key, 'pdf', 'attachment', documentPreview.fileNameBase)
                     );
+                }
 
                 files.push({
                     blob: pdfBlob,
@@ -1201,11 +1204,7 @@ function ShipmentDetailPage(): JSX.Element {
     }, [router, shipment]);
 
     if (authLoading) {
-        return (
-            <Box p="5">
-                <Text>Загрузка…</Text>
-            </Box>
-        );
+        return <PageLoader label="Загрузка..." fullPage />;
     }
 
     if (!canView) {
@@ -1213,13 +1212,7 @@ function ShipmentDetailPage(): JSX.Element {
     }
 
     if (loading) {
-        return (
-            <div className={styles.container}>
-                <div className={styles.card}>
-                    <Text as="div" size="2" color="gray">Загрузка…</Text>
-                </div>
-            </div>
-        );
+        return <PageLoader label="Загрузка отгрузки..." fullPage />;
     }
 
     if (error || !shipment) {

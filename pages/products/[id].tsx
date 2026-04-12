@@ -9,6 +9,7 @@ import { Box, Button, Card, Dialog, Flex, Grid, Separator, Table, Text } from '@
 import { FiArrowLeft, FiDownload, FiEdit2, FiFile, FiPaperclip, FiRefreshCw, FiTrash2, FiUploadCloud } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { PageLoader } from '../../components/PageLoader';
 import { RecordDocumentCenter, RecordPrintSheet, type RecordPrintDocument } from '../../components/print/RecordDocumentCenter';
 
 const PRODUCT_TYPE_LABELS: Record<string, string> = {
@@ -128,11 +129,7 @@ function ProductDetailPage(): JSX.Element {
     }, [product?.название, setPageTitle]);
 
     if (authLoading) {
-        return (
-            <Box p="5">
-                <Text>Загрузка…</Text>
-            </Box>
-        );
+        return <PageLoader label="Загрузка..." fullPage />;
     }
 
     if (!canView) {
@@ -437,22 +434,7 @@ function ProductDetailPage(): JSX.Element {
     };
 
     if (loading) {
-        return (
-            <div className={styles.container}>
-                <div className={styles.header}>
-                    <div className={styles.headerContent}>
-                        <div className={styles.headerLeft}>
-                            <h1 className={styles.title}>Загрузка товара...</h1>
-                            <p className={styles.subtitle}>Пожалуйста, подождите...</p>
-                        </div>
-                    </div>
-                </div>
-                <div className={styles.loading}>
-                    <FiRefreshCw className={styles.spinner} />
-                    <span>Загрузка данных товара...</span>
-                </div>
-            </div>
-        );
+        return <PageLoader label="Загрузка товара..." fullPage />;
     }
 
     if (error || !product) {

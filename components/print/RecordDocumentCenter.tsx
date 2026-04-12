@@ -226,7 +226,7 @@ export const RecordDocumentCenter = ({ documents, buttonClassName, saveTarget, o
             frameDocument.close();
 
             await new Promise<void>((resolve) => {
-                requestAnimationFrame(() => requestAnimationFrame(resolve));
+                requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
             });
 
             const printableNode = frameDocument.querySelector('.rpc-print-wrap') as HTMLElement | null;

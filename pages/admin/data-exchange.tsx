@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { withLayout } from '../../layout';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { PageLoader } from '../../components/PageLoader';
 import {
     Box,
     Button,
@@ -203,11 +204,7 @@ function AdminDataExchangePage(): JSX.Element {
     }, [allowedImportFormats, importFormat]);
 
     if (loading) {
-        return (
-            <Box p="5">
-                <Text>Загрузка…</Text>
-            </Box>
-        );
+        return <PageLoader label="Загрузка..." fullPage />;
     }
 
     if (!canPage) {

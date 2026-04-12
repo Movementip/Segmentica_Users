@@ -5,6 +5,7 @@ import { FiArrowLeft, FiDownload, FiFileText } from 'react-icons/fi';
 import { exportToWord } from '../../utils/exportUtils';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { PageLoader } from '../../components/PageLoader';
 import Link from 'next/link';
 import * as XLSX from 'xlsx';
 import styles from './ReportView.module.css';
@@ -96,11 +97,7 @@ const ReportViewer = () => {
     }, [canViewReport, name]);
 
     if (authLoading) {
-        return (
-            <div className={styles.container}>
-                <div className={styles.loading}>Загрузка отчета...</div>
-            </div>
-        );
+        return <PageLoader label="Загрузка..." fullPage />;
     }
 
     if (name && !canViewReport) {
@@ -108,11 +105,7 @@ const ReportViewer = () => {
     }
 
     if (loading) {
-        return (
-            <div className={styles.container}>
-                <div className={styles.loading}>Загрузка отчета...</div>
-            </div>
-        );
+        return <PageLoader label="Загрузка отчета..." fullPage />;
     }
 
     if (error) {

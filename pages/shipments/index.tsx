@@ -10,6 +10,7 @@ import * as XLSX from 'xlsx';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { PageLoader } from '../../components/PageLoader';
 import { calculateVatAmountsFromLine, DEFAULT_VAT_RATE_ID, getVatRateOption, VAT_RATE_OPTIONS } from '../../lib/vat';
 import { getShipmentDeliveryLabel } from '../../lib/logisticsDeliveryLabels';
 import OrderSearchSelect from '../../components/OrderSearchSelect';
@@ -1149,25 +1150,11 @@ function ShipmentsPage(): JSX.Element {
     };
 
     if (authLoading) {
-        return (
-            <Box p="5">
-                <Text>Загрузка…</Text>
-            </Box>
-        );
+        return <PageLoader label="Загрузка..." fullPage />;
     }
 
     if (!canList) {
         return <NoAccessPage />;
-    }
-
-    if (loading) {
-        return (
-            <div className={styles.container}>
-                <div className={styles.pageShell}>
-                    <div className={styles.emptyState}>Загрузка отгрузок...</div>
-                </div>
-            </div>
-        );
     }
 
     if (error) {
@@ -1367,6 +1354,9 @@ function ShipmentsPage(): JSX.Element {
                         </div>
 
                         <div className={styles.tableCard}>
+                            {loading ? (
+                                <PageLoader label="Загрузка отгрузок..." />
+                            ) : (
                             <div className={styles.tableContainer}>
                                 <Table.Root key={tableKey} variant="surface" className={styles.table}>
                                     <Table.Header>
@@ -1578,6 +1568,7 @@ function ShipmentsPage(): JSX.Element {
                                     </Table.Body>
                                 </Table.Root>
                             </div>
+                            )}
                         </div>
                     </Tabs.Root>
                 </div>

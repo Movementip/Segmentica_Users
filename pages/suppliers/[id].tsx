@@ -11,6 +11,7 @@ import { Badge, Box, Button, Dialog, Card, Flex, Grid, Table, Tabs, Text, TextFi
 import { FiArrowLeft, FiDownload, FiEdit2, FiFile, FiPaperclip, FiPlus, FiRefreshCw, FiSearch, FiTrash2, FiTruck, FiUploadCloud } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { PageLoader } from '../../components/PageLoader';
 import { getSupplierContragentTypeLabel, getSupplierContragentTypeTheme, normalizeSupplierContragentType, type SupplierBankAccount, type SupplierContragent } from '../../lib/supplierContragents';
 import { RecordDocumentCenter, RecordPrintSheet, type RecordPrintDocument } from '../../components/print/RecordDocumentCenter';
 
@@ -407,11 +408,7 @@ function SupplierDetailPage(): JSX.Element {
     };
 
     if (authLoading) {
-        return (
-            <Box p="5">
-                <Text>Загрузка…</Text>
-            </Box>
-        );
+        return <PageLoader label="Загрузка..." fullPage />;
     }
 
     if (!canView) {
@@ -419,16 +416,7 @@ function SupplierDetailPage(): JSX.Element {
     }
 
     if (loading) {
-        return (
-            <div className={styles.container}>
-                <div className={styles.header}>
-                    <div className={styles.headerLeft}>
-                        <h1 className={styles.title}>Загрузка...</h1>
-                        <p className={styles.subtitle}>Загрузка поставщика</p>
-                    </div>
-                </div>
-            </div>
-        );
+        return <PageLoader label="Загрузка поставщика..." fullPage />;
     }
 
     if (error || !supplier) {

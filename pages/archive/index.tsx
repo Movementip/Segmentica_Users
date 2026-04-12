@@ -3,6 +3,7 @@ import { useRouter } from 'next/router';
 import { Layout } from '../../layout/Layout';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { PageLoader } from '../../components/PageLoader';
 import styles from './Archive.module.css';
 import { Badge, Card, Flex, Select, Table, Tabs, Text, TextField } from '@radix-ui/themes';
 import { FiSearch } from 'react-icons/fi';
@@ -473,11 +474,7 @@ export default function Archive(): JSX.Element {
     if (authLoading) {
         return (
             <Layout>
-                <div className={styles.loadingShell}>
-                    <Card size="3" variant="surface">
-                        <div className={styles.loading}>Загрузка...</div>
-                    </Card>
-                </div>
+                <PageLoader label="Загрузка..." fullPage />
             </Layout>
         );
     }
@@ -532,10 +529,12 @@ export default function Archive(): JSX.Element {
                 </div>
 
                 {loading ? (
-                    <div className={styles.loadingShell}>
-                        <Card size="3" variant="surface">
-                            <div className={styles.loading}>Загрузка...</div>
-                        </Card>
+                    <div className={styles.tableSection}>
+                        <div className={styles.contentGrid}>
+                            <div className={styles.tableCard}>
+                                <PageLoader label="Загрузка архива..." />
+                            </div>
+                        </div>
                     </div>
                 ) : error || !data ? (
                     <Card size="3" variant="surface">

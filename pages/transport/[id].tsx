@@ -10,6 +10,7 @@ import { Box, Button, Dialog, Flex, Card, DropdownMenu, Table, Tabs, Text, TextF
 import { FiArrowLeft, FiDownload, FiEdit2, FiFile, FiMoreHorizontal, FiPaperclip, FiPlus, FiRefreshCw, FiSearch, FiTrash2, FiUploadCloud } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { PageLoader } from '../../components/PageLoader';
 import { RecordDocumentCenter, RecordPrintSheet, type RecordPrintDocument } from '../../components/print/RecordDocumentCenter';
 
 interface TransportCompany {
@@ -443,9 +444,7 @@ export default function TransportDetail() {
     if (authLoading) {
         return (
             <Layout>
-                <Box p="5">
-                    <Text>Загрузка…</Text>
-                </Box>
+                <PageLoader label="Загрузка..." fullPage />
             </Layout>
         );
     }
@@ -461,7 +460,7 @@ export default function TransportDetail() {
     if (loading) {
         return (
             <Layout>
-                <div className={styles.loading}>Загрузка...</div>
+                <PageLoader label="Загрузка транспортной компании..." fullPage />
             </Layout>
         );
     }
@@ -622,8 +621,8 @@ export default function TransportDetail() {
                         <RecordDocumentCenter
                             documents={transportPrintDocuments}
                             buttonClassName={`${styles.button} ${styles.secondaryButton} ${styles.surfaceButton}`}
-                            saveTarget={canTransportAttachmentsUpload ? { entityType: 'transport', entityId: transport.id } : undefined}
-                            onSaved={() => fetchAttachments(Number(transport.id))}
+                            saveTarget={canTransportAttachmentsUpload && transport ? { entityType: 'transport', entityId: transport.id } : undefined}
+                            onSaved={() => transport ? fetchAttachments(Number(transport.id)) : undefined}
                         />
                         <Button
                             type="button"

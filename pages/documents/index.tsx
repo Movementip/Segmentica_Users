@@ -5,6 +5,7 @@ import { FiDownload, FiExternalLink, FiLink2, FiMoreHorizontal, FiPaperclip, FiP
 import { withLayout } from '../../layout';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { PageLoader } from '../../components/PageLoader';
 import orderStyles from '../orders/Orders.module.css';
 import styles from './DocumentsPage.module.css';
 
@@ -329,12 +330,8 @@ function DocumentsPage(): JSX.Element {
         }
     };
 
-    if (authLoading || loading) {
-        return (
-            <Box p="5">
-                <Text>Загрузка…</Text>
-            </Box>
-        );
+    if (authLoading) {
+        return <PageLoader label="Загрузка..." fullPage />;
     }
 
     if (!canViewDocuments) {
@@ -392,6 +389,9 @@ function DocumentsPage(): JSX.Element {
 
             <div className={orderStyles.card}>
                 <div className={orderStyles.tableContainer}>
+                    {loading ? (
+                        <PageLoader label="Загрузка документов..." />
+                    ) : (
                     <Table.Root variant="surface" className={orderStyles.table}>
                         <Table.Header>
                             <Table.Row>
@@ -524,6 +524,7 @@ function DocumentsPage(): JSX.Element {
                             ))}
                         </Table.Body>
                     </Table.Root>
+                    )}
                 </div>
             </div>
 

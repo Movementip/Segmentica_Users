@@ -5,6 +5,7 @@ import { FiChevronLeft, FiChevronRight, FiRefreshCw } from 'react-icons/fi';
 import { withLayout } from '../../layout';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { PageLoader } from '../../components/PageLoader';
 import styles from './AdminScheduleBoard.module.css';
 
 type BoardDay = {
@@ -168,11 +169,7 @@ function AdminScheduleBoardPage(): JSX.Element {
     }, [authLoading, canViewScheduleBoard, includeInactive, loadBoard, monthKey]);
 
     if (authLoading || loading) {
-        return (
-            <Box p="5">
-                <Text>Загрузка…</Text>
-            </Box>
-        );
+        return <PageLoader label="Загрузка..." fullPage />;
     }
 
     if (!canViewScheduleBoard) {

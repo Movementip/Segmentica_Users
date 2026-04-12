@@ -3,6 +3,7 @@ import { Box, Button, Select, Text } from '@radix-ui/themes';
 import { withLayout } from '../../layout';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { PageLoader } from '../../components/PageLoader';
 import { VAT_RATE_OPTIONS } from '../../lib/vat';
 import { getOrderExecutionModeLabel, type OrderExecutionMode } from '../../lib/orderModes';
 import styles from './AdminSettings.module.css';
@@ -121,11 +122,7 @@ function AdminSettingsPage(): JSX.Element {
     };
 
     if (authLoading || loading) {
-        return (
-            <Box p="5">
-                <Text>Загрузка…</Text>
-            </Box>
-        );
+        return <PageLoader label="Загрузка..." fullPage />;
     }
 
     if (!canManageSettings) {

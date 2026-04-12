@@ -8,6 +8,7 @@ import { Box, Button, Card, Dialog, Flex, Table, Tabs, Text, TextField } from '@
 import { FiArrowLeft, FiDownload, FiEdit2, FiFile, FiPaperclip, FiSearch, FiTrash2, FiUploadCloud } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { PageLoader } from '../../components/PageLoader';
 import { RecordDocumentCenter, RecordPrintSheet, type RecordPrintDocument } from '../../components/print/RecordDocumentCenter';
 
 const PRODUCT_TYPE_LABELS: Record<string, string> = {
@@ -640,9 +641,7 @@ export default function WarehouseDetail() {
     if (authLoading) {
         return (
             <Layout>
-                <Box p="5">
-                    <Text>Загрузка…</Text>
-                </Box>
+                <PageLoader label="Загрузка..." fullPage />
             </Layout>
         );
     }
@@ -658,7 +657,7 @@ export default function WarehouseDetail() {
     if (loading) {
         return (
             <Layout>
-                <div className={styles.loading}>Загрузка...</div>
+                <PageLoader label="Загрузка товара..." fullPage />
             </Layout>
         );
     }

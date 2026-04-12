@@ -15,6 +15,7 @@ import { Badge, Box, Button, Dialog, DropdownMenu, Flex, Table, Text, TextField,
 import { WarehouseData, WarehouseItem } from './types';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { PageLoader } from '../../components/PageLoader';
 
 const MotionTableRow = motion(Table.Row);
 
@@ -534,9 +535,7 @@ export default function Warehouse() {
     if (authLoading) {
         return (
             <Layout>
-                <Box p="5">
-                    <Text>Загрузка…</Text>
-                </Box>
+                <PageLoader label="Загрузка..." fullPage />
             </Layout>
         );
     }
@@ -549,15 +548,7 @@ export default function Warehouse() {
         );
     }
 
-    if (loading) {
-        return (
-            <Layout>
-                <div className={styles.loading}>Загрузка...</div>
-            </Layout>
-        );
-    }
-
-    if (!data) {
+    if (!loading && !data) {
         return (
             <Layout>
                 <div className={styles.error}>Ошибка загрузки данных</div>
@@ -817,7 +808,9 @@ export default function Warehouse() {
 
                         <div className={styles.contentGrid}>
                             <div className={styles.tableCard}>
-                                {activeTab === 'stock' ? (
+                                {loading ? (
+                                    <PageLoader label="Загрузка склада..." />
+                                ) : activeTab === 'stock' ? (
                                     <div className={styles.tableContainer}>
                                         <Table.Root variant="surface" className={styles.table}>
                                             <Table.Header>
@@ -950,7 +943,7 @@ export default function Warehouse() {
                                         </Table.Root>
                                     </div>
                                 ) : null}
-                                {activeTab === 'movements' ? (
+                                {!loading && activeTab === 'movements' ? (
                                     <div className={styles.tableContainer}>
                                         <Table.Root variant="surface" className={styles.table}>
                                             <Table.Header>
@@ -1018,7 +1011,7 @@ export default function Warehouse() {
                                     </div>
                                 ) : null}
 
-                                {activeTab === 'critical' ? (
+                                {!loading && activeTab === 'critical' ? (
                                     <div className={styles.tableContainer}>
                                         <Table.Root variant="surface" className={styles.table}>
                                             <Table.Header>

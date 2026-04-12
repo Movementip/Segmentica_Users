@@ -13,6 +13,7 @@ import { Badge, Box, Button, Dialog, DropdownMenu, Flex, Select, Table, Tabs, Te
 import { FiDownload, FiEdit2, FiEye, FiFilter, FiMoreHorizontal, FiPlus, FiRefreshCw, FiSearch, FiTrash2, FiTrendingUp, FiUpload } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { PageLoader } from '../../components/PageLoader';
 
 const MotionTableRow = motion(Table.Row);
 
@@ -481,11 +482,7 @@ function ProductsPage(): JSX.Element {
     const totalValue = products.reduce((sum, p) => sum + (p.цена_закупки || 0), 0);
 
     if (authLoading) {
-        return (
-            <Box p="5">
-                <Text>Загрузка…</Text>
-            </Box>
-        );
+        return <PageLoader label="Загрузка..." fullPage />;
     }
 
     if (!canList) {
@@ -766,6 +763,9 @@ function ProductsPage(): JSX.Element {
                 </div>
 
                 <div className={styles.tableContainer} key={tableKey}>
+                    {loading ? (
+                        <PageLoader label="Загрузка товаров..." />
+                    ) : (
                     <Table.Root variant="surface" className={styles.table}>
                         <Table.Header>
                             <Table.Row>
@@ -780,13 +780,7 @@ function ProductsPage(): JSX.Element {
                             </Table.Row>
                         </Table.Header>
                         <Table.Body>
-                            {loading ? (
-                                <Table.Row>
-                                    <Table.Cell colSpan={8}>
-                                        <Text size="2" color="gray">Загрузка товаров...</Text>
-                                    </Table.Cell>
-                                </Table.Row>
-                            ) : error ? (
+                            {error ? (
                                 <Table.Row>
                                     <Table.Cell colSpan={8}>
                                         <Text size="2" color="red">{error}</Text>
@@ -882,6 +876,7 @@ function ProductsPage(): JSX.Element {
                             )}
                         </Table.Body>
                     </Table.Root>
+                    )}
                 </div>
             </div>
 

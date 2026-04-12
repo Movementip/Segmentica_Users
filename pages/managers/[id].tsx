@@ -8,6 +8,7 @@ import { FiArrowLeft, FiDownload, FiRefreshCw, FiSave, FiShield, FiUser } from '
 import { Eye, EyeOff, Lock } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { PageLoader } from '../../components/PageLoader';
 import { ManagerHrWorkspace } from '../../components/ManagerHrWorkspace';
 import { EmployeeSchedulePanel } from '../../components/EmployeeSchedulePanel';
 import { RecordDocumentCenter, RecordPrintSheet, type RecordPrintDocument } from '../../components/print/RecordDocumentCenter';
@@ -746,11 +747,7 @@ function ManagerDetailPage(): JSX.Element {
     const activePillClass = manager?.активен ? styles.statusPillGreen : styles.statusPillRed;
 
     if (authLoading) {
-        return (
-            <Box p="5">
-                <Text>Загрузка…</Text>
-            </Box>
-        );
+        return <PageLoader label="Загрузка..." fullPage />;
     }
 
     if (!canAccessPage) {
@@ -758,11 +755,7 @@ function ManagerDetailPage(): JSX.Element {
     }
 
     if (loading) {
-        return (
-            <div className={styles.container}>
-                <div className={styles.header} />
-            </div>
-        );
+        return <PageLoader label="Загрузка сотрудника..." fullPage />;
     }
 
     if (error || !manager) {

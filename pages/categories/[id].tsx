@@ -8,6 +8,7 @@ import { Badge, Box, Button, Card, Dialog, Flex, Grid, Separator, Text } from '@
 import { FiArrowLeft, FiEdit3, FiRefreshCw, FiSlash, FiTrash2 } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { PageLoader } from '../../components/PageLoader';
 import { RecordDocumentCenter, RecordPrintSheet, type RecordPrintDocument } from '../../components/print/RecordDocumentCenter';
 
 interface CategoryDetail {
@@ -70,11 +71,7 @@ function CategoryDetailPage(): JSX.Element {
     }, [authLoading, canView, fetchCategoryDetail, id]);
 
     if (authLoading) {
-        return (
-            <Box p="5">
-                <Text>Загрузка…</Text>
-            </Box>
-        );
+        return <PageLoader label="Загрузка..." fullPage />;
     }
 
     if (!canView) {
@@ -225,20 +222,7 @@ function CategoryDetailPage(): JSX.Element {
     };
 
     if (loading) {
-        return (
-            <div className={styles.container}>
-                <div className={styles.pageHeader}>
-                    <div className={styles.pageHeaderLeft}>
-                        <h1 className={styles.title}>Категория</h1>
-                        <p className={styles.subtitle}>Загружаю детали категории...</p>
-                    </div>
-                </div>
-                <div className={styles.loadingState}>
-                    <FiRefreshCw className={styles.spinner} />
-                    <span>Загрузка категории...</span>
-                </div>
-            </div>
-        );
+        return <PageLoader label="Загрузка категории..." fullPage />;
     }
 
     if (error || !category) {

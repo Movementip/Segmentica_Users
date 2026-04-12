@@ -10,6 +10,7 @@ import { Badge, Box, Button, Card, Dialog, Flex, Grid, IconButton, Separator, Te
 import { FiChevronDown, FiChevronRight, FiEdit3, FiExternalLink, FiFolderPlus, FiMove, FiRefreshCw, FiSearch, FiSlash, FiTrash2 } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { PageLoader } from '../../components/PageLoader';
 
 interface Category {
     id: number;
@@ -398,35 +399,14 @@ function CategoriesPage(): JSX.Element {
     };
 
     if (authLoading) {
-        return (
-            <Box p="5">
-                <Text>Загрузка…</Text>
-            </Box>
-        );
+        return <PageLoader label="Загрузка..." fullPage />;
     }
 
     if (!canList) {
         return <NoAccessPage />;
     }
 
-    if (loading) {
-        return (
-            <div className={styles.container}>
-                <div className={styles.pageHeader}>
-                    <div>
-                        <h1 className={styles.title}>Категории</h1>
-                        <p className={styles.subtitle}>Подготавливаю дерево категорий...</p>
-                    </div>
-                </div>
-                <div className={styles.loadingState}>
-                    <FiRefreshCw className={styles.spinner} />
-                    <span>Загрузка категорий...</span>
-                </div>
-            </div>
-        );
-    }
-
-    if (error) {
+    if (!loading && error) {
         return (
             <div className={styles.container}>
                 <div className={styles.pageHeader}>
@@ -528,7 +508,9 @@ function CategoriesPage(): JSX.Element {
                         </div>
                     </div>
 
-                    {filteredCategories.length === 0 ? (
+                    {loading ? (
+                        <PageLoader label="Загрузка категорий..." />
+                    ) : filteredCategories.length === 0 ? (
                         <div className={styles.emptyState}>
                             <Text as="div" size="4" weight="medium">Ничего не найдено</Text>
                             <Text as="div" size="2" color="gray">Попробуйте изменить поисковый запрос или создать новую категорию.</Text>

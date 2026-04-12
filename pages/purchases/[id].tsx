@@ -28,6 +28,7 @@ import {
 import { Badge, Box, Button, Card, Dialog, DropdownMenu, Flex, Grid, Separator, Table, Text } from '@radix-ui/themes';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { PageLoader } from '../../components/PageLoader';
 import { calculateVatAmountsFromLine, getVatRateOption } from '../../lib/vat';
 import { getClientContragentTypeLabel, normalizeClientContragentType } from '../../lib/clientContragents';
 import { getSupplierContragentTypeLabel, normalizeSupplierContragentType } from '../../lib/supplierContragents';
@@ -421,11 +422,7 @@ function PurchaseDetailPage(): JSX.Element {
         };
     }, [documentPreview, documentPreviewZoom]);
     if (authLoading) {
-        return (
-            <Box p="5">
-                <Text>Загрузка…</Text>
-            </Box>
-        );
+        return <PageLoader label="Загрузка..." fullPage />;
     }
 
     if (!canView) {
@@ -789,16 +786,18 @@ function PurchaseDetailPage(): JSX.Element {
             const files: GeneratedAttachmentFile[] = [];
 
             if (canPrint || canExportPdf) {
-                const pdfBlob = documentPreviewPdfBytesRef.current
-                    ? new Blob([
-                        documentPreviewPdfBytesRef.current.buffer.slice(
-                            documentPreviewPdfBytesRef.current.byteOffset,
-                            documentPreviewPdfBytesRef.current.byteOffset + documentPreviewPdfBytesRef.current.byteLength
-                        ),
-                    ], { type: 'application/pdf' })
-                    : await fetchGeneratedBlob(
+                const sourcePdfBytes = documentPreviewPdfBytesRef.current;
+                let pdfBlob: Blob;
+
+                if (sourcePdfBytes) {
+                    const pdfArrayBuffer = new ArrayBuffer(sourcePdfBytes.byteLength);
+                    new Uint8Array(pdfArrayBuffer).set(sourcePdfBytes);
+                    pdfBlob = new Blob([pdfArrayBuffer], { type: 'application/pdf' });
+                } else {
+                    pdfBlob = await fetchGeneratedBlob(
                         buildPurchaseDocumentUrl(documentPreview.key, 'pdf', 'attachment', documentPreview.fileNameBase)
                     );
+                }
 
                 files.push({
                     blob: pdfBlob,
@@ -889,11 +888,7 @@ function PurchaseDetailPage(): JSX.Element {
     };
 
     if (loading) {
-        return (
-            <div className={styles.container}>
-
-            </div>
-        );
+        return <PageLoader label="Загрузка закупки..." fullPage />;
     }
 
     if (error) {

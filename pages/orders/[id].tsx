@@ -33,6 +33,7 @@ import { Button, Table, DropdownMenu, Flex, Box, Text, Card, Grid, Separator, Ba
 import DeleteConfirmation from '../../components/DeleteConfirmation';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { PageLoader } from '../../components/PageLoader';
 import { calculateVatAmountsFromLine, getVatRateOption } from '../../lib/vat';
 import { getClientContragentTypeLabel, normalizeClientContragentType } from '../../lib/clientContragents';
 import { lockBodyScroll } from '../../utils/bodyScrollLock';
@@ -509,11 +510,7 @@ function OrderDetailPage(): JSX.Element {
     }, [authLoading, canView, id, fetchOrderDetail]);
 
     if (authLoading) {
-        return (
-            <Box p="5">
-                <Text>Загрузка…</Text>
-            </Box>
-        );
+        return <PageLoader label="Загрузка..." fullPage />;
     }
 
     if (!canView) {
@@ -1023,16 +1020,18 @@ function OrderDetailPage(): JSX.Element {
             const files: GeneratedAttachmentFile[] = [];
 
             if (canPrint || canExportPdf) {
-                const pdfBlob = documentPreviewPdfBytesRef.current
-                    ? new Blob([
-                        documentPreviewPdfBytesRef.current.buffer.slice(
-                            documentPreviewPdfBytesRef.current.byteOffset,
-                            documentPreviewPdfBytesRef.current.byteOffset + documentPreviewPdfBytesRef.current.byteLength
-                        ),
-                    ], { type: 'application/pdf' })
-                    : await fetchGeneratedBlob(
+                const sourcePdfBytes = documentPreviewPdfBytesRef.current;
+                let pdfBlob: Blob;
+
+                if (sourcePdfBytes) {
+                    const pdfArrayBuffer = new ArrayBuffer(sourcePdfBytes.byteLength);
+                    new Uint8Array(pdfArrayBuffer).set(sourcePdfBytes);
+                    pdfBlob = new Blob([pdfArrayBuffer], { type: 'application/pdf' });
+                } else {
+                    pdfBlob = await fetchGeneratedBlob(
                         buildOrderDocumentUrl(documentPreview.key, 'pdf', 'attachment', documentPreview.fileNameBase)
                     );
+                }
 
                 files.push({
                     blob: pdfBlob,
@@ -1071,11 +1070,7 @@ function OrderDetailPage(): JSX.Element {
     };
 
     if (loading) {
-        return (
-            <div className={styles.container}>
-
-            </div>
-        );
+        return <PageLoader label="Загрузка заявки..." fullPage />;
     }
 
     if (error || !order) {

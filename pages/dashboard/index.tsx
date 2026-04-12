@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { withLayout } from '../../layout';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { PageLoader } from '../../components/PageLoader';
 import { getDashboardAccess } from '../../lib/dashboardRbac';
 import styles from './Dashboard.module.css';
 import { Card, Flex, Grid, Heading, Separator, Table, Text } from '@radix-ui/themes';
@@ -277,7 +278,7 @@ const Home: NextPage = (): JSX.Element => {
     }, [authLoading, dashboardAccess]);
 
     if (authLoading || loading) {
-        return <div className={styles.loading}><div>Загрузка...</div></div>;
+        return <PageLoader label="Загрузка..." fullPage />;
     }
 
     if (!dashboardAccess.canDashboard) {

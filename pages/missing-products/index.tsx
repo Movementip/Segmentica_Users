@@ -9,6 +9,7 @@ import { Box, Button, Dialog, DropdownMenu, Flex, Select, Table, Tabs, Text, Tex
 import { FiAlertTriangle, FiEdit2, FiFilter, FiMoreHorizontal, FiPlus, FiRefreshCw, FiSearch, FiShoppingCart, FiTrash2 } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { PageLoader } from '../../components/PageLoader';
 
 interface MissingProduct {
     id: number;
@@ -545,27 +546,11 @@ function MissingProductsPage(): JSX.Element {
     };
 
     if (authLoading) {
-        return (
-            <div className={styles.container}>
-                <div className={styles.pageShell}>
-                    <div className={styles.emptyState}>Загрузка...</div>
-                </div>
-            </div>
-        );
+        return <PageLoader label="Загрузка..." fullPage />;
     }
 
     if (!canList) {
         return <NoAccessPage />;
-    }
-
-    if (loading) {
-        return (
-            <div className={styles.container}>
-                <div className={styles.pageShell}>
-                    <div className={styles.emptyState}>Загрузка недостающих товаров...</div>
-                </div>
-            </div>
-        );
     }
 
     if (error) {
@@ -886,6 +871,11 @@ function MissingProductsPage(): JSX.Element {
 
 
 
+                    {loading ? (
+                        <div className={styles.tableContainer} key={refreshTick}>
+                            <PageLoader label="Загрузка недостающих товаров..." />
+                        </div>
+                    ) : (
                     <div className={styles.tableContainer} key={refreshTick}>
                         <Table.Root variant="surface" className={styles.table}>
                             <Table.Header>
@@ -1004,6 +994,7 @@ function MissingProductsPage(): JSX.Element {
                             </Table.Body>
                         </Table.Root>
                     </div>
+                    )}
                 </div>
             </div>
 

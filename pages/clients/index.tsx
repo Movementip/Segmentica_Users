@@ -13,6 +13,7 @@ import { FiFilter } from 'react-icons/fi';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { PageLoader } from '../../components/PageLoader';
 import { getClientContragentTypeLabel, getClientContragentTypeTheme, isPersonContragentType, normalizeClientContragentType, type ClientContragent } from '../../lib/clientContragents';
 
 const MotionTableRow = motion(Table.Row);
@@ -500,11 +501,7 @@ function ClientsPage(): JSX.Element {
     };
 
     if (authLoading) {
-        return (
-            <Box p="5">
-                <Text>Загрузка…</Text>
-            </Box>
-        );
+        return <PageLoader label="Загрузка..." fullPage />;
     }
 
     if (!canList) {
@@ -798,8 +795,8 @@ function ClientsPage(): JSX.Element {
                 </Flex>
 
                 {loading ? (
-                    <Box className={styles.loading}>
-                        <Text size="2" color="gray">Загрузка контрагентов...</Text>
+                    <Box className={styles.tableContainer}>
+                        <PageLoader label="Загрузка контрагентов..." />
                     </Box>
                 ) : clients.length === 0 ? (
                     <Box className={styles.noResults}>

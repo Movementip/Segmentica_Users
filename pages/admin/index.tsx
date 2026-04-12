@@ -6,17 +6,14 @@ import { useAuth } from '../../context/AuthContext';
 import styles from './AdminRbac.module.css';
 import { UsersAdmin } from '../../components/AdminRbac/UsersAdmin';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { PageLoader } from '../../components/PageLoader';
 
 function AdminHome(): JSX.Element {
     const { user, loading } = useAuth();
     const canViewDocuments = Boolean(user?.permissions?.includes('documents.view'));
 
     if (loading) {
-        return (
-            <Box p="5">
-                <Text>Загрузка…</Text>
-            </Box>
-        );
+        return <PageLoader label="Загрузка..." fullPage />;
     }
 
     if (!user?.roles?.includes('director')) {

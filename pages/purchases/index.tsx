@@ -11,6 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Badge, Box, Button, Card, Dialog, DropdownMenu, Flex, Select, Table, Tabs, Text, TextArea, TextField } from '@radix-ui/themes';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { PageLoader } from '../../components/PageLoader';
 
 const MotionTableRow = motion(Table.Row);
 
@@ -623,11 +624,7 @@ function PurchasesPage(): JSX.Element {
     }, [allPurchases]);
 
     if (authLoading) {
-        return (
-            <Box p="5">
-                <Text>Загрузка…</Text>
-            </Box>
-        );
+        return <PageLoader label="Загрузка..." fullPage />;
     }
 
     if (!canList) {
@@ -961,9 +958,8 @@ function PurchasesPage(): JSX.Element {
                 </div>
 
                 {loading ? (
-                    <div className={styles.loadingState}>
-                        <div className={styles.loadingSpinner}></div>
-                        <p>Загрузка закупок...</p>
+                    <div className={styles.tableContainer} key={tableKey}>
+                        <PageLoader label="Загрузка закупок..." />
                     </div>
                 ) : error ? (
                     <div className={styles.errorState}>

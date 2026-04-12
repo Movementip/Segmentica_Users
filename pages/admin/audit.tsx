@@ -5,6 +5,7 @@ import { Box, Button, Dialog, Flex, Select, Table, Tabs, Text, TextArea, TextFie
 import { FiChevronDown, FiCopy, FiFilter, FiRefreshCw, FiSearch } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { NoAccessPage } from '../../components/NoAccessPage';
+import { PageLoader } from '../../components/PageLoader';
 import styles from './Audit.module.css';
 
 type AuditItem = Record<string, any>;
@@ -492,13 +493,7 @@ function AuditPage(): JSX.Element {
     }, [data?.columns]);
 
     if (loading) {
-        return (
-            <div className={styles.container}>
-                <div className={styles.card}>
-                    <Text>Загрузка…</Text>
-                </div>
-            </div>
-        );
+        return <PageLoader label="Загрузка..." fullPage />;
     }
 
     if (!canView) {
@@ -507,6 +502,10 @@ function AuditPage(): JSX.Element {
                 <NoAccessPage title="Нет доступа\nАудит-лог доступен только для роли director." />
             </>
         );
+    }
+
+    if (isFetching && !data) {
+        return <PageLoader label="Загрузка аудита..." fullPage />;
     }
 
     return (
@@ -739,10 +738,6 @@ function AuditPage(): JSX.Element {
                 {error ? (
                     <Box className={styles.state}>
                         <Text color="red">{error}</Text>
-                    </Box>
-                ) : isFetching && !data ? (
-                    <Box className={styles.state}>
-                        <Text>Загрузка…</Text>
                     </Box>
                 ) : rows.length === 0 ? (
                     <Box className={styles.state}>
