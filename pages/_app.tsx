@@ -4,6 +4,7 @@ import '../styles/globals.css';
 import '@radix-ui/themes/styles.css';
 import { Theme } from '@radix-ui/themes';
 import React, { useEffect, useMemo } from 'react';
+import { ThemeProvider as NextThemesProvider, useTheme } from 'next-themes';
 import { useRouter } from 'next/router';
 import { Sidebar } from '../layout/Sidebar/Sidebar';
 import { Header } from '../layout/Header/Header';
@@ -26,18 +27,25 @@ function MyApp({ Component, pageProps }: AppProps) {
     const isLoginPage = useRouter().pathname === '/login';
 
     return (
-        <AuthProvider skipInitialRefresh={isLoginPage}>
-            <ThemedAppShell isLoginPage={isLoginPage}>
-                <SidebarProvider>
-                    <PageTitleProvider>
-                        <DocumentTitle />
-                        <ProtectedLayoutGate isLoginPage={isLoginPage}>
-                            <Component {...pageProps} />
-                        </ProtectedLayoutGate>
-                    </PageTitleProvider>
-                </SidebarProvider>
-            </ThemedAppShell>
-        </AuthProvider>
+        <NextThemesProvider
+            attribute="class"
+            defaultTheme="light"
+            enableSystem={false}
+            disableTransitionOnChange
+        >
+            <AuthProvider skipInitialRefresh={isLoginPage}>
+                <ThemedAppShell isLoginPage={isLoginPage}>
+                    <SidebarProvider>
+                        <PageTitleProvider>
+                            <DocumentTitle />
+                            <ProtectedLayoutGate isLoginPage={isLoginPage}>
+                                <Component {...pageProps} />
+                            </ProtectedLayoutGate>
+                        </PageTitleProvider>
+                    </SidebarProvider>
+                </ThemedAppShell>
+            </AuthProvider>
+        </NextThemesProvider>
     );
 }
 
@@ -80,14 +88,32 @@ function ProtectedLayoutGate({
     );
 }
 
-function ThemedAppShell({ isLoginPage, children }: { isLoginPage: boolean; children: React.ReactNode }): JSX.Element {
+function ThemedAppShell({ children }: { isLoginPage: boolean; children: React.ReactNode }): JSX.Element {
     const { user } = useAuth();
-    const theme = (user?.preferences?.theme === 'dark' || user?.preferences?.theme === 'light')
+    const { theme, resolvedTheme, setTheme } = useTheme();
+
+    const savedTheme = (user?.preferences?.theme === 'dark' || user?.preferences?.theme === 'light')
         ? (user.preferences.theme as 'light' | 'dark')
-        : 'light';
+        : null;
+
+    useEffect(() => {
+        if (!savedTheme) return;
+        if (theme === savedTheme) return;
+        setTheme(savedTheme);
+    }, [savedTheme, setTheme, theme]);
+
+    const appearance = resolvedTheme === 'dark' || theme === 'dark' || savedTheme === 'dark' ? 'dark' : 'light';
+
+    useEffect(() => {
+        const root = document.documentElement;
+        root.classList.toggle('dark', appearance === 'dark');
+        root.classList.toggle('light', appearance === 'light');
+        root.dataset.theme = appearance;
+        root.style.colorScheme = appearance;
+    }, [appearance]);
 
     return (
-        <Theme appearance={theme}>
+        <Theme appearance={appearance}>
             {children}
         </Theme>
     );

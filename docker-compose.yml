@@ -1,20 +1,106 @@
 services:
+  db:
+    image: postgres:17
+    container_name: segmentica-postgres
+    environment:
+      POSTGRES_DB: Segmentica
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5439:5432"
+    volumes:
+      - segmentica-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d Segmentica"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  vpn:
+    image: qmcgaw/gluetun:latest
+    container_name: segmentica-vpn
+    entrypoint:
+      - /bin/sh
+      - /gluetun-route-fix.sh
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    env_file:
+      - .env.local
+    environment:
+      TZ: Asia/Yekaterinburg
+    ports:
+      - "3000:3000"
+      - "31415:31415"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - gluetun:/gluetun
+      - ./infra/vpn/gluetun-route-fix.sh:/gluetun-route-fix.sh:ro
+    restart: unless-stopped
+
   app:
     image: segmentica-app:local
     build:
       context: .
       dockerfile: Dockerfile
     container_name: segmentica-app
-    ports:
-      - "3000:3000"
+    network_mode: "service:vpn"
+    depends_on:
+      db:
+        condition: service_healthy
+      vpn:
+        condition: service_started
     env_file:
       - .env.local
     environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/Segmentica
+      LOCAL_DATABASE_URL: postgresql://postgres:postgres@db:5432/Segmentica
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: Segmentica
+      DB_USER: postgres
+      DB_PASSWORD: postgres
       NODE_ENV: production
       PORT: 3000
       NEXTAUTH_URL: http://localhost:3000
       LIBREOFFICE_BIN: /usr/bin/soffice
       LIBREOFFICE_TIMEOUT_MS: 30000
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     restart: unless-stopped
+
+  symmetricds:
+    image: segmentica-symmetricds:local
+    build:
+      context: ./services/symmetricds
+      dockerfile: Dockerfile
+    container_name: segmentica-symmetricds
+    network_mode: "service:vpn"
+    depends_on:
+      db:
+        condition: service_healthy
+      vpn:
+        condition: service_started
+    env_file:
+      - .env.local
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: Segmentica
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      SYMMETRIC_DB_URL: jdbc:postgresql://db:5432/Segmentica
+      SYMMETRIC_DB_USER: postgres
+      SYMMETRIC_DB_PASSWORD: postgres
+    volumes:
+      - symmetricds-logs:/opt/symmetricds/logs
+      - symmetricds-tmp:/opt/symmetricds/tmp
+    restart: unless-stopped
+
+volumes:
+  segmentica-postgres-data:
+    name: segmentica-postgres-data
+  gluetun:
+  symmetricds-logs:
+  symmetricds-tmp:

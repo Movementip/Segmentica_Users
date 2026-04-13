@@ -530,3 +530,115 @@
         min-width: 0;
     }
 }
+
+:global(html.dark) .container,
+:global(.radix-themes.dark) .container {
+    background: var(--app-bg) !important;
+    color: var(--app-text) !important;
+}
+
+:global(html.dark) .surface,
+:global(html.dark) .metricCard,
+:global(html.dark) .blockCard,
+:global(html.dark) .chartCard,
+:global(html.dark) .chartCardWide,
+:global(html.dark) .customReportsCard,
+:global(html.dark) .card,
+:global(.radix-themes.dark) .surface,
+:global(.radix-themes.dark) .metricCard,
+:global(.radix-themes.dark) .blockCard,
+:global(.radix-themes.dark) .chartCard,
+:global(.radix-themes.dark) .chartCardWide,
+:global(.radix-themes.dark) .customReportsCard,
+:global(.radix-themes.dark) .card {
+    background: var(--app-surface) !important;
+    border-color: var(--app-border) !important;
+    color: var(--app-text) !important;
+    box-shadow: none !important;
+}
+
+:global(html.dark) .tabsList:global(.rt-TabsList),
+:global(.radix-themes.dark) .tabsList:global(.rt-TabsList) {
+    background: var(--app-surface-muted) !important;
+    border-color: var(--app-border) !important;
+    box-shadow: none !important;
+}
+
+:global(html.dark) .tabsIndicator,
+:global(.radix-themes.dark) .tabsIndicator {
+    background: var(--app-surface) !important;
+    border-color: var(--app-border) !important;
+    box-shadow: none !important;
+}
+
+:global(html.dark) .tabsList :global(.rt-TabsTrigger),
+:global(.radix-themes.dark) .tabsList :global(.rt-TabsTrigger) {
+    color: var(--app-text-muted) !important;
+}
+
+:global(html.dark) .tabsList :global(.rt-TabsTrigger[data-state='active']),
+:global(.radix-themes.dark) .tabsList :global(.rt-TabsTrigger[data-state='active']) {
+    color: var(--app-text-strong) !important;
+}
+
+:global(html.dark) .filterSelectTrigger:global(.rt-SelectTrigger),
+:global(html.dark) .surfaceButton:global(.rt-Button),
+:global(.radix-themes.dark) .filterSelectTrigger:global(.rt-SelectTrigger),
+:global(.radix-themes.dark) .surfaceButton:global(.rt-Button) {
+    background: var(--app-surface) !important;
+    border-color: var(--app-border) !important;
+    color: var(--app-text) !important;
+    box-shadow: inset 0 0 0 1px var(--app-border) !important;
+}
+
+:global(html.dark) .filterSelectTrigger:global(.rt-SelectTrigger):hover,
+:global(html.dark) .surfaceButton:global(.rt-Button):hover,
+:global(.radix-themes.dark) .filterSelectTrigger:global(.rt-SelectTrigger):hover,
+:global(.radix-themes.dark) .surfaceButton:global(.rt-Button):hover {
+    background: var(--app-surface-hover) !important;
+    border-color: var(--app-border-strong) !important;
+}
+
+:global(html.dark) .table:global(.rt-TableRootTable),
+:global(html.dark) .table :global(.rt-TableHeader),
+:global(html.dark) .table :global(.rt-TableColumnHeaderCell),
+:global(html.dark) .table :global(.rt-TableCell),
+:global(.radix-themes.dark) .table:global(.rt-TableRootTable),
+:global(.radix-themes.dark) .table :global(.rt-TableHeader),
+:global(.radix-themes.dark) .table :global(.rt-TableColumnHeaderCell),
+:global(.radix-themes.dark) .table :global(.rt-TableCell) {
+    background: var(--app-surface) !important;
+    border-color: var(--app-border) !important;
+    color: var(--app-text) !important;
+}
+
+:global(html.dark) .title,
+:global(html.dark) .sectionTitle,
+:global(html.dark) .blockTitle,
+:global(html.dark) .metricValue,
+:global(html.dark) .statValue,
+:global(.radix-themes.dark) .title,
+:global(.radix-themes.dark) .sectionTitle,
+:global(.radix-themes.dark) .blockTitle,
+:global(.radix-themes.dark) .metricValue,
+:global(.radix-themes.dark) .statValue {
+    color: var(--app-text-strong) !important;
+}
+
+:global(html.dark) .subtitle,
+:global(html.dark) .metricLabel,
+:global(html.dark) .statLabel,
+:global(html.dark) .profitabilityValue,
+:global(html.dark) .customReportDesc,
+:global(.radix-themes.dark) .subtitle,
+:global(.radix-themes.dark) .metricLabel,
+:global(.radix-themes.dark) .statLabel,
+:global(.radix-themes.dark) .profitabilityValue,
+:global(.radix-themes.dark) .customReportDesc {
+    color: var(--app-text-muted) !important;
+}
+
+:global(html.dark) .statCard:not(:last-child)::after,
+:global(.radix-themes.dark) .statCard:not(:last-child)::after {
+    background-color: var(--app-border) !important;
+}

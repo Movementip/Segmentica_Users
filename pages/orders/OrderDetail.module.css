@@ -1390,6 +1390,191 @@
     margin-bottom: 16px;
 }
 
+:global(html.dark) .container {
+    --app-bg: #050505;
+    --app-surface: #000000;
+    --app-surface-hover: #0a0a0a;
+    --app-surface-muted: #0f0f0f;
+    --app-border: #1f1f1f;
+    --app-border-strong: rgba(255, 255, 255, 0.35);
+    --app-text: #dedede;
+    --app-text-strong: #ffffff;
+    --app-text-muted: #8a8a8a;
+    background: var(--app-bg);
+    color: var(--app-text);
+}
+
+:global(html.dark) .header,
+:global(html.dark) .card,
+:global(html.dark) .searchSection {
+    background: var(--app-bg);
+    color: var(--app-text);
+}
+
+:global(html.dark) .title,
+:global(html.dark) .sectionTitle,
+:global(html.dark) .sectionTotal,
+:global(html.dark) .statsTitle,
+:global(html.dark) .statValue,
+:global(html.dark) .productName,
+:global(html.dark) .infoValue,
+:global(html.dark) .clientName,
+:global(html.dark) .amountCell,
+:global(html.dark) .orderId {
+    color: var(--app-text-strong);
+}
+
+:global(html.dark) .subtitle,
+:global(html.dark) .infoLabel,
+:global(html.dark) .productMeta,
+:global(html.dark) .statLabel,
+:global(html.dark) .managerCell,
+:global(html.dark) .dateCell,
+:global(html.dark) .addressCell {
+    color: var(--app-text-muted);
+}
+
+:global(html.dark) .sectionHeader,
+:global(html.dark) .sectionBlock,
+:global(html.dark) .missingProducts,
+:global(html.dark) .statsContainer {
+    border-color: var(--app-border);
+}
+
+:global(html.dark) .surfaceButton,
+:global(html.dark) .secondaryButton,
+:global(html.dark) .filterButton,
+:global(html.dark) .filterSelectTrigger,
+:global(html.dark) .sortSelectTrigger,
+:global(html.dark) .searchInput:global(.rt-TextFieldRoot) {
+    background: var(--app-bg) !important;
+    border-color: var(--app-border) !important;
+    box-shadow: none !important;
+    color: var(--app-text) !important;
+}
+
+:global(html.dark) .surfaceButton:hover,
+:global(html.dark) .secondaryButton:hover,
+:global(html.dark) .filterButton:hover,
+:global(html.dark) .filterButton.active,
+:global(html.dark) .filterSelectTrigger:hover,
+:global(html.dark) .sortSelectTrigger:hover,
+:global(html.dark) .searchInput:global(.rt-TextFieldRoot):hover,
+:global(html.dark) .searchInput:global(.rt-TextFieldRoot):focus-within {
+    background: var(--app-surface) !important;
+    border-color: var(--app-border-strong) !important;
+}
+
+:global(html.dark) .searchInput :global(.rt-TextFieldInput) {
+    background: transparent !important;
+    color: var(--app-text-strong) !important;
+}
+
+:global(html.dark) .searchInput :global(.rt-TextFieldInput)::placeholder {
+    color: var(--app-text-muted) !important;
+}
+
+:global(html.dark) .searchInput :global(.rt-TextFieldSlot) {
+    background: transparent !important;
+    color: var(--app-text-muted) !important;
+    box-shadow: none !important;
+}
+
+:global(html.dark) .exportMenu,
+:global(html.dark) .rowMenu,
+:global(html.dark) .filterDropdownContent {
+    background: var(--app-surface);
+    border-color: var(--app-border);
+    box-shadow: var(--app-menu-shadow);
+    color: var(--app-text);
+}
+
+:global(html.dark) .exportButton,
+:global(html.dark) .rowMenuItem,
+:global(html.dark) .menuButton,
+:global(html.dark) .rowMenuIcon {
+    color: var(--app-text);
+}
+
+:global(html.dark) .exportButton:hover,
+:global(html.dark) .rowMenuItem:hover,
+:global(html.dark) .menuButton:hover {
+    background: var(--app-surface-hover);
+}
+
+:global(html.dark) .table,
+:global(html.dark) .table :global(.rt-TableRootTable),
+:global(html.dark) .table :global(.rt-TableRoot),
+:global(html.dark) .table :global(.rt-TableBody),
+:global(html.dark) .table :global(.rt-TableRow),
+:global(html.dark) .tableRow {
+    background: var(--app-surface) !important;
+    color: var(--app-text);
+    border-color: var(--app-border);
+    box-shadow: none !important;
+}
+
+:global(html.dark) .table :global(.rt-TableHeader),
+:global(html.dark) .table :global(.rt-TableColumnHeaderCell),
+:global(html.dark) .tableHeader {
+    background: var(--app-surface-muted) !important;
+    color: var(--app-text-strong) !important;
+    border-color: var(--app-border) !important;
+}
+
+:global(html.dark) .table :global(.rt-TableCell),
+:global(html.dark) .tableCell {
+    color: var(--app-text);
+    border-color: var(--app-border) !important;
+}
+
+:global(html.dark) .table :global(.rt-TableBody) :global(.rt-TableRow):hover,
+:global(html.dark) .tableRow:hover {
+    background: var(--app-surface-hover) !important;
+}
+
+:global(html.dark) .totalRow,
+:global(html.dark) .emptyState,
+:global(html.dark) .errorState {
+    background: var(--app-surface-muted);
+    color: var(--app-text);
+    border-color: var(--app-border);
+}
+
+:global(html.dark) .statusPillBlue {
+    background: rgba(59, 130, 246, 0.16);
+    color: #93c5fd;
+    border-color: rgba(147, 197, 253, 0.35);
+}
+
+:global(html.dark) .statusPillGreen {
+    background: rgba(34, 197, 94, 0.16);
+    color: #86efac;
+    border-color: rgba(134, 239, 172, 0.35);
+}
+
+:global(html.dark) .statusPillOrange {
+    background: rgba(245, 158, 11, 0.16);
+    color: #fcd34d;
+    border-color: rgba(252, 211, 77, 0.35);
+}
+
+:global(html.dark) .statusPillRed,
+:global(html.dark) .rowMenuItemDanger,
+:global(html.dark) .rowMenuItemDanger .rowMenuIcon {
+    color: #f87171;
+    border-color: rgba(248, 113, 113, 0.35);
+}
+
+:global(html.dark) .deleteButton:hover {
+    background: rgba(239, 68, 68, 0.14);
+}
+
+:global(html.dark) .loadingSpinner {
+    border-color: var(--app-border);
+    border-top-color: var(--app-text-strong);
+}
+
 /* Animation */
 @keyframes fadeIn {
     from {

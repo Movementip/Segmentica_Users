@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/router';
+import { useTheme } from 'next-themes';
 import styles from './Header.module.css';
 import { FiSearch, FiX, FiPackage, FiUser } from 'react-icons/fi';
 import {
@@ -403,7 +404,8 @@ const readSystemGuidePreferences = (preferences: Record<string, unknown> | undef
 
 export function Header(): JSX.Element {
     const router = useRouter();
-    const { user, logout, setTheme } = useAuth();
+    const { user, logout, setTheme: saveThemePreference } = useAuth();
+    const { theme, setTheme } = useTheme();
     const [searchQuery, setSearchQuery] = useState('');
     const [isSearchOpen, setIsSearchOpen] = useState(false);
     const [isSearching, setIsSearching] = useState(false);
@@ -437,6 +439,12 @@ export function Header(): JSX.Element {
     const [systemGuideCompleted, setSystemGuideCompleted] = useState(initialSystemGuidePreferences.completed);
     const [systemGuideFurthestStep, setSystemGuideFurthestStep] = useState(initialSystemGuidePreferences.furthestStep);
     const initializedGuideUserIdRef = useRef<number | null>(null);
+    const selectedTheme = theme === 'dark' || user?.preferences?.theme === 'dark' ? 'dark' : 'light';
+
+    const handleThemeChange = useCallback(async (nextTheme: 'light' | 'dark') => {
+        setTheme(nextTheme);
+        await saveThemePreference(nextTheme);
+    }, [saveThemePreference, setTheme]);
 
     const fetchDbStatus = async () => {
         try {
@@ -728,7 +736,7 @@ export function Header(): JSX.Element {
                             setIsSearchOpen(true);
                         }}
                         onFocus={() => setIsSearchOpen(true)}
-                        title="Поиск по всем разделам системы"
+                        aria-label="Поиск по всем разделам системы"
                     >
                         <TextField.Slot>
                             <FiSearch className={styles.searchIcon} />
@@ -1064,11 +1072,11 @@ export function Header(): JSX.Element {
                                 Тема
                             </DropdownMenu.SubTrigger>
                             <DropdownMenu.SubContent className={styles.profileMenuContent}>
-                                <DropdownMenu.RadioGroup value={user?.preferences?.theme === 'dark' ? 'dark' : 'light'}>
+                                <DropdownMenu.RadioGroup value={selectedTheme}>
                                     <DropdownMenu.RadioItem
                                         value="light"
                                         onSelect={async () => {
-                                            await setTheme('light');
+                                            await handleThemeChange('light');
                                         }}
                                     >
                                         Светлая
@@ -1076,7 +1084,7 @@ export function Header(): JSX.Element {
                                     <DropdownMenu.RadioItem
                                         value="dark"
                                         onSelect={async () => {
-                                            await setTheme('dark');
+                                            await handleThemeChange('dark');
                                         }}
                                     >
                                         Тёмная

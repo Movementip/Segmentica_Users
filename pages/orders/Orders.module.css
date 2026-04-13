@@ -1509,6 +1509,313 @@
     }
 }
 
+:global(html.dark) .container {
+    --app-bg: #050505;
+    --app-surface: #000000;
+    --app-surface-hover: #0a0a0a;
+    --app-surface-muted: #0f0f0f;
+    --app-border: #1f1f1f;
+    --app-border-strong: rgba(255, 255, 255, 0.35);
+    --app-text: #dedede;
+    --app-text-strong: #ffffff;
+    --app-text-muted: #8a8a8a;
+    background: var(--app-bg);
+    color: var(--app-text);
+}
+
+:global(html.dark) .header,
+:global(html.dark) .card,
+:global(html.dark) .searchSection {
+    background: var(--app-bg);
+    color: var(--app-text);
+}
+
+:global(html.dark) .title,
+:global(html.dark) .sectionTitle,
+:global(html.dark) .sectionTotal,
+:global(html.dark) .statsTitle,
+:global(html.dark) .statValue,
+:global(html.dark) .productName,
+:global(html.dark) .infoValue,
+:global(html.dark) .clientName,
+:global(html.dark) .amountCell,
+:global(html.dark) .orderId {
+    color: var(--app-text-strong);
+}
+
+:global(html.dark) .subtitle,
+:global(html.dark) .infoLabel,
+:global(html.dark) .productMeta,
+:global(html.dark) .statLabel,
+:global(html.dark) .managerCell,
+:global(html.dark) .dateCell,
+:global(html.dark) .addressCell,
+:global(html.dark) .sortDropdown span,
+:global(html.dark) .suggestEmpty,
+:global(html.dark) .inlineSuggestEmpty {
+    color: var(--app-text-muted);
+}
+
+:global(html.dark) .statsContainer,
+:global(html.dark) .sectionHeader,
+:global(html.dark) .sectionBlock,
+:global(html.dark) .missingProducts {
+    border-color: var(--app-border);
+}
+
+:global(html.dark) .statCard:not(:last-child)::after {
+    background: var(--app-border);
+}
+
+:global(html.dark) .searchInput:global(.rt-TextFieldRoot),
+:global(html.dark) .filterSelectTrigger:global(.rt-Button),
+:global(html.dark) .sortSelectTrigger:global(.rt-SelectTrigger),
+:global(html.dark) .surfaceButton,
+:global(html.dark) .surfaceButton:global(.rt-BaseButton):where(.rt-variant-surface),
+:global(html.dark) .surfaceButton:global(.rt-Button):where(.rt-variant-surface),
+:global(html.dark) .secondaryButton,
+:global(html.dark) .purchaseChipButton:global(.rt-Button),
+:global(html.dark) .filterButton,
+:global(html.dark) .filterDropdownContent select {
+    background: var(--app-bg) !important;
+    border-color: var(--app-border) !important;
+    box-shadow: none !important;
+    color: var(--app-text) !important;
+}
+
+:global(html.dark) .searchInput:global(.rt-TextFieldRoot):hover,
+:global(html.dark) .searchInput:global(.rt-TextFieldRoot):focus-within,
+:global(html.dark) .filterSelectTrigger:global(.rt-Button):where(:hover),
+:global(html.dark) .filterSelectTrigger:global(.rt-Button)[aria-expanded='true'],
+:global(html.dark) .sortSelectTrigger:global(.rt-SelectTrigger):where(:hover),
+:global(html.dark) .sortSelectTrigger:global(.rt-SelectTrigger)[aria-expanded='true'],
+:global(html.dark) .surfaceButton:where(:hover),
+:global(html.dark) .surfaceButton:global(.rt-BaseButton):where(.rt-variant-surface):where(:hover),
+:global(html.dark) .surfaceButton:global(.rt-Button):where(.rt-variant-surface):where(:hover),
+:global(html.dark) .secondaryButton:hover,
+:global(html.dark) .purchaseChipButton:global(.rt-Button):where(:hover),
+:global(html.dark) .filterButton:hover,
+:global(html.dark) .filterButton.active {
+    background: var(--app-surface) !important;
+    border-color: var(--app-border-strong) !important;
+}
+
+:global(html.dark) .searchInput :global(.rt-TextFieldInput),
+:global(html.dark) .select {
+    color: var(--app-text-strong);
+}
+
+:global(html.dark) .sortDropdown {
+    background: transparent;
+    color: var(--app-text);
+}
+
+:global(html.dark) .filtersDropdownPanel,
+:global(html.dark) .suggestList,
+:global(html.dark) .rowMenu,
+:global(html.dark) .exportMenu {
+    background: var(--app-surface);
+    border-color: var(--app-border);
+    box-shadow: var(--app-menu-shadow);
+    color: var(--app-text);
+}
+
+:global(html.dark) .filtersTabs :global(.rt-TabsTrigger),
+:global(html.dark) .filtersDropdownPanel :global(.rt-TextFieldRoot),
+:global(html.dark) .filterTextArea:global(.rt-TextAreaRoot),
+:global(html.dark) .filtersDropdownPanelActions :global(.rt-Button),
+:global(html.dark) .inlineSuggestItem,
+:global(html.dark) .inlineSuggestEmpty {
+    background: var(--app-bg) !important;
+    border-color: var(--app-border) !important;
+    box-shadow: none !important;
+    color: var(--app-text) !important;
+}
+
+:global(html.dark) .filtersTabs :global(.rt-TabsTrigger):where(:hover),
+:global(html.dark) .filtersDropdownPanel :global(.rt-TextFieldRoot):where(:hover),
+:global(html.dark) .filterTextArea:global(.rt-TextAreaRoot):where(:hover),
+:global(html.dark) .filtersDropdownPanelActions :global(.rt-Button):where(:hover),
+:global(html.dark) .inlineSuggestItem:hover {
+    background: var(--app-surface) !important;
+    border-color: var(--app-border-strong) !important;
+}
+
+:global(html.dark) .filtersTabs :global(.rt-TabsTrigger)[data-state='active'] {
+    background: var(--app-text-strong) !important;
+    border-color: var(--app-text-strong) !important;
+    color: var(--app-bg) !important;
+}
+
+:global(html.dark) .table,
+:global(html.dark) .table :global(.rt-TableRootTable),
+:global(html.dark) .table :global(.rt-TableColumnHeaderCell),
+:global(html.dark) .table :global(.rt-TableCell),
+:global(html.dark) .table :global(.rt-TableRow),
+:global(html.dark) .tableRow {
+    background: var(--app-bg);
+    color: var(--app-text);
+    border-color: var(--app-border);
+}
+
+:global(html.dark) .table :global(.rt-TableColumnHeaderCell),
+:global(html.dark) .tableHeader {
+    color: var(--app-text-strong);
+    background: var(--app-bg);
+}
+
+:global(html.dark) .table :global(.rt-TableBody) :global(.rt-TableRow):hover,
+:global(html.dark) .tableRow:hover,
+:global(html.dark) .rowMenuItem:hover,
+:global(html.dark) .menuButton:hover {
+    background: var(--app-surface);
+}
+
+:global(html.dark) .tableCell,
+:global(html.dark) .rowMenuItem,
+:global(html.dark) .rowMenuIcon,
+:global(html.dark) .menuButton {
+    color: var(--app-text);
+    border-color: var(--app-border);
+}
+
+:global(html.dark) .container :global(.rt-TextFieldInput),
+:global(html.dark) .container :global(.rt-TextAreaInput) {
+    background: transparent !important;
+    color: var(--app-text-strong) !important;
+}
+
+:global(html.dark) .container :global(.rt-TextFieldInput)::placeholder,
+:global(html.dark) .container :global(.rt-TextAreaInput)::placeholder {
+    color: var(--app-text-muted) !important;
+}
+
+:global(html.dark) .searchInput :global(.rt-TextFieldSlot) {
+    background: transparent !important;
+    color: var(--app-text-muted) !important;
+    box-shadow: none !important;
+}
+
+:global(html.dark) .searchInput :global(.rt-TextFieldSlot)::before,
+:global(html.dark) .searchInput :global(.rt-TextFieldSlot)::after,
+:global(html.dark) .searchInput:global(.rt-TextFieldRoot)::before,
+:global(html.dark) .searchInput:global(.rt-TextFieldRoot)::after {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+:global(html.dark) .card {
+    border-color: transparent;
+}
+
+:global(html.dark) .tableContainer {
+    background: var(--app-surface);
+    border-color: var(--app-border);
+}
+
+:global(html.dark) .table :global(.rt-TableRoot) {
+    background: var(--app-surface) !important;
+    border-color: transparent !important;
+    box-shadow: none !important;
+}
+
+:global(html.dark) .table :global(.rt-TableHeader) {
+    background: var(--app-surface-muted) !important;
+}
+
+:global(html.dark) .table :global(.rt-TableBody),
+:global(html.dark) .table :global(.rt-TableRootTable),
+:global(html.dark) .table :global(.rt-TableRow),
+:global(html.dark) .tableRow {
+    background: var(--app-surface) !important;
+}
+
+:global(html.dark) .table :global(.rt-TableColumnHeaderCell) {
+    background: var(--app-surface-muted) !important;
+    color: var(--app-text-strong) !important;
+    border-bottom-color: var(--app-border) !important;
+}
+
+:global(html.dark) .table :global(.rt-TableCell),
+:global(html.dark) .tableCell {
+    color: var(--app-text);
+    border-bottom-color: var(--app-border) !important;
+}
+
+:global(html.dark) .table :global(.rt-TableBody) :global(.rt-TableRow):hover,
+:global(html.dark) .tableRow:hover {
+    background: var(--app-surface-hover) !important;
+}
+
+:global(html.dark) .orderId,
+:global(html.dark) .clientName,
+:global(html.dark) .amountCell {
+    color: var(--app-text-strong);
+}
+
+:global(html.dark) .managerCell,
+:global(html.dark) .dateCell,
+:global(html.dark) .addressCell {
+    color: var(--app-text-muted);
+}
+
+:global(html.dark) .rowMenuItemDanger,
+:global(html.dark) .rowMenuItemDanger .rowMenuIcon,
+:global(html.dark) .rowMenuItemDanger .rowMenuIconDel {
+    color: #f87171 !important;
+}
+
+:global(html.dark) .rowMenuItemDanger:hover {
+    background: rgba(239, 68, 68, 0.14);
+}
+
+:global(html.dark) .filterDropdownContent,
+:global(html.dark) .filtersDropdownPanel,
+:global(html.dark) .suggestList,
+:global(html.dark) .inlineSuggestList,
+:global(html.dark) .rowMenu,
+:global(html.dark) .exportMenu {
+    background: var(--app-surface) !important;
+    border-color: var(--app-border) !important;
+    color: var(--app-text) !important;
+    box-shadow: var(--app-menu-shadow) !important;
+}
+
+:global(html.dark) .filterLabel,
+:global(html.dark) .filtersDropdownPanel :global(label),
+:global(html.dark) .filtersDropdownPanel :global(.rt-Text) {
+    color: var(--app-text-muted) !important;
+}
+
+:global(html.dark) .inlineSuggestItem,
+:global(html.dark) .suggestItem,
+:global(html.dark) .inlineSuggestEmpty,
+:global(html.dark) .suggestEmpty {
+    background: var(--app-bg) !important;
+    border-color: var(--app-border) !important;
+    color: var(--app-text) !important;
+}
+
+:global(html.dark) .inlineSuggestItem:hover,
+:global(html.dark) .suggestItem:hover {
+    background: var(--app-surface-hover) !important;
+    border-color: var(--app-border-strong) !important;
+}
+
+:global(html.dark) .totalRow,
+:global(html.dark) .emptyState,
+:global(html.dark) .errorState {
+    background: var(--app-surface-muted);
+    color: var(--app-text);
+    border-color: var(--app-border);
+}
+
+:global(html.dark) .loadingSpinner {
+    border-color: var(--app-border);
+    border-top-color: var(--app-text-strong);
+}
+
 .spin {
     animation: spin 1s linear infinite;
 }

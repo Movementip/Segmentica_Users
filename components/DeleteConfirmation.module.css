@@ -201,6 +201,68 @@
   cursor: not-allowed;
 }
 
+:global(html.dark) .dialog,
+:global(html.dark) .modalContent {
+  background: var(--app-surface);
+  color: var(--app-text);
+  border: 1px solid var(--app-border);
+  box-shadow: var(--app-menu-shadow);
+}
+
+:global(html.dark) .header,
+:global(html.dark) .actions,
+:global(html.dark) .modalActions {
+  border-color: var(--app-border);
+}
+
+:global(html.dark) .header h3,
+:global(html.dark) .orderInfo strong {
+  color: var(--app-text-strong);
+}
+
+:global(html.dark) .content p,
+:global(html.dark) .orderInfo div {
+  color: var(--app-text-muted);
+}
+
+:global(html.dark) .orderInfo,
+:global(html.dark) .positionsSection {
+  background: var(--app-bg);
+  border-color: #3b82f6;
+}
+
+:global(html.dark) .warning {
+  background: rgba(245, 158, 11, 0.14);
+  border-color: rgba(245, 158, 11, 0.34);
+  color: #fcd34d;
+}
+
+:global(html.dark) .warning strong {
+  color: #fde68a;
+}
+
+:global(html.dark) .modalActions :global(.rt-BaseButton):where(.rt-variant-surface),
+:global(html.dark) .modalActions :global(.rt-Button):where(.rt-variant-surface) {
+  background: var(--app-bg);
+  border-color: var(--app-border);
+  box-shadow: none;
+  color: var(--app-text);
+}
+
+:global(html.dark) .modalActions :global(.rt-BaseButton.rt-variant-surface):hover,
+:global(html.dark) .modalActions :global(.rt-Button.rt-variant-surface):hover {
+  background: var(--app-surface-hover) !important;
+  border-color: var(--app-border-strong) !important;
+}
+
+:global(html.dark) .modalDeleteButton:global(.rt-BaseButton),
+:global(html.dark) .modalDeleteButton:global(.rt-Button),
+:global(html.dark) .modalDeleteButton:global(.rt-BaseButton.rt-variant-surface),
+:global(html.dark) .modalDeleteButton:global(.rt-Button.rt-variant-surface) {
+  color: #f87171 !important;
+  border-color: rgba(248, 113, 113, 0.35) !important;
+}
+
 @media (max-width: 480px) {
   .dialog {
     width: 95%;

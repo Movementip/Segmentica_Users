@@ -226,6 +226,43 @@
   color: #111827;
 }
 
+:global(html.dark) .sidebar,
+:global(html.dark) .logoContainer {
+  background: var(--app-bg);
+  color: var(--app-text);
+  scrollbar-color: var(--app-border) transparent;
+}
+
+:global(html.dark) .sectionTitle {
+  color: var(--app-text-muted);
+}
+
+:global(html.dark) .sectionDivider {
+  background: var(--app-border);
+}
+
+:global(html.dark) .menuLink,
+:global(html.dark) .menuIcon,
+:global(html.dark) .menuText {
+  color: var(--app-text);
+}
+
+:global(html.dark) .menuLink:hover,
+:global(html.dark) .menuLink:focus,
+:global(html.dark) .menuLink.active,
+:global(html.dark) .menuLink:not(.active):hover,
+:global(html.dark) .menuLink:hover:not(.active) {
+  background: var(--app-surface);
+  color: var(--app-text-strong);
+  box-shadow: none;
+}
+
+:global(html.dark) .menuLink.active .menuIcon,
+:global(html.dark) .menuLink:not(.active):hover .menuIcon,
+:global(html.dark) .menuLink:hover:not(.active) .menuIcon {
+  color: var(--app-text-strong);
+}
+
 /* Mobile styles */
 @media (max-width: 768px) {
   .sidebar {

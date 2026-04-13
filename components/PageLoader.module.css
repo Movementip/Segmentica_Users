@@ -7,26 +7,28 @@
     justify-content: center;
     gap: 12px;
     padding: 40px 20px 48px;
-    color: #757575;
+    color: var(--app-text-muted);
     text-align: center;
+    background: transparent;
 }
 
 .fullPage {
     min-height: calc(100vh - 96px);
+    background: var(--app-bg);
 }
 
 .spinner {
     width: 24px;
     height: 24px;
-    border: 3px solid #e0e0e0;
-    border-top-color: #111111;
+    border: 3px solid var(--app-border);
+    border-top-color: var(--app-text-strong);
     border-radius: 9999px;
     animation: spin 1s linear infinite;
 }
 
 .label {
     margin: 0;
-    color: #757575;
+    color: var(--app-text-muted);
     font-size: 16px;
     line-height: 1.5;
 }

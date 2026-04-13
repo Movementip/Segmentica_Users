@@ -218,6 +218,65 @@
     border-bottom: 1px solid #f0f0f0;
 }
 
+:global(html.dark) .container,
+:global(.radix-themes.dark) .container {
+    background: var(--app-bg) !important;
+    color: var(--app-text) !important;
+}
+
+:global(html.dark) .surface,
+:global(html.dark) .section,
+:global(html.dark) .statCard,
+:global(html.dark) .statsContainer:global(.rt-Card),
+:global(html.dark) .card:global(.rt-Card),
+:global(.radix-themes.dark) .surface,
+:global(.radix-themes.dark) .section,
+:global(.radix-themes.dark) .statCard,
+:global(.radix-themes.dark) .statsContainer:global(.rt-Card),
+:global(.radix-themes.dark) .card:global(.rt-Card) {
+    background: var(--app-surface) !important;
+    border-color: var(--app-border) !important;
+    color: var(--app-text) !important;
+    box-shadow: none !important;
+}
+
+:global(html.dark) .card:global(.rt-Card)::before,
+:global(html.dark) .card:global(.rt-Card)::after,
+:global(html.dark) .statsContainer:global(.rt-Card)::before,
+:global(html.dark) .statsContainer:global(.rt-Card)::after,
+:global(.radix-themes.dark) .card:global(.rt-Card)::before,
+:global(.radix-themes.dark) .card:global(.rt-Card)::after,
+:global(.radix-themes.dark) .statsContainer:global(.rt-Card)::before,
+:global(.radix-themes.dark) .statsContainer:global(.rt-Card)::after {
+    background: transparent !important;
+    box-shadow: inset 0 0 0 1px var(--app-border) !important;
+}
+
+:global(html.dark) .title,
+:global(html.dark) .sectionTitle,
+:global(html.dark) .statValue,
+:global(html.dark) .statValueOrdersStyle,
+:global(.radix-themes.dark) .title,
+:global(.radix-themes.dark) .sectionTitle,
+:global(.radix-themes.dark) .statValue,
+:global(.radix-themes.dark) .statValueOrdersStyle {
+    color: var(--app-text-strong) !important;
+}
+
+:global(html.dark) .subtitle,
+:global(html.dark) .statLabel,
+:global(html.dark) .statLabelOrdersStyle,
+:global(.radix-themes.dark) .subtitle,
+:global(.radix-themes.dark) .statLabel,
+:global(.radix-themes.dark) .statLabelOrdersStyle {
+    color: var(--app-text-muted) !important;
+}
+
+:global(html.dark) .statCardOrdersStyle + .statCardOrdersStyle,
+:global(.radix-themes.dark) .statCardOrdersStyle + .statCardOrdersStyle {
+    border-left-color: var(--app-border) !important;
+}
+
 .cardHeader {
     margin-bottom: 10px;
     padding-left: 14px;

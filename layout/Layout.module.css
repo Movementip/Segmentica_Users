@@ -48,6 +48,28 @@
   box-shadow: 0 8px 32px 0 rgba(60, 80, 180, 0.13);
 }
 
+:global(html.dark) .wrapper {
+  background-color: var(--app-bg);
+}
+
+:global(html.dark) .content {
+  background: var(--app-bg);
+  color: var(--app-text);
+  box-shadow: none;
+}
+
+:global(html.dark) .card {
+  background: var(--app-surface);
+  color: var(--app-text);
+  border: 1px solid var(--app-border);
+  box-shadow: none;
+}
+
+:global(html.dark) .card:hover {
+  background: var(--app-surface-hover);
+  box-shadow: none;
+}
+
 .overlay {
   display: none;
 }

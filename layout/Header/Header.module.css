@@ -463,6 +463,136 @@ border: 1px solid #e0e0e0;
   width: 16px;
 }
 
+:global(html.dark) .header {
+  background: var(--app-bg);
+  color: var(--app-text);
+}
+
+:global(html.dark) .searchField:global(.rt-TextFieldRoot),
+:global(html.dark) .profile,
+:global(html.dark) .dbInfo {
+  background: var(--app-bg);
+  border-color: var(--app-border);
+  box-shadow: none;
+  color: var(--app-text);
+
+}
+
+:global(html.dark) .searchField:global(.rt-TextFieldRoot)::before,
+:global(html.dark) .searchField:global(.rt-TextFieldRoot)::after {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+:global(html.dark) .searchField :global(.rt-TextFieldSlot) {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: var(--app-text-muted);
+}
+
+:global(html.dark) .searchField :global(.rt-TextFieldSlot:hover),
+:global(html.dark) .searchField :global(.rt-TextFieldSlot[data-side='left']),
+:global(html.dark) .searchField :global(.rt-TextFieldSlot[data-side='right']) {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+:global(html.dark) .searchField :global(.rt-TextFieldSlot)::before,
+:global(html.dark) .searchField :global(.rt-TextFieldSlot)::after {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+:global(html.dark) .searchField :global(.rt-TextFieldInput) {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  color: var(--app-text-strong);
+}
+
+:global(html.dark) .searchField :global(.rt-TextFieldInput)::-webkit-textfield-decoration-container {
+  background: transparent !important;
+}
+
+:global(html.dark) .searchField :global(.rt-TextFieldInput)::placeholder {
+  color: var(--app-text-muted);
+}
+
+:global(html.dark) .profile:hover,
+:global(html.dark) .dbInfo:hover,
+:global(html.dark) .searchField:global(.rt-TextFieldRoot):hover {
+  background: var(--app-bg);
+}
+
+:global(html.dark) .searchField:global(.rt-TextFieldRoot):focus-visible,
+:global(html.dark) .searchField:global(.rt-TextFieldRoot):focus-within {
+  background: var(--app-bg);
+  border-color: var(--app-border-strong) !important;
+  box-shadow: none !important;
+}
+
+:global(html.dark) .profileName,
+:global(html.dark) .dbIcon,
+:global(html.dark) .dbConnection,
+:global(html.dark) .dbUser,
+:global(html.dark) .emptyTitle {
+  color: var(--app-text-strong);
+}
+
+:global(html.dark) .profileRole,
+:global(html.dark) .dbLabel,
+:global(html.dark) .emptySubtitle,
+:global(html.dark) .searchIcon {
+  color: var(--app-text-muted);
+}
+
+:global(html.dark) .searchResults,
+:global(html.dark) .exampleChip {
+  background: var(--app-surface);
+  border-color: var(--app-border);
+  color: var(--app-text);
+}
+
+:global(html.dark) .searchResults {
+  box-shadow: var(--app-menu-shadow);
+}
+
+:global(html.dark) .searchCard:global(.rt-Card) {
+  background: var(--app-surface) !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: var(--app-text);
+}
+
+:global(html.dark) .searchCard:global(.rt-Card)::before,
+:global(html.dark) .searchCard:global(.rt-Card)::after {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+:global(html.dark) .searchEmpty,
+:global(html.dark) .searchEmpty :global(.rt-Text),
+:global(html.dark) .sectionHeader :global(.rt-Text),
+:global(html.dark) .loading,
+:global(html.dark) .noResults {
+  color: var(--app-text-muted);
+}
+
+:global(html.dark) .resultRow:hover,
+:global(html.dark) .exampleChip:hover {
+  background: var(--app-surface-hover);
+}
+
 
 
 /* Mobile styles */

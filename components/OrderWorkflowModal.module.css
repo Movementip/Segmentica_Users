@@ -225,6 +225,61 @@
     transform: translateY(-1px);
 }
 
+:global(html.dark) .modalContent {
+    background: var(--app-surface);
+    color: var(--app-text);
+    border-color: var(--app-border);
+}
+
+:global(html.dark) .modeBanner {
+    background: var(--app-bg);
+    border-color: var(--app-border);
+    color: var(--app-text);
+}
+
+:global(html.dark) .card,
+:global(html.dark) .timeline,
+:global(html.dark) .detailItem,
+:global(html.dark) .detailCard,
+:global(html.dark) .sectionNote {
+    background: var(--app-bg);
+    border-color: var(--app-border);
+    color: var(--app-text);
+}
+
+:global(html.dark) .cardLine {
+    border-color: var(--app-border);
+}
+
+:global(html.dark) .timelineList::before {
+    background: var(--app-border);
+}
+
+:global(html.dark) .timelineTitle,
+:global(html.dark) .detailValue,
+:global(html.dark) .detailCardTitle {
+    color: var(--app-text-strong);
+}
+
+:global(html.dark) .timelineText,
+:global(html.dark) .detailLabel,
+:global(html.dark) .detailCardMeta,
+:global(html.dark) .sectionNote {
+    color: var(--app-text-muted);
+}
+
+:global(html.dark) .actionButton:global(.rt-Button):where(.rt-variant-surface) {
+    background: var(--app-bg) !important;
+    border-color: var(--app-border) !important;
+    color: var(--app-text) !important;
+    box-shadow: none !important;
+}
+
+:global(html.dark) .actionButton:hover {
+    background: var(--app-surface-hover) !important;
+    border-color: var(--app-border-strong) !important;
+}
+
 @media (max-width: 760px) {
     .grid {
         grid-template-columns: 1fr;
