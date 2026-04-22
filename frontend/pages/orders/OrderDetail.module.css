@@ -1,0 +1,572 @@
+/* Main Container */
+.container {
+    padding: 2rem 1.5rem;
+    padding-top: 81px;
+    font-family: var(--font-sans);
+    background-color: var(--background);
+    min-height: 100vh;
+
+}
+
+/* Header Styles */
+.header {
+
+
+    margin-bottom: 16px;
+    padding: 16px 20px;
+
+}
+
+.headerContent {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.headerLeft {
+    display: flex;
+    flex-direction: column;
+}
+
+.headerActions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.title {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--foreground);
+    margin: 0;
+    line-height: 1.2;
+}
+
+.subtitle {
+    color: var(--muted-foreground);
+    margin: 2px 0 0;
+    font-size: 13px;
+    font-weight: 400;
+}
+
+.buttonGroup {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+}
+
+.attachmentPreviewImageFrame {
+    position: relative;
+    width: 100%;
+    height: 75vh;
+}
+
+.attachmentPreviewFrame {
+    width: 100%;
+    height: 75vh;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+}
+
+.sectionTitle {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--foreground);
+    margin: 0;
+}
+
+.dangerSectionTitle {
+    color: var(--destructive);
+}
+
+.sectionHeader {
+    padding-left: 20px;
+    padding-right: 20px;
+    padding-top: 20px;
+    padding-bottom: 16px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+}
+
+.sectionBlock {
+    margin-top: 24px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+}
+
+.separator {
+    height: 1px;
+    width: 100%;
+    background: var(--border);
+}
+
+.sectionHeaderRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+    margin-left: 16px;
+}
+
+.infoLabel {
+    margin: 0;
+    font-size: 12px;
+    color: var(--muted-foreground);
+}
+
+.tableWrapper {
+    overflow: hidden;
+}
+
+.documentsTable,
+.positionsTable,
+.missingTable {
+    table-layout: fixed;
+    min-width: 100%;
+}
+
+.documentsTable [data-slot="table-head"],
+.positionsTable [data-slot="table-head"],
+.missingTable [data-slot="table-head"] {
+    position: static;
+    z-index: auto;
+}
+
+.textRight[data-slot="table-head"],
+.textRight[data-slot="table-cell"] {
+    text-align: right !important;
+}
+
+.documentsTable [data-slot="table-head"].textRight,
+.documentsTable [data-slot="table-cell"].textRight,
+.positionsTable [data-slot="table-head"].textRight,
+.positionsTable [data-slot="table-cell"].textRight,
+.missingTable [data-slot="table-head"].textRight,
+.missingTable [data-slot="table-cell"].textRight {
+    text-align: right !important;
+}
+
+.documentsTable {
+    min-width: 980px;
+}
+
+.documentsFileColumn {
+    width: auto;
+}
+
+.documentsSizeColumn {
+    width: 140px;
+}
+
+.documentsActionsColumn {
+    width: 560px;
+}
+
+.positionsTable {
+    min-width: 1320px;
+}
+
+.positionNameColumn {
+    width: 22%;
+}
+
+.positionSupplyColumn {
+    width: 11%;
+}
+
+.positionUnitColumn {
+    width: 7%;
+}
+
+.positionQuantityColumn {
+    width: 9%;
+}
+
+.positionPriceColumn {
+    width: 10%;
+}
+
+.positionNetColumn {
+    width: 13%;
+}
+
+.positionVatColumn {
+    width: 7%;
+}
+
+.positionTaxColumn {
+    width: 11%;
+}
+
+.positionTotalColumn {
+    width: 10%;
+}
+
+.missingTable {
+    min-width: 860px;
+}
+
+.missingProductColumn {
+    width: auto;
+}
+
+.missingQuantityColumn {
+    width: 150px;
+}
+
+.missingStatusColumn {
+    width: 190px;
+}
+
+.productName {
+    font-weight: 600;
+    color: var(--foreground);
+    font-size: 14px;
+}
+
+.productMeta {
+    margin-top: 2px;
+    color: var(--muted-foreground);
+    font-size: 12px;
+}
+
+.totalRow {
+    background-color: var(--muted);
+}
+
+.missingProducts {
+    margin-top: 24px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+}
+
+.missingProducts .tableWrapper {
+    margin-top: 12px;
+}
+
+.missingProducts [data-slot="table-row"] > [data-slot="table-cell"]:last-child,
+.missingProducts [data-slot="table-row"] > [data-slot="table-head"]:last-child {
+    text-align: right;
+    padding-right: 16px;
+}
+
+.missingProducts [data-slot="table-head"]:last-child {
+    justify-content: flex-end;
+    width: 100%;
+}
+
+.missingProducts .actions {
+    margin-top: 12px;
+}
+
+.actions {
+    margin-top: 16px;
+}
+
+.no-print {}
+
+.previewScreen {
+    position: fixed;
+    inset: 0;
+    z-index: 100000100;
+    overflow: hidden;
+    overscroll-behavior: contain;
+    touch-action: none;
+}
+
+.previewBackdrop {
+    position: fixed;
+    inset: 0;
+    background: color-mix(in oklch, black 48%, transparent);
+    backdrop-filter: blur(6px);
+}
+
+.previewPanel {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(1120px, calc(100vw - 232px));
+    background: var(--background);
+    color: var(--foreground);
+    box-shadow: -24px 0 60px color-mix(in oklch, black 18%, transparent);
+    padding: 24px 28px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    overflow: hidden;
+    box-sizing: border-box;
+    overscroll-behavior: contain;
+    touch-action: auto;
+    animation: previewPanelIn 180ms ease-out;
+}
+
+.previewPanelHeader {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.previewPanelTitleBlock {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+
+.previewPanelTitle {
+    margin: 0;
+    font-size: 28px;
+    line-height: 1.1;
+    font-weight: 700;
+    color: var(--foreground);
+}
+
+.previewCloseButton {
+    width: 44px;
+    height: 44px;
+    border: none;
+    background: transparent;
+    color: var(--muted-foreground);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: color 0.18s ease;
+}
+
+.previewCloseButton:hover {
+    color: var(--foreground);
+}
+
+.previewCloseButton svg {
+    width: 22px;
+    height: 22px;
+}
+
+.previewToolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+}
+
+.previewToolbarAction {
+    height: 42px;
+    min-width: auto;
+    padding: 0 16px;
+    border-radius: 0;
+}
+
+.previewCanvas {
+    flex: 1;
+    min-height: 0;
+    display: block;
+    overflow: auto;
+    overscroll-behavior: contain;
+}
+
+.previewStage {
+    width: 100%;
+    min-height: calc(100vh - 240px);
+    background: #ffffff;
+    overflow: auto;
+}
+
+.previewPages {
+    width: fit-content;
+    min-width: 100%;
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    align-items: flex-start;
+}
+
+.previewPageImage {
+    display: block;
+    background: #fff;
+    box-shadow: 0 8px 24px rgba(17, 17, 17, 0.08);
+}
+
+.previewLoading {
+    display: flex;
+    min-height: calc(100vh - 240px);
+    align-items: center;
+    justify-content: center;
+    color: var(--muted-foreground);
+    font-size: 15px;
+}
+
+.previewSaveMessage {
+    padding: 10px 12px;
+    border: 1px solid color-mix(in oklch, #16a34a 35%, transparent);
+    background: color-mix(in oklch, #16a34a 10%, transparent);
+    color: #15803d;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.hiddenPrintFrame {
+    position: fixed;
+    width: 0;
+    height: 0;
+    opacity: 0;
+    pointer-events: none;
+    border: 0;
+}
+
+@keyframes previewPanelIn {
+    from {
+        transform: translateX(32px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@media print {
+
+    .container :global(header),
+    .container :global(aside) {
+        display: none;
+    }
+
+    .header {
+        display: none;
+    }
+
+    .no-print {
+        display: none;
+    }
+
+    .container {
+        padding: 0;
+        padding-top: 0;
+        background: #fff;
+        min-height: auto;
+    }
+
+    .previewScreen {
+        display: none;
+    }
+
+    .card {
+        box-shadow: none;
+        border: none;
+        padding: 0;
+    }
+
+}
+
+.icon {
+    width: 16px;
+    height: 16px;
+}
+
+.wordIcon {
+    color: #185abd;
+}
+
+.pdfIcon {
+    color: #b42318;
+}
+
+/* Table Styles */
+.card {
+    background: var(--background);
+    border-radius: var(--radius-2xl);
+    box-shadow: none;
+    overflow: visible;
+    border: none;
+    padding: 0px;
+}
+
+.textRight {
+    text-align: right;
+}
+
+.errorText {
+    color: var(--destructive);
+    margin-bottom: 16px;
+}
+
+:global(html.dark) .container {
+    --app-bg: var(--background);
+    --app-surface: var(--card);
+    --app-surface-hover: var(--chrome-hover);
+    --app-surface-muted: color-mix(in oklch, var(--card) 84%, var(--background));
+    --app-border: var(--border);
+    --app-border-strong: color-mix(in oklch, var(--foreground) 38%, transparent);
+    --app-text: var(--foreground);
+    --app-text-strong: var(--foreground);
+    --app-text-muted: var(--muted-foreground);
+    background: var(--app-bg);
+    color: var(--app-text);
+}
+
+:global(html.dark) .header,
+:global(html.dark) .card {
+    background: var(--app-bg);
+    color: var(--app-text);
+}
+
+:global(html.dark) .title,
+:global(html.dark) .sectionTitle,
+:global(html.dark) .productName {
+    color: var(--app-text-strong);
+}
+
+:global(html.dark) .subtitle,
+:global(html.dark) .infoLabel,
+:global(html.dark) .productMeta {
+    color: var(--app-text-muted);
+}
+
+:global(html.dark) .sectionHeader,
+:global(html.dark) .sectionBlock,
+:global(html.dark) .missingProducts {
+    border-color: var(--app-border);
+}
+
+:global(html.dark) .totalRow {
+    background: var(--app-surface-muted);
+    color: var(--app-text);
+    border-color: var(--app-border);
+}
+
+/* Animation */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .headerContent {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .headerActions {
+        width: 100%;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+}

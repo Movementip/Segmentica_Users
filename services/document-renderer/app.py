@@ -1174,6 +1174,38 @@ def health():
     })
 
 
+@app.post("/convert/office-to-pdf")
+def convert_office_to_pdf():
+    uploaded_file = request.files.get("file")
+    if uploaded_file is None or not uploaded_file.filename:
+        return jsonify({"error": "file is required"}), 400
+
+    original_name = Path(uploaded_file.filename).name
+    original_stem = Path(original_name).stem or "document"
+    original_suffix = Path(original_name).suffix or ".docx"
+    safe_input_name = f"{to_ascii_filename(original_stem)}{original_suffix}"
+
+    temp_dir = Path(tempfile.mkdtemp(prefix="segmentica-office-convert-"))
+    try:
+        input_path = temp_dir / safe_input_name
+        uploaded_file.save(input_path)
+        pdf_path = convert_to_pdf(input_path, temp_dir)
+        pdf_bytes = pdf_path.read_bytes()
+
+        response = send_file(
+            io.BytesIO(pdf_bytes),
+            mimetype="application/pdf",
+            as_attachment=True,
+            download_name=f"{original_stem}.pdf",
+        )
+        return apply_download_filename(response, f"{original_stem}.pdf")
+    except Exception as error:  # noqa: BLE001
+        traceback.print_exc()
+        return jsonify({"error": str(error)}), 500
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
 @app.post("/render/xlsx-template")
 def render_xlsx_template():
     payload = request.get_json(silent=True) or {}

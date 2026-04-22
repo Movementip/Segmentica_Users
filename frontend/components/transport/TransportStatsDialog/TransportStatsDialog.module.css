@@ -1,0 +1,109 @@
+.modalContent {
+  max-width: 1080px;
+}
+
+.content {
+  display: grid;
+  gap: 24px;
+}
+
+.section {
+  display: grid;
+  gap: 14px;
+}
+
+.sectionTitle {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.cardsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.statCard {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2xl);
+  background: color-mix(in oklab, var(--card) 84%, var(--muted) 16%);
+}
+
+.statLabel {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.statValue {
+  color: var(--foreground);
+  font-size: 22px;
+  line-height: 1.2;
+  font-weight: 750;
+}
+
+.tableSurface {
+  overflow: hidden;
+}
+
+.innerTableSurface {
+  margin-top: 12px;
+}
+
+.table {
+  width: 100%;
+}
+
+.textRight {
+  text-align: right;
+}
+
+.expandableRow {
+  cursor: pointer;
+}
+
+.monthTitle {
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.monthHint {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.emptyCell {
+  padding: 18px 12px;
+  color: var(--muted-foreground);
+  text-align: center;
+}
+
+.expandedCell {
+  padding: 12px;
+}
+
+.emptyText {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 14px;
+}
+
+.errorText {
+  margin: 0;
+  color: var(--destructive);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+@media (max-width: 760px) {
+  .cardsGrid {
+    grid-template-columns: 1fr;
+  }
+}

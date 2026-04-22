@@ -1,0 +1,109 @@
+.table {
+  table-layout: fixed;
+}
+
+.table :global([data-slot="table-head"]) {
+  height: 52px;
+}
+
+.table :global([data-slot="table-cell"]) {
+  height: 64px;
+}
+
+.tableRow {
+  transition: background-color 0.18s ease;
+}
+
+.tableRowClickable {
+  cursor: pointer;
+}
+
+.tableCell {
+  vertical-align: middle;
+}
+
+.primaryCell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.shipmentId,
+.primaryText {
+  color: var(--foreground);
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 600;
+}
+
+.primaryText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.secondaryText {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.45;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.textRight {
+  text-align: right;
+}
+
+.amountCell {
+  font-variant-numeric: tabular-nums;
+}
+
+.sumColumn {
+  white-space: nowrap;
+}
+
+.sumColumnInner {
+  display: flex;
+  width: 100%;
+  justify-content: flex-end;
+}
+
+.actionsHeader,
+.actionsCell {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.colId {
+  width: 104px;
+}
+
+.colOrder {
+  width: 15%;
+}
+
+.colTransport {
+  width: 18%;
+}
+
+.colDate {
+  width: 13%;
+}
+
+.colTracking {
+  width: 14%;
+}
+
+.colCost {
+  width: 12%;
+}
+
+.colStatus {
+  width: 12%;
+}
+
+.colActions {
+  width: 64px;
+}

@@ -1,0 +1,13 @@
+.menuButton {
+  color: var(--muted-foreground);
+}
+
+.menuButton:hover,
+.menuButton:focus-visible {
+  color: var(--foreground);
+}
+
+.rowMenuIcon {
+  width: 16px;
+  height: 16px;
+}

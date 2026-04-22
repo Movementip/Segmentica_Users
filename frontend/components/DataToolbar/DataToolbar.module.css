@@ -1,0 +1,114 @@
+.toolbar {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 20px;
+}
+
+.search {
+    flex: 1 1 auto;
+    min-width: 250px;
+    max-width: 600px;
+}
+
+.controls {
+    position: relative;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-left: auto;
+    flex-wrap: nowrap;
+}
+
+.filter {
+    position: relative;
+    display: inline-block;
+}
+
+.filterButton {
+    min-width: 142px;
+    height: 40px;
+    border-radius: var(--radius-xl);
+    white-space: nowrap;
+    background: var(--chrome);
+}
+
+.filterButton:hover,
+.filterButton[aria-expanded="true"] {
+    background: var(--chrome-hover);
+    color: var(--chrome-foreground);
+}
+
+.icon {
+    width: 16px;
+    height: 16px;
+}
+
+.filterPanel {
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    z-index: 50;
+    width: 420px;
+    max-width: min(80vw, 420px);
+    padding: 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-2xl);
+    background: var(--popover);
+    color: var(--popover-foreground);
+    box-shadow: var(--app-menu-shadow);
+}
+
+.sort {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 40px;
+}
+
+.sort span {
+    color: var(--muted-foreground);
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+.sortSelect {
+    min-width: 238px;
+    border-radius: var(--radius-xl);
+}
+
+@media (max-width: 900px) {
+    .toolbar {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .search {
+        max-width: none;
+    }
+
+    .controls {
+        width: 100%;
+        align-items: stretch;
+        flex-direction: column;
+        margin-left: 0;
+    }
+
+    .filter,
+    .filterButton,
+    .sort,
+    .sortSelect {
+        width: 100%;
+    }
+
+    .sort {
+        align-items: stretch;
+        flex-direction: column;
+        height: auto;
+    }
+
+    .filterPanel {
+        width: min(100vw - 48px, 420px);
+    }
+}

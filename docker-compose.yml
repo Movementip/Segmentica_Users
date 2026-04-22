@@ -32,7 +32,6 @@ services:
     environment:
       TZ: Asia/Yekaterinburg
     ports:
-      - "3000:3000"
       - "31415:31415"
     extra_hosts:
       - "host.docker.internal:host-gateway"
@@ -41,33 +40,21 @@ services:
       - ./infra/vpn/gluetun-route-fix.sh:/gluetun-route-fix.sh:ro
     restart: unless-stopped
 
-  app:
-    image: segmentica-app:local
+  libreoffice:
+    image: segmentica-libreoffice:local
     build:
       context: .
-      dockerfile: Dockerfile
-    container_name: segmentica-app
-    network_mode: "service:vpn"
-    depends_on:
-      db:
-        condition: service_healthy
-      vpn:
-        condition: service_started
-    env_file:
-      - .env.local
+      dockerfile: services/document-renderer/Dockerfile
+    container_name: segmentica-libreoffice
+    ports:
+      - "3010:3000"
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/Segmentica
-      LOCAL_DATABASE_URL: postgresql://postgres:postgres@db:5432/Segmentica
-      DB_HOST: db
-      DB_PORT: 5432
-      DB_NAME: Segmentica
-      DB_USER: postgres
-      DB_PASSWORD: postgres
-      NODE_ENV: production
       PORT: 3000
-      NEXTAUTH_URL: http://localhost:3000
       LIBREOFFICE_BIN: /usr/bin/soffice
-      LIBREOFFICE_TIMEOUT_MS: 30000
+      TEMPLATES_DIR: /app/templates/forms
+    volumes:
+      - ./backend/templates:/app/templates
+      - ./services/document-renderer/app.py:/app/app.py:ro
     restart: unless-stopped
 
   symmetricds:

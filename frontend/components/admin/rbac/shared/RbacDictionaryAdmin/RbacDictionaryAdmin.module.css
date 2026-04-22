@@ -1,0 +1,60 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.tableSurface {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2xl);
+  background: var(--card);
+}
+
+.tableContainer {
+  overflow: auto;
+}
+
+.table {
+  table-layout: fixed;
+  min-width: 860px;
+}
+
+.tableHead {
+  height: 48px;
+}
+
+.tableCell {
+  vertical-align: middle;
+  white-space: normal;
+}
+
+.colId {
+  width: 96px;
+}
+
+.colKey {
+  width: 220px;
+}
+
+.colName {
+  width: 240px;
+}
+
+.colDescription {
+  width: auto;
+}
+
+.colActions {
+  width: 96px;
+}
+
+.emptyState {
+  min-height: 220px;
+}
+
+@media (max-width: 900px) {
+  .table {
+    min-width: 760px;
+  }
+}

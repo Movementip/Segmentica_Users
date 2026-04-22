@@ -1,0 +1,124 @@
+.table {
+  table-layout: fixed;
+}
+
+.table :global([data-slot="table-head"]) {
+  height: 52px;
+}
+
+.table :global([data-slot="table-cell"]) {
+  height: 64px;
+}
+
+.tableRow {
+  transition: background-color 0.15s ease;
+}
+
+.tableRowClickable {
+  cursor: pointer;
+}
+
+.tableCell {
+  vertical-align: middle;
+}
+
+.itemId {
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.itemTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.itemSub,
+.stockMin,
+.dateCell {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.itemSub {
+  margin-top: 2px;
+}
+
+.categoryPill {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--card) 80%, var(--muted) 20%);
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 550;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stockQty,
+.amountCell {
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.textRight {
+  text-align: right;
+}
+
+.actionsHeader,
+.actionsCell {
+  text-align: right;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.colId {
+  width: 96px;
+}
+
+.colName {
+  width: 25%;
+}
+
+.colCategory {
+  width: 16%;
+}
+
+.colStock {
+  width: 13%;
+}
+
+.colStatus {
+  width: 13%;
+}
+
+.colPurchase {
+  width: 12%;
+}
+
+.colSale {
+  width: 12%;
+}
+
+.colUpdated {
+  width: 13%;
+}
+
+.colActions {
+  width: 64px;
+}

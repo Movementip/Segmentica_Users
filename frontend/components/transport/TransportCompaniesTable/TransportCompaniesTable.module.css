@@ -1,0 +1,74 @@
+.tableRow {
+  transition: background-color 0.18s ease;
+}
+
+.tableRowClickable {
+  cursor: pointer;
+}
+
+.tableRowClickable:hover {
+  background: color-mix(in oklab, var(--card) 86%, var(--muted) 14%);
+}
+
+.tableCell {
+  vertical-align: middle;
+}
+
+.companyCell {
+  display: grid;
+  gap: 4px;
+}
+
+.companyName,
+.metricValue,
+.amountCell {
+  color: var(--foreground);
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 650;
+}
+
+.companyMeta,
+.mutedText {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.contactsCell {
+  display: grid;
+  gap: 6px;
+}
+
+.contactLine {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--foreground);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.contactIcon {
+  width: 14px;
+  height: 14px;
+  color: var(--muted-foreground);
+}
+
+.textRight {
+  text-align: right;
+}
+
+.sumColumn {
+  min-width: 154px;
+}
+
+.sumColumnInner {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.actionsCell {
+  display: flex;
+  justify-content: flex-end;
+}

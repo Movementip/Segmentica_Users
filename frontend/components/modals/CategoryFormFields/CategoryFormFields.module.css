@@ -1,0 +1,59 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.label {
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.textField {
+  width: 100%;
+  min-height: 40px;
+  border-radius: var(--radius-xl);
+  background: var(--chrome);
+  color: var(--foreground);
+  font-size: 14px;
+}
+
+.textField:hover,
+.textarea:hover {
+  background: var(--chrome-hover);
+}
+
+.textarea {
+  min-height: 132px;
+  resize: vertical;
+  border-radius: var(--radius-xl);
+  background: var(--chrome);
+  color: var(--foreground);
+  font-size: 14px;
+}
+
+.helper {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.error {
+  margin-top: -2px;
+  padding: 12px;
+  border: 1px solid color-mix(in oklab, var(--destructive) 35%, transparent);
+  border-radius: var(--radius-lg);
+  background: color-mix(in oklab, var(--destructive) 12%, transparent);
+  color: var(--destructive);
+  font-size: 14px;
+  line-height: 1.45;
+}

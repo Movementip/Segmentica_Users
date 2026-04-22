@@ -1,0 +1,91 @@
+.banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 18px;
+  margin-bottom: 18px;
+  padding: 18px 22px;
+  border: 1px solid color-mix(in oklab, var(--border) 58%, #f97316 42%);
+  border-radius: var(--radius-2xl);
+  background: color-mix(in oklab, var(--card) 90%, #f97316 10%);
+}
+
+.content {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.iconWrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  color: #ea580c;
+  background: color-mix(in oklab, var(--card) 78%, #f97316 22%);
+}
+
+.icon {
+  width: 16px;
+  height: 16px;
+}
+
+.copy {
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  color: color-mix(in oklab, var(--foreground) 82%, #ea580c 18%);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.text {
+  margin: 4px 0 0;
+  color: color-mix(in oklab, var(--muted-foreground) 70%, #ea580c 30%);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.actionButton {
+  min-width: 136px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: var(--radius-xl);
+  border-color: color-mix(in oklab, var(--border) 70%, #f97316 30%);
+  background: color-mix(in oklab, var(--card) 94%, #ffffff 6%);
+  color: var(--foreground);
+  box-shadow: 0 1px 0 rgb(0 0 0 / 0.04);
+  font-weight: 650;
+}
+
+.actionButton:hover {
+  border-color: color-mix(in oklab, var(--border) 56%, #f97316 44%);
+  background: color-mix(in oklab, var(--card) 88%, #f97316 12%);
+  color: var(--foreground);
+}
+
+:global(html.dark) .banner {
+  border-color: color-mix(in oklab, var(--border) 72%, #fb923c 28%);
+  background: color-mix(in oklab, var(--card) 94%, #f97316 6%);
+}
+
+:global(html.dark) .iconWrap {
+  background: color-mix(in oklab, var(--card) 86%, #f97316 14%);
+}
+
+@media (max-width: 760px) {
+  .banner {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .actionButton {
+    width: 100%;
+  }
+}

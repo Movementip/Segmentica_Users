@@ -1,0 +1,93 @@
+.tableRow {
+  transition: background-color 0.18s ease;
+}
+
+.tableRowClickable {
+  cursor: pointer;
+}
+
+.tableRowClickable:hover {
+  background: color-mix(in oklab, var(--card) 86%, var(--muted) 14%);
+}
+
+.tableCell {
+  vertical-align: middle;
+}
+
+.supplierId,
+.supplierName,
+.metricValue {
+  color: var(--foreground);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.supplierId,
+.supplierName,
+.metricValue {
+  font-weight: 650;
+}
+
+.supplierMeta,
+.mutedText {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.typeBadge {
+  border-color: transparent;
+}
+
+.typeBadge[data-theme="organization"] {
+  background: color-mix(in oklab, var(--card) 72%, #3b82f6 28%);
+  color: #1d4ed8;
+}
+
+.typeBadge[data-theme="entrepreneur"] {
+  background: color-mix(in oklab, var(--card) 72%, #22c55e 28%);
+  color: #15803d;
+}
+
+.typeBadge[data-theme="person"] {
+  background: color-mix(in oklab, var(--card) 72%, #a855f7 28%);
+  color: #7e22ce;
+}
+
+.contactsCell {
+  display: grid;
+  gap: 6px;
+}
+
+.contactLine {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--foreground);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.contactIcon {
+  width: 14px;
+  height: 14px;
+  color: var(--muted-foreground);
+}
+
+.textRight {
+  text-align: right;
+}
+
+.sumColumn {
+  min-width: 170px;
+}
+
+.sumColumnInner {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.actionsCell {
+  display: flex;
+  justify-content: flex-end;
+}

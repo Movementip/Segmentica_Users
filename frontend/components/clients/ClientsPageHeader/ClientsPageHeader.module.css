@@ -1,0 +1,39 @@
+.surfaceButton {
+  height: 40px;
+  min-width: 142px;
+  border-radius: var(--radius-xl);
+  white-space: nowrap;
+  background: var(--chrome);
+  color: var(--chrome-foreground);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.surfaceButton:hover,
+.surfaceButton[aria-expanded="true"] {
+  background: var(--chrome-hover);
+  color: inherit;
+}
+
+.createButton {
+  min-width: 198px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@media (max-width: 760px) {
+  .surfaceButton,
+  .createButton {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+}

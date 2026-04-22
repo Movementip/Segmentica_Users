@@ -1,0 +1,106 @@
+.table :global([data-slot="table-head"]) {
+  height: 52px;
+}
+
+.table :global([data-slot="table-cell"]) {
+  height: 64px;
+}
+
+.tableRow {
+  transition: background-color 0.15s ease;
+}
+
+.tableCell {
+  vertical-align: middle;
+}
+
+.typeBadge {
+  height: 26px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-weight: 700;
+  text-transform: none;
+}
+
+.success {
+  background: color-mix(in oklab, var(--card) 72%, #22c55e 28%);
+  color: #15803d;
+}
+
+.warning {
+  background: color-mix(in oklab, var(--card) 72%, #f59e0b 28%);
+  color: #b45309;
+}
+
+.danger {
+  background: color-mix(in oklab, var(--card) 72%, #ef4444 28%);
+  color: #b91c1c;
+}
+
+.neutral {
+  background: color-mix(in oklab, var(--card) 72%, #3b82f6 28%);
+  color: #1d4ed8;
+}
+
+.referenceLink {
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.referenceLink:hover {
+  color: var(--foreground);
+  text-decoration: underline;
+}
+
+.itemTitle {
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.itemSub,
+.muted,
+.dateCell {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.quantity {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.quantityIn {
+  color: #16a34a;
+}
+
+.quantityOut {
+  color: #dc2626;
+}
+
+.commentCell {
+  max-width: 360px;
+  color: var(--foreground);
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: normal;
+}
+
+:global(html.dark) .success {
+  color: #86efac;
+}
+
+:global(html.dark) .warning {
+  color: #fcd34d;
+}
+
+:global(html.dark) .danger {
+  color: #fca5a5;
+}
+
+:global(html.dark) .neutral {
+  color: #93c5fd;
+}

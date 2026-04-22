@@ -1,0 +1,290 @@
+.modalContent {
+  width: min(1480px, calc(100vw - 32px));
+  max-width: 1480px;
+  max-height: 90vh;
+  overflow: auto;
+}
+
+.form {
+  margin-top: 16px;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.formGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.selectTrigger,
+.vatField,
+.textField,
+.qtyField,
+.priceField,
+.positionSearchSelectInput {
+  width: 100%;
+  height: 40px;
+  border-radius: var(--radius-xl);
+  background: var(--chrome);
+  color: var(--foreground);
+}
+
+.selectTrigger:hover,
+.vatField:hover,
+.textField:hover,
+.qtyField:hover,
+.priceField:hover,
+.positionSearchSelectInput:hover {
+  background: var(--chrome-hover);
+}
+
+.dateField {
+  max-width: 360px;
+}
+
+.checkboxRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.includeCheckbox {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+}
+
+.checkboxText {
+  font-size: 14px;
+  color: var(--foreground);
+}
+
+.positionsSection {
+  margin-top: 6px;
+  --positions-grid: 86px minmax(280px, 2.4fr) 72px 92px 124px 156px 108px 138px 138px 40px;
+  --positions-grid-compact: minmax(300px, 2.8fr) 72px 92px 124px 156px 108px 138px 138px 40px;
+}
+
+.positionsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 6px;
+  margin-bottom: 12px;
+}
+
+.positionsTitle {
+  color: var(--foreground);
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.positionsTable {
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.positionsList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.positionHeaderRow {
+  display: grid;
+  grid-template-columns: var(--positions-grid);
+  gap: 10px;
+  min-width: 1380px;
+  padding: 12px;
+}
+
+.positionHeaderRowCompact {
+  grid-template-columns: var(--positions-grid-compact);
+  min-width: 1260px;
+}
+
+.positionHeaderCell {
+  display: flex;
+  align-items: center;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.positionHeaderCellRight {
+  justify-content: flex-end;
+}
+
+.positionHeaderCellCenter {
+  justify-content: center;
+}
+
+.positionRow {
+  display: grid;
+  grid-template-columns: var(--positions-grid);
+  gap: 10px;
+  align-items: start;
+  min-width: 1380px;
+  padding: 12px;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--card);
+  color: var(--card-foreground);
+}
+
+.positionRowCompact {
+  grid-template-columns: var(--positions-grid-compact);
+  min-width: 1260px;
+}
+
+.positionRowMuted {
+  opacity: 0.68;
+  background: var(--muted);
+}
+
+.includeCell {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 8px;
+}
+
+.includeLabel {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.positionSearchSelectMenu {
+  min-width: 0;
+  width: auto;
+}
+
+.positionMetric,
+.positionTotal {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: flex-end;
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: right;
+}
+
+.unitValue {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  color: var(--muted-foreground);
+  font-size: 14px;
+}
+
+.totalAmount {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border-radius: var(--radius-xl);
+  background: var(--muted);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.totalRowSecondary {
+  color: var(--muted-foreground);
+  font-size: 14px;
+}
+
+.totalRowPrimary {
+  color: var(--foreground);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.error {
+  margin: 0 0 4px;
+  padding: 12px;
+  border: 1px solid color-mix(in oklab, var(--destructive) 35%, transparent);
+  border-radius: var(--radius-lg);
+  background: color-mix(in oklab, var(--destructive) 12%, transparent);
+  color: var(--destructive);
+  font-size: 14px;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.removePositionButton {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  justify-self: end;
+  align-self: start;
+  border-radius: var(--radius-lg);
+  color: var(--muted-foreground);
+}
+
+.removePositionButton:hover {
+  background: color-mix(in oklab, var(--destructive) 12%, transparent);
+  color: var(--destructive);
+}
+
+@media (max-width: 768px) {
+  .modalContent {
+    width: 95vw;
+    max-width: none;
+  }
+
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .positionHeaderRow,
+  .positionHeaderRowCompact {
+    display: none;
+  }
+
+  .positionRow,
+  .positionRowCompact {
+    grid-template-columns: 1fr;
+    min-width: 0;
+    gap: 8px;
+  }
+
+  .positionMetric,
+  .positionTotal {
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  .totalAmount {
+    align-items: stretch;
+  }
+
+  .modalActions {
+    flex-direction: column;
+  }
+
+  .modalActions button {
+    width: 100%;
+  }
+}

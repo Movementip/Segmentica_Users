@@ -1,0 +1,77 @@
+.tableRow {
+  font-family: var(--font-sans);
+}
+
+.tableRowClickable {
+  cursor: pointer;
+}
+
+.tableCell {
+  vertical-align: middle;
+}
+
+.clientId {
+  color: var(--foreground);
+  font-weight: 700;
+}
+
+.nameCell {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--foreground);
+  font-weight: 700;
+}
+
+.mutedCell {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted-foreground);
+  font-weight: 500;
+}
+
+.typeBadges {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.actionsHeader,
+.actionsCell {
+  text-align: right;
+}
+
+.actionsCell {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.colId {
+  width: 92px;
+}
+
+.colName {
+  width: 22%;
+}
+
+.colType {
+  width: 18%;
+}
+
+.colPhone {
+  width: 16%;
+}
+
+.colEmail {
+  width: 18%;
+}
+
+.colAddress {
+  width: 20%;
+}
+
+.colActions {
+  width: 64px;
+}

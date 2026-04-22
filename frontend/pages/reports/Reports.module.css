@@ -1,0 +1,336 @@
+.container {
+  min-height: 100vh;
+  padding: 81px 24px 32px;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.periodSelect {
+  min-width: 220px;
+  border-radius: var(--radius-xl);
+}
+
+.surface {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2xl);
+  background: var(--card);
+  color: var(--card-foreground);
+}
+
+.tabsSection {
+  padding: 20px;
+}
+
+.blocksWrap {
+  position: relative;
+  padding: 0 20px 20px;
+}
+
+.tabLoadingState {
+  position: absolute;
+  inset: 0 20px 20px;
+  display: flex;
+  min-height: 320px;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in oklab, var(--card) 92%, transparent);
+  backdrop-filter: blur(2px);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.blocksContent {
+  min-height: 320px;
+}
+
+.blocksGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+.sectionCard {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2xl);
+  background: var(--card);
+  color: var(--card-foreground);
+  box-shadow: none;
+}
+
+.sectionCardWide {
+  grid-column: 1 / -1;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 20px 0;
+}
+
+.sectionCopy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.sectionTitle {
+  color: var(--foreground);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.sectionDescription {
+  margin-top: 4px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.sectionActionLink {
+  flex-shrink: 0;
+  text-decoration: none;
+}
+
+.surfaceButton {
+  min-height: 36px;
+  border-radius: var(--radius-xl);
+  background: var(--chrome);
+  color: var(--chrome-foreground);
+}
+
+.surfaceButton:hover {
+  background: var(--chrome-hover);
+  color: var(--chrome-foreground);
+}
+
+.chartCardContent,
+.tableCardContent {
+  padding: 16px 20px 20px;
+}
+
+.tableCardContent {
+  padding: 16px 0 0;
+}
+
+.chartBox {
+  width: 100%;
+  min-width: 0;
+}
+
+.tableSurface {
+  border-top: 1px solid var(--border);
+}
+
+.table {
+  width: 100%;
+  table-layout: auto;
+}
+
+.tableHeadNumeric,
+.numericHead,
+.numericCell {
+  text-align: right;
+}
+
+.tableRow {
+  transition: background-color 0.15s ease;
+}
+
+.textCell {
+  white-space: normal;
+}
+
+.cellContent {
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.numericCell {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.emptyRowCell {
+  padding: 24px 14px;
+}
+
+.emptyRow {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  text-align: center;
+}
+
+.emptyState {
+  display: flex;
+  min-height: 220px;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  text-align: center;
+}
+
+.progressList {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.progressRow {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.progressRowHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.progressName {
+  color: var(--foreground);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.progressValue {
+  color: var(--muted-foreground);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.progressTrack {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--card) 74%, var(--muted) 26%);
+}
+
+.progressBar {
+  height: 100%;
+  border-radius: 999px;
+}
+
+.successBadge {
+  border-color: color-mix(in oklab, #16a34a 34%, transparent);
+  background: color-mix(in oklab, #16a34a 12%, transparent);
+  color: #16a34a;
+  font-weight: 700;
+}
+
+.positiveText {
+  color: #16a34a;
+  font-weight: 700;
+}
+
+.negativeText {
+  color: #dc2626;
+  font-weight: 700;
+}
+
+.inlineMetric {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  width: 100%;
+}
+
+.ratingCell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  width: 100%;
+}
+
+.ratingTrack {
+  width: 72px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in oklab, #16a34a 18%, transparent);
+}
+
+.ratingFill {
+  height: 100%;
+  background: #22c55e;
+}
+
+.ratingValue {
+  min-width: 44px;
+  color: var(--foreground);
+  font-weight: 700;
+  text-align: right;
+}
+
+.clickableRow {
+  cursor: pointer;
+}
+
+.clickableRow:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--foreground) 18%, transparent);
+  outline-offset: -2px;
+}
+
+.customReportTitle {
+  color: var(--foreground);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.customReportDesc {
+  max-width: 560px;
+  color: var(--muted-foreground);
+  line-height: 1.45;
+}
+
+@media (min-width: 960px) {
+  .blocksGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 980px) {
+  .tabsSection {
+    padding-bottom: 16px;
+  }
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .blocksWrap {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .sectionHeader {
+    flex-direction: column;
+  }
+
+  .sectionActionLink,
+  .surfaceButton,
+  .periodSelect {
+    width: 100%;
+  }
+
+  .ratingCell,
+  .inlineMetric {
+    justify-content: flex-start;
+  }
+}

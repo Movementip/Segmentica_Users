@@ -1,0 +1,62 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.label {
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.searchInput,
+.input,
+.selectTrigger {
+  width: 100%;
+  min-height: 40px;
+  border-radius: var(--radius-xl);
+  background: var(--chrome);
+  color: var(--foreground);
+  font-size: 14px;
+}
+
+.searchInput:hover,
+.input:hover,
+.selectTrigger:hover,
+.searchInput:focus-visible,
+.input:focus-visible,
+.selectTrigger:focus-visible {
+  background: var(--chrome-hover);
+}
+
+.error {
+  margin-top: -2px;
+  padding: 12px;
+  border: 1px solid color-mix(in oklab, var(--destructive) 35%, transparent);
+  border-radius: var(--radius-lg);
+  background: color-mix(in oklab, var(--destructive) 12%, transparent);
+  color: var(--destructive);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+@media (max-width: 720px) {
+  .row {
+    grid-template-columns: 1fr;
+  }
+}

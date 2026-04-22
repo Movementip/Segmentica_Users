@@ -1,0 +1,177 @@
+.card {
+  width: 100%;
+  padding: 32px;
+  border: 1px solid var(--border);
+  border-radius: 30px;
+  background: var(--card);
+  box-shadow: none;
+}
+
+.sectionTitle {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.sectionText {
+  margin: 8px 0 0;
+  color: var(--muted-foreground);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 20px;
+  margin-top: 24px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fieldWide {
+  grid-column: 1 / -1;
+}
+
+.fieldLabel {
+  color: var(--foreground);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.fieldHint {
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.selectTrigger {
+  width: 100%;
+  min-height: 52px;
+  border-radius: 18px;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.checkboxRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 2px;
+  color: var(--foreground);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.settingsCheckbox {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+}
+
+.checkboxText {
+  font-size: 15px;
+  color: var(--foreground);
+  line-height: 1.45;
+}
+
+.notice {
+  margin-top: 18px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.noticeSuccess {
+  background: color-mix(in oklab, var(--card) 84%, #22c55e 16%);
+  color: #78e69e;
+  border: 1px solid color-mix(in oklab, #22c55e 34%, transparent);
+}
+
+.noticeError {
+  background: color-mix(in oklab, var(--card) 84%, #ef4444 16%);
+  color: #ff8b8b;
+  border: 1px solid color-mix(in oklab, #ef4444 34%, transparent);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+  flex-wrap: wrap;
+}
+
+.secondaryButton,
+.primaryButton,
+.refreshButton {
+  min-height: 44px;
+  border-radius: 18px;
+  padding-inline: 18px;
+  font-weight: 600;
+}
+
+.secondaryButton {
+  border-color: var(--border);
+  background: var(--chrome);
+  color: var(--chrome-foreground);
+}
+
+.secondaryButton:hover {
+  background: var(--chrome-hover);
+  color: var(--chrome-foreground);
+}
+
+.refreshButton {
+  min-width: 152px;
+}
+
+.primaryButton {
+  min-width: 142px;
+}
+
+.spin {
+  animation: settings-card-spin 0.9s linear infinite;
+}
+
+@keyframes settings-card-spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 900px) {
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .card {
+    padding: 22px 18px;
+    border-radius: 24px;
+  }
+
+  .actions {
+    flex-direction: column;
+  }
+
+  .secondaryButton,
+  .primaryButton,
+  .refreshButton {
+    width: 100%;
+  }
+}

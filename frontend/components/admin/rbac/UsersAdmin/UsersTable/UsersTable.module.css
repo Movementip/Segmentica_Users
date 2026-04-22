@@ -1,0 +1,91 @@
+.table {
+  table-layout: fixed;
+}
+
+.table :global([data-slot="table-head"]) {
+  height: 52px;
+}
+
+.table :global([data-slot="table-cell"]) {
+  height: 64px;
+}
+
+.tableRow {
+  transition: background-color 0.18s ease;
+}
+
+.tableRowClickable {
+  cursor: pointer;
+}
+
+.tableCell {
+  vertical-align: middle;
+}
+
+.idValue,
+.primaryText {
+  color: var(--foreground);
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 650;
+}
+
+.secondaryText,
+.mutedText {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.personCell {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.personName,
+.positionText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.roleBadges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.roleBadge {
+  max-width: 100%;
+}
+
+.statusWrap {
+  display: flex;
+  align-items: center;
+}
+
+.colUserId {
+  width: 112px;
+}
+
+.colEmployeeId {
+  width: 126px;
+}
+
+.colFio {
+  width: 24%;
+}
+
+.colPosition {
+  width: 22%;
+}
+
+.colStatus {
+  width: 160px;
+}
+
+.colRoles {
+  width: 28%;
+}

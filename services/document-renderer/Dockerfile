@@ -15,7 +15,7 @@ COPY services/document-renderer/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY services/document-renderer/app.py ./app.py
-COPY templates ./templates
+COPY backend/templates ./templates
 
 ENV PYTHONUNBUFFERED=1
 ENV TEMPLATES_DIR=/app/templates/forms

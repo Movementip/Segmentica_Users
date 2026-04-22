@@ -1,0 +1,111 @@
+.surface {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2xl);
+  background: var(--card);
+}
+
+.surface[data-variant="embedded"] {
+  border: 0;
+  border-radius: 0;
+}
+
+.surface[data-clip="bottom"] {
+  border-radius: 0 0 calc(var(--radius-2xl) - 1px) calc(var(--radius-2xl) - 1px);
+}
+
+.surface [data-slot="table-container"] {
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--card);
+  color: var(--card-foreground);
+}
+
+.table th {
+  height: 44px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--foreground);
+  font-size: 14px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.table tbody tr {
+  background: var(--card);
+  transition: background-color 0.15s ease;
+}
+
+.table tbody tr:hover {
+  background: var(--chrome-hover);
+}
+
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.skeletonTable {
+  display: flex;
+  min-width: 960px;
+  flex-direction: column;
+  background: var(--card);
+}
+
+.skeletonHeader,
+.skeletonRow {
+  display: grid;
+  grid-template-columns: var(--entity-skeleton-columns, repeat(7, minmax(112px, 1fr)) 56px);
+  gap: 28px;
+  align-items: center;
+  min-height: 64px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.skeletonHeader {
+  min-height: 52px;
+}
+
+.skeletonRow:last-child {
+  border-bottom: 0;
+}
+
+.skeletonHeaderCell,
+.skeletonCell {
+  height: 16px;
+  width: 100%;
+}
+
+.skeletonHeaderCell {
+  height: 13px;
+  max-width: 120px;
+}
+
+.skeletonFirstCell {
+  max-width: 86px;
+}
+
+.skeletonActionCell {
+  height: 28px;
+  width: 28px;
+  justify-self: end;
+  border-radius: var(--radius-lg);
+}

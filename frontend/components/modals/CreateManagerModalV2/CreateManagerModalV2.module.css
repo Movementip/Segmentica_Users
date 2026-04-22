@@ -1,0 +1,96 @@
+.modalContent {
+  width: min(760px, calc(100vw - 32px));
+  max-width: min(760px, calc(100vw - 32px));
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.formGroup {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.label {
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.textField {
+  height: 44px;
+  border-radius: 14px;
+  width: 100%;
+  padding-inline: 14px;
+  color-scheme: dark;
+}
+
+.textField::-webkit-calendar-picker-indicator,
+.textField::-webkit-inner-spin-button {
+  color: var(--foreground);
+  opacity: 1;
+}
+
+.checkboxRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.checkboxLabel {
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.error {
+  border: 1px solid color-mix(in oklab, var(--destructive) 22%, transparent);
+  border-radius: 16px;
+  background: color-mix(in oklab, var(--destructive) 10%, var(--card));
+  color: var(--destructive);
+  padding: 12px 14px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 8px;
+}
+
+.primaryButton,
+.secondaryButton {
+  min-height: 48px;
+  padding-inline: 24px;
+  border-radius: 16px;
+}
+
+@media (max-width: 760px) {
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .actions {
+    flex-direction: column;
+  }
+
+  .primaryButton,
+  .secondaryButton {
+    width: 100%;
+  }
+}

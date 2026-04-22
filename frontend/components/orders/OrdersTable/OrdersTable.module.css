@@ -1,0 +1,82 @@
+.tableRow {
+    transition: background-color 0.15s ease;
+}
+
+.tableRowClickable {
+    cursor: pointer;
+}
+
+.tableCell {
+    vertical-align: middle;
+}
+
+.textRight {
+    text-align: right;
+}
+
+.sumColumn {
+    white-space: nowrap;
+}
+
+.sumColumnInner {
+    display: flex;
+    width: 100%;
+    justify-content: flex-end;
+}
+
+.orderId {
+    margin-right: 8px;
+    color: var(--foreground);
+    font-size: 14px;
+    font-weight: 650;
+}
+
+.modeBadge {
+    vertical-align: middle;
+}
+
+.clientCell {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.clientName {
+    color: var(--foreground);
+    font-size: 14px;
+    font-weight: 550;
+}
+
+.managerCell {
+    color: var(--muted-foreground);
+    font-size: 14px;
+}
+
+.dateCell,
+.addressCell {
+    color: var(--muted-foreground);
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.dateCell {
+    white-space: nowrap;
+}
+
+.amountCell {
+    color: var(--foreground);
+    font-size: 14px;
+    font-weight: 650;
+}
+
+.addressCell {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.actionsCell {
+    display: flex;
+    justify-content: flex-end;
+}

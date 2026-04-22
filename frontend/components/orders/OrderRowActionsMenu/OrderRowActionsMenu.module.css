@@ -1,0 +1,18 @@
+.menuButton {
+    color: var(--muted-foreground);
+}
+
+.rowMenuIcon,
+.rowMenuIconDel {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+}
+
+.rowMenuItemDanger {
+    color: var(--destructive);
+}
+
+.rowMenuIconDel {
+    color: var(--destructive);
+}

@@ -1,0 +1,93 @@
+.pageShell {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.summaryGrid {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 2px;
+}
+
+.metricCard {
+  min-height: 92px;
+}
+
+.metricContent {
+  display: flex;
+  min-height: 92px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+}
+
+.metricLabel {
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+}
+
+.metricValue {
+  color: var(--foreground);
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.emptyState,
+.loadingState {
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--muted-foreground);
+  font-size: 15px;
+}
+
+.loadingState {
+  min-height: 320px;
+}
+
+.alertCard {
+  border-left: 4px solid #f59e0b;
+}
+
+.alertContent {
+  padding-top: 20px;
+}
+
+.alertText {
+  color: #f59e0b;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+}
+
+.alertTextError {
+  color: var(--destructive);
+}
+
+@media (max-width: 1180px) {
+  .pageShell {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (min-width: 1280px) {
+  .summaryGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .fieldWide {
+    grid-column: span 1;
+  }
+}

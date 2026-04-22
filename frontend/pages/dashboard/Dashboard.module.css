@@ -1,0 +1,259 @@
+.container {
+  min-height: 100vh;
+  padding: 81px 24px 32px;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mainGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  min-width: 0;
+}
+
+.extraGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+.linkAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.linkAction:hover {
+  color: color-mix(in oklab, var(--foreground) 78%, var(--muted-foreground));
+}
+
+.linkAction :global(svg) {
+  width: 14px;
+  height: 14px;
+}
+
+.chartContent {
+  padding-top: 12px;
+}
+
+.chartWrap,
+.pieWrap {
+  width: 100%;
+  min-width: 0;
+}
+
+.emptyState {
+  display: flex;
+  height: 280px;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  text-align: center;
+}
+
+.divider {
+  height: 1px;
+  margin: 8px 0 12px;
+  background: var(--border);
+}
+
+.pieLegend {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.legendRow {
+  display: grid;
+  grid-template-columns: 12px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.legendDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+}
+
+.legendName {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--foreground);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.legendValue {
+  color: var(--foreground);
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.tableCardContent {
+  padding: 16px 0 0;
+}
+
+.tableSurface {
+  border-top: 1px solid var(--border);
+}
+
+.table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.numericHead,
+.numericCell {
+  text-align: right;
+}
+
+.numericCell {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.textCell {
+  white-space: normal;
+}
+
+.tableLink {
+  color: var(--foreground);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.tableLink:hover {
+  text-decoration: underline;
+}
+
+.cellTitle {
+  color: var(--foreground);
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.cellSub {
+  margin-top: 3px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.statusCell {
+  text-align: right;
+}
+
+.statusBadgeWrap {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.statusBadge {
+  min-width: 120px;
+}
+
+.movementQty {
+  font-weight: 750;
+}
+
+.movementQtyIn {
+  color: oklch(0.55 0.13 145);
+}
+
+.movementQtyOut {
+  color: var(--destructive);
+}
+
+.movementBadge {
+  min-width: 78px;
+  justify-content: center;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.movementBadgeIn {
+  border-color: color-mix(in oklab, #16a34a 34%, transparent);
+  background: color-mix(in oklab, #16a34a 12%, transparent);
+  color: oklch(0.55 0.13 145);
+}
+
+.movementBadgeOut {
+  border-color: color-mix(in oklab, var(--destructive) 34%, transparent);
+  background: color-mix(in oklab, var(--destructive) 12%, transparent);
+  color: var(--destructive);
+}
+
+.emptyRowCell {
+  padding: 24px 14px;
+}
+
+.emptyRow {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  text-align: center;
+}
+
+.error {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 81px 24px 0;
+  padding: 12px 16px;
+  border: 1px solid color-mix(in oklab, var(--destructive) 28%, transparent);
+  border-radius: var(--radius-xl);
+  background: color-mix(in oklab, var(--card) 74%, var(--destructive) 26%);
+  color: var(--destructive);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+@media (min-width: 1024px) {
+  .mainGrid {
+    grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
+  }
+
+  .extraGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .statusBadge {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .table {
+    table-layout: auto;
+  }
+
+  .linkAction {
+    white-space: normal;
+  }
+
+  .error {
+    margin-right: 16px;
+    margin-left: 16px;
+  }
+}

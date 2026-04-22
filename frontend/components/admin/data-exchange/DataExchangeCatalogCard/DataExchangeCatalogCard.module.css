@@ -1,0 +1,201 @@
+.card {
+  width: 100%;
+  padding: 32px;
+  border: 1px solid var(--border);
+  border-radius: 30px;
+  background: var(--card);
+  box-shadow: none;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.sectionTitle {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.sectionText {
+  margin: 8px 0 0;
+  color: var(--muted-foreground);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.actionButton {
+  min-width: 188px;
+  min-height: 44px;
+  border-radius: 18px;
+  border-color: var(--border);
+  background: var(--chrome);
+  color: var(--chrome-foreground);
+  font-weight: 600;
+}
+
+.actionButton:hover {
+  background: var(--chrome-hover);
+  color: var(--chrome-foreground);
+}
+
+.catalogList {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.catalogGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.catalogGroupHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.groupCheckboxRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  width: fit-content;
+  cursor: pointer;
+}
+
+.groupCheckbox {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--chrome);
+  color: var(--primary-foreground);
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.groupCheckboxActive {
+  border-color: var(--primary);
+  background: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.groupCheckbox svg {
+  width: 14px;
+  height: 14px;
+}
+
+.groupCheckboxText {
+  color: var(--foreground);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.catalogGroupText {
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.catalogGroupList {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-left: 18px;
+}
+
+.catalogOption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  background: var(--card);
+  transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.catalogOption:hover {
+  background: color-mix(in oklab, var(--card) 88%, var(--muted) 12%);
+}
+
+.catalogOptionDisabled {
+  opacity: 0.52;
+  cursor: not-allowed;
+}
+
+.catalogOptionMain {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.checkboxRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--foreground);
+  cursor: pointer;
+}
+
+.catalogCheckbox {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+}
+
+.catalogMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.catalogLabel {
+  color: var(--foreground);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.catalogAccess {
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+@media (max-width: 720px) {
+  .card {
+    padding: 22px 18px;
+    border-radius: 24px;
+  }
+
+  .actions {
+    flex-direction: column;
+  }
+
+  .actionButton {
+    width: 100%;
+  }
+
+  .catalogGroupList {
+    padding-left: 0;
+  }
+}

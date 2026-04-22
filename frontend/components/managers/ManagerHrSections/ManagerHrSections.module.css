@@ -1,0 +1,263 @@
+.sectionStack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.card {
+  padding-top: 20px;
+  padding-bottom: 20px;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-left: 20px;
+  padding-right: 20px;
+  padding-bottom: 12px;
+}
+
+.cardTitle {
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.cardDescription {
+  margin-top: 4px;
+  color: var(--muted-foreground);
+}
+
+.cardContent {
+  padding-left: 20px;
+  padding-right: 20px;
+  padding-top: 0;
+}
+
+.formGrid2,
+.formGrid3,
+.formGrid4,
+.rowGrid5,
+.rowGrid6 {
+  display: grid;
+  gap: 16px;
+}
+
+.formGrid2 {
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+
+.formGrid3,
+.formGrid4,
+.rowGrid5,
+.rowGrid6 {
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+}
+
+.field,
+.checkboxRow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fieldLabel {
+  color: var(--foreground);
+  font-size: 0.875rem;
+}
+
+.fieldMeta {
+  color: var(--muted-foreground);
+  font-size: 0.75rem;
+}
+
+.span2 {
+  grid-column: span 2;
+}
+
+.spanAll {
+  grid-column: 1 / -1;
+}
+
+.input,
+.selectTrigger {
+  min-height: 42px;
+  border-radius: 12px;
+}
+
+.input {
+  color-scheme: dark;
+}
+
+.input::-webkit-calendar-picker-indicator,
+.input::-webkit-inner-spin-button {
+  color: var(--foreground);
+  opacity: 1;
+}
+
+.textarea {
+  min-height: 96px;
+  border-radius: 14px;
+  background: var(--chrome);
+}
+
+.radioGroup {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.radioOption,
+.checkboxLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--foreground);
+  font-size: 14px;
+}
+
+.rowList {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.inlineRowCard {
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--card) 88%, var(--muted) 12%);
+  padding: 14px;
+}
+
+.inlineRowFooter {
+  margin-top: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.rowDeleteButton {
+  border: none;
+  background: transparent;
+  color: var(--destructive);
+  font-size: 15px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.emptyState {
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--muted-foreground);
+  font-size: 15px;
+}
+
+.uploadLabel {
+  display: inline-flex;
+}
+
+.uploadButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  padding: 0 16px;
+  background: var(--chrome);
+  color: var(--foreground);
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.uploadButton:hover {
+  background: var(--chrome-hover);
+  border-color: var(--ring);
+}
+
+.hiddenInput {
+  display: none;
+}
+
+.inlineError {
+  color: var(--destructive);
+  font-size: 0.875rem;
+}
+
+.table {
+  width: 100%;
+}
+
+.table :global([data-slot="table-head"]),
+.table :global([data-slot="table-cell"]) {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+
+.table :global([data-slot="table-head"]) {
+  color: color-mix(in oklab, var(--foreground) 80%, transparent);
+}
+
+.tableCellWrap {
+  white-space: normal;
+}
+
+.tableActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.button {
+  min-height: 36px;
+  border-radius: 12px;
+}
+
+@media (min-width: 900px) {
+  .formGrid2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .formGrid3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .rowGrid5 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .rowGrid6 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1200px) {
+  .formGrid4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .rowGrid5 {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .rowGrid6 {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .span2,
+  .spanAll {
+    grid-column: auto;
+  }
+}

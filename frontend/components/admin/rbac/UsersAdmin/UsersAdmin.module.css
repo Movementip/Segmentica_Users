@@ -1,0 +1,242 @@
+.container {
+  min-height: 100vh;
+  padding: 81px 24px 32px;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.card {
+  overflow: visible;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2xl);
+  background: var(--card);
+  color: var(--card-foreground);
+}
+
+.searchSection {
+  position: relative;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  font-family: var(--font-sans);
+}
+
+.searchInputWrapper {
+  flex: 1 1 auto;
+  min-width: 250px;
+  max-width: 600px;
+}
+
+.tableContainer {
+  position: relative;
+  z-index: 1;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--primary);
+  color: var(--primary-foreground);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 650;
+}
+
+.retryButton {
+  min-height: 40px;
+  border-radius: var(--radius-xl);
+}
+
+.button:hover {
+  filter: brightness(0.94);
+}
+
+.errorState,
+.emptyState {
+  display: flex;
+  min-height: 280px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 32px;
+  color: var(--muted-foreground);
+  text-align: center;
+}
+
+.errorText {
+  color: var(--destructive);
+  font-weight: 600;
+}
+
+.purchaseSelectTrigger {
+  min-height: 40px;
+  border-radius: var(--radius-xl);
+  background: var(--chrome);
+  color: var(--foreground);
+}
+
+.purchaseSelectTrigger:hover {
+  background: var(--chrome-hover);
+}
+
+.passwordField {
+  display: flex;
+  align-items: center;
+}
+
+.passwordIcon {
+  position: absolute;
+  top: 50%;
+  left: 14px;
+  width: 18px;
+  height: 18px;
+  color: var(--muted-foreground);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.passwordInput {
+  padding-left: 42px;
+}
+
+.passwordInputWithIcon {
+  padding-left: 42px;
+}
+
+.successBox {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in oklab, #22c55e 30%, var(--border));
+  border-radius: var(--radius-2xl);
+  background: color-mix(in oklab, var(--card) 76%, #22c55e 24%);
+}
+
+.successTitle {
+  color: var(--foreground);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.successText {
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.sectionLead {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sectionTitle {
+  color: var(--foreground);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.sectionSubTitle {
+  color: var(--muted-foreground);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.sectionText {
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.permissionsHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.permissionsSearch {
+  min-width: 320px;
+  max-width: 420px;
+}
+
+.autofillTrap {
+  position: absolute;
+  top: 0;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.autofillTrap input {
+  width: 1px;
+  height: 1px;
+  border: 0;
+  padding: 0;
+  opacity: 0;
+}
+
+.rbacDialogShell {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 8px;
+}
+
+.rbacDialogBody {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.rbacDialogContent {
+  height: min(900px, calc(100vh - 40px));
+  max-height: calc(100vh - 40px);
+  display: flex;
+  flex-direction: column;
+}
+
+@media (max-width: 560px) {
+  .container {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .searchInputWrapper {
+    max-width: none;
+  }
+
+  .permissionsSearch {
+    min-width: 0;
+    max-width: none;
+    width: 100%;
+  }
+
+  .rbacDialogShell {
+    padding-bottom: 4px;
+  }
+
+  .rbacDialogContent {
+    height: calc(100vh - 24px);
+    max-height: calc(100vh - 24px);
+  }
+}

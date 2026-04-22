@@ -1,0 +1,142 @@
+.container {
+  min-height: 100vh;
+  padding: 81px 24px 32px;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.surface {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2xl);
+  background: var(--card);
+  color: var(--card-foreground);
+}
+
+.periodSelect {
+  min-width: 220px;
+  border-radius: var(--radius-xl);
+}
+
+.searchInput {
+  width: min(420px, 100%);
+  min-width: min(420px, 100%);
+}
+
+.surfaceButton {
+  min-height: 40px;
+  border-radius: var(--radius-xl);
+  background: var(--chrome);
+  color: var(--chrome-foreground);
+}
+
+.surfaceButton:hover {
+  background: var(--chrome-hover);
+  color: var(--chrome-foreground);
+}
+
+.backActionLink {
+  text-decoration: none;
+}
+
+.tableSurface {
+  border-radius: inherit;
+}
+
+.table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.tableRow {
+  transition: background-color 0.15s ease;
+}
+
+.textCell {
+  white-space: normal;
+}
+
+.cellContent {
+  max-width: 320px;
+  overflow: hidden;
+  color: var(--foreground);
+  text-overflow: ellipsis;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.emptyRowCell {
+  padding: 24px 14px;
+}
+
+.emptyRow {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  text-align: center;
+}
+
+.loading,
+.error,
+.noData {
+  padding: 2rem;
+  text-align: center;
+  color: var(--muted-foreground);
+  font-size: 1rem;
+}
+
+.error {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border: 1px solid color-mix(in oklab, var(--destructive) 28%, transparent);
+  border-radius: var(--radius-xl);
+  background: color-mix(in oklab, var(--card) 74%, var(--destructive) 26%);
+  color: var(--destructive);
+  font-weight: 600;
+}
+
+.backLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  color: var(--foreground);
+  text-decoration: none;
+}
+
+.backLink:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 900px) {
+  .searchInput,
+  .periodSelect,
+  .backActionLink,
+  .surfaceButton {
+    width: 100%;
+  }
+
+  .table {
+    table-layout: auto;
+  }
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+}
+
+@media print {
+  .container {
+    padding: 0;
+    background: #fff;
+  }
+
+  .surface {
+    border: 0;
+    box-shadow: none;
+  }
+}

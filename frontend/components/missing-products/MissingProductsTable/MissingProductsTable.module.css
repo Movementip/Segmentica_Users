@@ -1,0 +1,123 @@
+.table {
+  table-layout: fixed;
+}
+
+.table :global([data-slot="table-head"]) {
+  height: 52px;
+}
+
+.table :global([data-slot="table-cell"]) {
+  height: 72px;
+}
+
+.colId {
+  width: 90px;
+}
+
+.colOrder {
+  width: 140px;
+}
+
+.colProduct {
+  width: auto;
+}
+
+.colQuantity {
+  width: 132px;
+}
+
+.colDeficit {
+  width: 120px;
+}
+
+.colStatus {
+  width: 152px;
+}
+
+.colActions {
+  width: 64px;
+}
+
+.tableCell {
+  vertical-align: middle;
+}
+
+.tableRow {
+  transition: background-color 0.18s ease;
+}
+
+.tableRow:hover {
+  background: color-mix(in oklab, var(--card) 86%, var(--muted) 14%);
+}
+
+.itemId,
+.orderLink,
+.itemTitle,
+.numericValue,
+.missingValue,
+.percentValue {
+  color: var(--foreground);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.itemId,
+.orderLink,
+.itemTitle {
+  font-weight: 650;
+}
+
+.numericValue,
+.missingValue,
+.percentValue {
+  font-weight: 600;
+}
+
+.missingValue {
+  color: color-mix(in oklab, var(--foreground) 82%, #f97316 18%);
+}
+
+.itemTitle,
+.itemSub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.itemSub {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.textRight {
+  text-align: right;
+}
+
+.actionsHeader {
+  width: 64px;
+}
+
+.actionsCell {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.menuButton {
+  color: var(--muted-foreground);
+}
+
+.menuButton:hover,
+.menuButton:focus-visible {
+  color: var(--foreground);
+}
+
+.rowMenuIcon,
+.rowMenuIconDel {
+  width: 16px;
+  height: 16px;
+}
+
+.rowMenuItemDanger {
+  color: var(--destructive);
+}

@@ -1,0 +1,103 @@
+.wrapper {
+    display: flex;
+    min-height: 100vh;
+    background-color: #f5f5f5;
+    padding-top: var(--segmentica-header-height, 66px);
+    position: relative;
+    margin-left: 0;
+    width: 100%;
+    transition: all 0.3s ease;
+}
+
+.main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: calc(100vh - var(--segmentica-header-height, 66px));
+    transition: all 0.3s ease;
+    margin-left: var(--segmentica-sidebar-width, 256px);
+    width: calc(100% - var(--segmentica-sidebar-width, 256px));
+    position: relative;
+    z-index: 1;
+}
+
+.content {
+    flex: 1;
+    padding-top: 0px;
+    padding-left: var(--segmentica-sidebar-width, 256px);
+    overflow-x: auto;
+    background: #fff;
+    min-height: calc(100vh - var(--segmentica-header-height, 66px));
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    margin: 0;
+    border-radius: 0;
+}
+
+.card {
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 4px 24px 0 rgba(60, 80, 180, 0.06);
+  padding: 24px 32px;
+  margin-bottom: 24px;
+  transition: box-shadow 0.2s;
+}
+
+.card:hover {
+  box-shadow: 0 8px 32px 0 rgba(60, 80, 180, 0.13);
+}
+
+:global(html.dark) .wrapper {
+  background-color: var(--app-bg);
+}
+
+:global(html.dark) .content {
+  background: var(--app-bg);
+  color: var(--app-text);
+  box-shadow: none;
+}
+
+:global(html.dark) .card {
+  background: var(--app-surface);
+  color: var(--app-text);
+  border: 1px solid var(--app-border);
+  box-shadow: none;
+}
+
+:global(html.dark) .card:hover {
+  background: var(--app-surface-hover);
+  box-shadow: none;
+}
+
+.overlay {
+  display: none;
+}
+
+/* Mobile styles */
+@media (max-width: 768px) {
+  .wrapper {
+    margin-left: 0;
+    width: 100%;
+    padding-top: 0;
+  }
+  
+  .main {
+    min-height: 100vh;
+  }
+  
+  .content {
+    padding: 16px;
+    min-height: calc(100vh - 64px);
+  }
+  
+  .overlay {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 999;
+  }
+}

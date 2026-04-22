@@ -1,0 +1,60 @@
+.root {
+  --status-accent: color-mix(in oklch, var(--foreground) 62%, var(--background));
+
+  display: inline-flex;
+  min-width: 70px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in oklch, var(--status-accent) 34%, transparent);
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--status-accent) 12%, transparent);
+  color: var(--status-accent);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  padding: 6px 12px;
+  text-align: center;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.compact {
+  min-width: auto;
+  padding: 4px 10px;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+}
+
+.neutral {
+  --status-accent: color-mix(in oklch, var(--foreground) 66%, var(--muted-foreground));
+}
+
+.success {
+  --status-accent: oklch(0.55 0.13 145);
+}
+
+.warning {
+  --status-accent: oklch(0.64 0.15 70);
+}
+
+.danger {
+  --status-accent: var(--destructive);
+}
+
+.muted {
+  --status-accent: var(--muted-foreground);
+}
+
+:global(html.dark) .success {
+  --status-accent: oklch(0.72 0.14 145);
+}
+
+:global(html.dark) .warning {
+  --status-accent: oklch(0.78 0.14 74);
+}
+
+:global(html.dark) .neutral {
+  --status-accent: color-mix(in oklch, var(--foreground) 76%, var(--muted-foreground));
+}

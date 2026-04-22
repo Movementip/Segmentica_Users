@@ -1,0 +1,49 @@
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.work {
+  background: color-mix(in oklab, var(--card) 84%, #22c55e 16%);
+  color: #22c55e;
+}
+
+.off {
+  background: color-mix(in oklab, var(--card) 84%, var(--muted) 16%);
+  color: var(--muted-foreground);
+}
+
+.vacation {
+  background: color-mix(in oklab, var(--card) 84%, #3b82f6 16%);
+  color: #4f8dff;
+}
+
+.sick {
+  background: color-mix(in oklab, var(--card) 84%, #ef4444 16%);
+  color: #ff6666;
+}
+
+.trip {
+  background: color-mix(in oklab, var(--card) 84%, #f59e0b 16%);
+  color: #f59e0b;
+}
+
+.field {
+  background: color-mix(in oklab, var(--card) 84%, #06b6d4 16%);
+  color: #31c6e5;
+}

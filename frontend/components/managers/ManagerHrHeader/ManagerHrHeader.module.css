@@ -1,0 +1,93 @@
+.header {
+  margin-bottom: 16px;
+  padding: 12px 0 16px;
+}
+
+.headerContent {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.headerLeft {
+  display: flex;
+  flex-direction: column;
+}
+
+.title {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.subtitle {
+  margin: 2px 0 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 400;
+}
+
+.saveState {
+  margin-top: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+.saveStateIcon {
+  color: color-mix(in oklab, var(--foreground) 70%, transparent);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.statusBadge {
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 9999px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid transparent;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.statusBadgeActive {
+  background: color-mix(in oklab, #3bb273 16%, transparent);
+  border-color: color-mix(in oklab, #3bb273 34%, transparent);
+  color: #8ce5ae;
+}
+
+.statusBadgeInactive {
+  background: color-mix(in oklab, var(--destructive) 14%, transparent);
+  border-color: color-mix(in oklab, var(--destructive) 30%, transparent);
+  color: color-mix(in oklab, var(--destructive) 82%, white 18%);
+}
+
+.button {
+  min-height: 40px;
+  border-radius: 14px;
+  padding-inline: 16px;
+}
+
+.icon {
+  width: 16px;
+  height: 16px;
+}
+
+@media (max-width: 900px) {
+  .actions {
+    justify-content: flex-start;
+  }
+}

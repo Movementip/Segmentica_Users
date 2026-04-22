@@ -1,0 +1,48 @@
+.list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.badge {
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.pdf {
+  background: color-mix(in oklab, var(--card) 72%, #ef4444 28%);
+  color: #b91c1c;
+}
+
+.word {
+  background: color-mix(in oklab, var(--card) 72%, #3b82f6 28%);
+  color: #1d4ed8;
+}
+
+.excel {
+  background: color-mix(in oklab, var(--card) 72%, #22c55e 28%);
+  color: #15803d;
+}
+
+.image,
+.file {
+  background: color-mix(in oklab, var(--card) 76%, var(--muted) 24%);
+  color: var(--muted-foreground);
+}
+
+:global(html.dark) .pdf {
+  color: #fca5a5;
+}
+
+:global(html.dark) .word {
+  color: #93c5fd;
+}
+
+:global(html.dark) .excel {
+  color: #86efac;
+}

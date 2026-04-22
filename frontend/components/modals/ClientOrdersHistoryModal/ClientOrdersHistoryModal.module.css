@@ -1,0 +1,98 @@
+.modalContent {
+  width: min(1180px, calc(100vw - 32px));
+  max-width: 1180px;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.controlField {
+  display: flex;
+  min-width: 220px;
+  flex: 1 1 220px;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.controlLabel {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+
+.selectTrigger {
+  height: 44px;
+  border-radius: 16px;
+}
+
+.selectTriggerValue {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.selectTriggerIcon {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  color: color-mix(in oklab, var(--chrome-foreground) 68%, transparent);
+}
+
+.openButton {
+  min-width: 176px;
+  margin-left: auto;
+}
+
+.error {
+  margin-bottom: 18px;
+  border: 1px solid color-mix(in oklab, var(--destructive) 24%, transparent);
+  border-radius: 16px;
+  background: color-mix(in oklab, var(--destructive) 10%, var(--card));
+  color: var(--destructive);
+  padding: 12px 14px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.tableSurface {
+  overflow: hidden;
+}
+
+.actionsHead,
+.actionsCell {
+  text-align: right;
+}
+
+.actionsCell > button {
+  margin-left: auto;
+}
+
+.emptyState {
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--muted-foreground);
+}
+
+@media (max-width: 860px) {
+  .controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .controlField,
+  .openButton {
+    width: 100%;
+    min-width: 0;
+    margin-left: 0;
+  }
+}

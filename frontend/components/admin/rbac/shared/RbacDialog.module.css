@@ -1,0 +1,210 @@
+.dialogContent {
+  width: min(920px, calc(100vw - 32px));
+  max-width: 920px;
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  border-radius: var(--radius-3xl);
+  background: var(--popover);
+  color: var(--popover-foreground);
+}
+
+.dialogContentNarrow {
+  width: min(560px, calc(100vw - 32px));
+  max-width: 560px;
+}
+
+.dialogContentWide {
+  width: min(1280px, calc(100vw - 32px));
+  max-width: 1280px;
+}
+
+.dialogHeader {
+  margin-bottom: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.dialogTitle {
+  color: var(--foreground);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.dialogDescription {
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.dialogBody {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin-top: 20px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fieldLabel {
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.fieldHint {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.input,
+.selectTrigger {
+  width: 100%;
+  min-height: 40px;
+  border-radius: var(--radius-xl);
+  background: var(--chrome);
+  color: var(--foreground);
+}
+
+.input:hover,
+.selectTrigger:hover {
+  background: var(--chrome-hover);
+}
+
+.input:focus-visible,
+.selectTrigger:focus-visible,
+.selectTrigger[data-popup-open="true"] {
+  background: var(--chrome-hover);
+}
+
+.hintCard {
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2xl);
+  background: color-mix(in oklab, var(--card) 72%, var(--muted) 28%);
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.secondaryButton,
+.primaryButton {
+  min-height: 40px;
+  min-width: 132px;
+  border-radius: var(--radius-xl);
+  font-weight: 650;
+}
+
+.secondaryButton {
+  background: var(--chrome);
+  color: var(--chrome-foreground);
+}
+
+.secondaryButton:hover {
+  background: var(--chrome-hover);
+  color: var(--chrome-foreground);
+}
+
+.primaryButton {
+  background: color-mix(in oklab, var(--foreground) 90%, var(--background));
+  color: var(--background);
+}
+
+.primaryButton:hover {
+  background: color-mix(in oklab, var(--foreground) 96%, var(--background));
+  color: var(--background);
+}
+
+.error {
+  color: var(--destructive);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.success {
+  color: #22c55e;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.tabShell {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.tabPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.tabPanelScroll {
+  max-height: 520px;
+  overflow: auto;
+}
+
+.passwordField {
+  position: relative;
+}
+
+.passwordInput {
+  padding-right: 52px;
+}
+
+.passwordToggle {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.passwordToggle:hover {
+  color: var(--foreground);
+}
+
+.selectContent {
+  min-width: max-content;
+}
+
+@media (max-width: 760px) {
+  .dialogContent,
+  .dialogContentWide,
+  .dialogContentNarrow {
+    width: calc(100vw - 24px);
+  }
+
+  .actions {
+    flex-direction: column-reverse;
+  }
+
+  .secondaryButton,
+  .primaryButton {
+    width: 100%;
+  }
+}

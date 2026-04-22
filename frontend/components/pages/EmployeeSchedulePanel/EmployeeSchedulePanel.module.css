@@ -1,0 +1,575 @@
+.panel {
+  width: 100%;
+  --schedule-surface: var(--card);
+  --schedule-surface-muted: color-mix(in oklab, var(--card) 88%, var(--muted) 12%);
+  --schedule-surface-soft: var(--chrome);
+  --schedule-surface-hover: var(--chrome-hover);
+  --schedule-border: var(--border);
+  --schedule-foreground: var(--foreground);
+  --schedule-muted: var(--muted-foreground);
+  --schedule-accent: var(--ring);
+  --schedule-danger: var(--destructive);
+  --schedule-success: color-mix(in oklab, #22c55e 78%, white 22%);
+}
+
+.panelGrid {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.mainColumn,
+.sideColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mainColumn {
+  grid-column: span 2;
+}
+
+.monthCard {
+  overflow: hidden;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 14px;
+}
+
+.cardBody {
+  padding-top: 0;
+}
+
+.sectionTitle {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--schedule-foreground);
+}
+
+.sectionDescription {
+  margin-top: 4px;
+  color: var(--schedule-muted);
+  font-size: 0.9375rem;
+}
+
+.monthControls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.periodNav {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 16px;
+  border: 1px solid var(--schedule-border);
+  background: var(--schedule-surface-soft);
+}
+
+.monthTitle {
+  min-width: 170px;
+  text-align: center;
+  text-transform: capitalize;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--schedule-foreground);
+}
+
+.iconButton {
+  min-width: 40px;
+  width: 40px;
+  height: 36px;
+  border-radius: 12px;
+}
+
+.weekdaysRow {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.weekdayCell {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--schedule-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.monthGrid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.dayCell {
+  min-height: 104px;
+  border-radius: 16px;
+  border: 1px solid var(--schedule-border);
+  background: var(--schedule-surface-muted);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 5px;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.18s ease, background-color 0.18s ease, transform 0.18s ease;
+}
+
+.dayCell:hover {
+  border-color: color-mix(in oklab, var(--schedule-accent) 45%, var(--schedule-border));
+  background: var(--schedule-surface-hover);
+}
+
+.dayCellMuted {
+  opacity: 0.6;
+}
+
+.dayCellToday {
+  border-color: color-mix(in oklab, var(--schedule-accent) 55%, var(--schedule-border));
+}
+
+.dayCellSelected {
+  border-color: var(--schedule-accent);
+  background: var(--schedule-surface-soft);
+  transform: translateY(-1px);
+}
+
+.dayCellFilled {
+  background: var(--schedule-surface);
+}
+
+.dayCellWorking {
+  background: color-mix(in oklab, var(--schedule-surface) 88%, #22c55e 12%);
+  border-color: color-mix(in oklab, var(--schedule-border) 70%, #22c55e 30%);
+}
+
+.dayCellOff {
+  background: color-mix(in oklab, var(--schedule-surface) 90%, var(--muted) 10%);
+  border-color: color-mix(in oklab, var(--schedule-border) 88%, var(--muted-foreground) 12%);
+}
+
+.dayCellVacation {
+  background: color-mix(in oklab, var(--schedule-surface) 88%, #3b82f6 12%);
+  border-color: color-mix(in oklab, var(--schedule-border) 72%, #3b82f6 28%);
+}
+
+.dayCellSick {
+  background: color-mix(in oklab, var(--schedule-surface) 88%, #ef4444 12%);
+  border-color: color-mix(in oklab, var(--schedule-border) 72%, #ef4444 28%);
+}
+
+.dayCellTop {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.dayNumber {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--schedule-foreground);
+}
+
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 9999px;
+  flex: 0 0 auto;
+}
+
+.dotGreen {
+  background: #22c55e;
+}
+
+.dotBlue {
+  background: #3b82f6;
+}
+
+.dotOrange {
+  background: #f59e0b;
+}
+
+.dotGray {
+  background: color-mix(in oklab, var(--schedule-muted) 88%, white 12%);
+}
+
+.dotRed {
+  background: #ef4444;
+}
+
+.dayCellBottom {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 2px;
+}
+
+.dayStatus {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--schedule-foreground);
+  line-height: 1.15;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+.dayTime,
+.dayPlaceholder {
+  font-size: 11px;
+  line-height: 1.2;
+  color: var(--schedule-muted);
+}
+
+.weekGrid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.weekCard {
+  border: 1px solid var(--schedule-border);
+  border-radius: 16px;
+  background: var(--schedule-surface-muted);
+  padding: 10px;
+  min-height: 138px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.weekCardSelected {
+  border-color: var(--schedule-accent);
+  background: var(--schedule-surface-soft);
+}
+
+.weekNumber {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: var(--schedule-foreground);
+}
+
+.weekdayShort {
+  text-transform: uppercase;
+  color: var(--schedule-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.statusBadge {
+  width: fit-content;
+  max-width: 100%;
+  white-space: normal;
+  line-height: 1.15;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.statusBadgeGreen {
+  background: color-mix(in oklab, #22c55e 20%, transparent);
+  color: #8ce5ae;
+  border-color: color-mix(in oklab, #22c55e 34%, transparent);
+}
+
+.statusBadgeBlue {
+  background: color-mix(in oklab, #3b82f6 18%, transparent);
+  color: #93c5fd;
+  border-color: color-mix(in oklab, #3b82f6 34%, transparent);
+}
+
+.statusBadgeOrange {
+  background: color-mix(in oklab, #f59e0b 18%, transparent);
+  color: #fcd34d;
+  border-color: color-mix(in oklab, #f59e0b 34%, transparent);
+}
+
+.statusBadgeGray {
+  background: color-mix(in oklab, var(--muted-foreground) 18%, transparent);
+  color: color-mix(in oklab, white 82%, var(--muted-foreground) 18%);
+  border-color: color-mix(in oklab, var(--muted-foreground) 28%, transparent);
+}
+
+.statusBadgeRed {
+  background: color-mix(in oklab, #ef4444 18%, transparent);
+  color: #fca5a5;
+  border-color: color-mix(in oklab, #ef4444 34%, transparent);
+}
+
+.weekTime {
+  line-height: 1.2;
+  color: var(--schedule-muted);
+}
+
+.weekHint {
+  color: var(--schedule-muted);
+  font-size: 0.75rem;
+}
+
+.headerIcon {
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--schedule-surface-soft);
+  color: var(--schedule-foreground);
+}
+
+.detailsStack,
+.editorStack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.patternOptions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.patternCard {
+  overflow: hidden;
+}
+
+.patternBody {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.patternGrid {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 12px;
+  align-items: end;
+}
+
+.patternFooter {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-top: 14px;
+  border-top: 1px solid var(--schedule-border);
+}
+
+.patternFooterInfo {
+  flex: 1 1 340px;
+  min-width: 0;
+}
+
+.patternFooterActions {
+  flex: 0 0 auto;
+}
+
+.checkboxRowInline {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--schedule-foreground);
+}
+
+.patternHint {
+  margin-top: 0;
+  max-width: 520px;
+  color: var(--schedule-muted);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.detailRow,
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fieldLabel {
+  color: var(--schedule-foreground);
+  font-size: 0.9375rem;
+}
+
+.fieldGrid2 {
+  display: grid;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.detailRow {
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--schedule-border);
+  background: var(--schedule-surface-muted);
+}
+
+.detailLabel {
+  color: var(--schedule-muted);
+  font-size: 0.875rem;
+}
+
+.detailValue {
+  color: var(--schedule-foreground);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.input,
+.selectTrigger {
+  min-height: 44px;
+  border-radius: 14px;
+}
+
+.input {
+  color-scheme: dark;
+}
+
+.input::-webkit-calendar-picker-indicator,
+.input::-webkit-inner-spin-button {
+  color: var(--foreground);
+  opacity: 1;
+}
+
+.selectContent {
+  border-radius: 14px;
+}
+
+.editorActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.deleteButton {
+  color: var(--schedule-danger);
+}
+
+.errorText {
+  color: var(--schedule-danger);
+  margin-bottom: 12px;
+}
+
+.successText {
+  color: var(--schedule-success);
+  margin-bottom: 12px;
+}
+
+.loadingState,
+.loadingCompact {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--schedule-muted);
+}
+
+.loadingState {
+  min-height: 240px;
+}
+
+.loadingCompact {
+  min-height: 120px;
+}
+
+@media (min-width: 640px) {
+  .fieldGrid2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 900px) {
+  .patternGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1280px) {
+  .panelGrid {
+    grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
+  }
+
+  .mainColumn {
+    grid-column: span 1;
+  }
+
+  .patternGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .weekGrid,
+  .monthGrid,
+  .weekdaysRow {
+    gap: 6px;
+  }
+
+  .dayCell {
+    min-height: 90px;
+    padding: 9px;
+  }
+
+  .weekCard {
+    min-height: 128px;
+  }
+
+  .weekGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .patternFooter {
+    align-items: stretch;
+  }
+
+  .patternFooterActions {
+    width: 100%;
+  }
+
+  .patternFooterActions :global([data-slot='button']) {
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .weekdaysRow,
+  .monthGrid {
+    grid-template-columns: repeat(7, minmax(44px, 1fr));
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .monthControls {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .monthTitle {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+}

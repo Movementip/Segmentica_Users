@@ -1,0 +1,337 @@
+.content {
+  width: min(1320px, calc(100vw - 32px));
+  max-width: 1320px;
+  max-height: 90vh;
+  overflow: auto;
+}
+
+.form {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.hint {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.field :global([data-slot="input"]),
+.field :global([data-slot="button"].group\/button),
+.positionSearchSelectInput,
+.vatField,
+.qtyField,
+.priceField {
+  width: 100%;
+  height: 40px;
+  border-radius: var(--radius-xl);
+  background: var(--chrome);
+  color: var(--foreground);
+}
+
+.field :global([data-slot="input"]):hover,
+.field :global([data-slot="button"].group\/button):hover,
+.positionSearchSelectInput:hover,
+.vatField:hover,
+.qtyField:hover,
+.priceField:hover {
+  background: var(--chrome-hover);
+}
+
+.checkboxCard {
+  display: flex;
+  min-height: 96px;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: color-mix(in oklab, var(--card) 84%, var(--muted) 16%);
+  cursor: pointer;
+}
+
+.checkboxRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 20px;
+}
+
+.includeCheckbox {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+}
+
+.checkboxTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--foreground);
+}
+
+.checkboxHint {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.emptyMessage {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.tableSurface {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+}
+
+.previewTable {
+  table-layout: fixed;
+}
+
+.primaryText {
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.secondaryText {
+  margin-top: 4px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+.textRight {
+  text-align: right;
+}
+
+.positionSearchSelectMenu {
+  min-width: 0;
+  width: auto;
+  z-index: 140;
+}
+
+.positionsSection {
+  margin-top: 6px;
+  --positions-grid: minmax(260px, 2fr) 72px 92px 124px 108px 138px 40px;
+}
+
+.positionsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 6px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.positionsTitle {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 16px;
+  font-weight: 650;
+}
+
+.positionsTable {
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.positionHeaderRow {
+  display: grid;
+  grid-template-columns: var(--positions-grid);
+  gap: 10px;
+  min-width: 920px;
+  padding: 12px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.positionsList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.positionRow {
+  display: grid;
+  grid-template-columns: var(--positions-grid);
+  gap: 10px;
+  align-items: start;
+  min-width: 920px;
+  padding: 12px;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--card);
+  color: var(--card-foreground);
+}
+
+.unitValue {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  color: var(--muted-foreground);
+  font-size: 14px;
+}
+
+.qtyField,
+.priceField,
+.vatField {
+  width: 100%;
+}
+
+.positionTotal {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: flex-end;
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.surfaceActionButton {
+  height: 40px;
+  border-radius: var(--radius-xl);
+  background: var(--chrome);
+  color: var(--chrome-foreground);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.surfaceActionButton:hover {
+  background: var(--chrome-hover);
+}
+
+.removePositionButton {
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  justify-self: end;
+  align-self: start;
+  border-radius: var(--radius-lg);
+  color: var(--muted-foreground);
+}
+
+.removePositionButton:hover {
+  background: color-mix(in oklab, var(--destructive) 12%, transparent);
+  color: var(--destructive);
+}
+
+.totalAmount {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  justify-content: flex-end;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-xl);
+  background: var(--muted);
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.modalActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  width: 100%;
+  padding-top: 4px;
+}
+
+.orderButton {
+  margin-right: auto;
+}
+
+.previewColName {
+  width: auto;
+}
+
+.previewColUnit {
+  width: 90px;
+}
+
+.previewColQty {
+  width: 96px;
+}
+
+.previewColPrice {
+  width: 150px;
+}
+
+.previewColNet {
+  width: 180px;
+}
+
+.previewColVat {
+  width: 120px;
+}
+
+.previewColTax {
+  width: 170px;
+}
+
+.previewColTotal {
+  width: 180px;
+}
+
+@media (max-width: 1080px) {
+  .positionHeaderRow {
+    display: none;
+  }
+
+  .positionRow {
+    grid-template-columns: 1fr;
+    min-width: 100%;
+  }
+
+  .positionTotal {
+    text-align: left;
+    justify-content: flex-start;
+  }
+
+  .removePositionButton {
+    justify-self: flex-start;
+  }
+}
+
+@media (max-width: 860px) {
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .modalActions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .orderButton {
+    margin-right: 0;
+  }
+}

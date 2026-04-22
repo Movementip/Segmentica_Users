@@ -1,0 +1,384 @@
+.container {
+  min-height: 100vh;
+  padding: 81px 24px 32px;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+  padding: 16px 0;
+}
+
+.headerCopy {
+  display: flex;
+  flex-direction: column;
+}
+
+.title {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 24px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.subtitle {
+  margin: 4px 0 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.actionButton {
+  min-width: 118px;
+}
+
+.card {
+  overflow: hidden;
+  margin-bottom: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2xl);
+  background: var(--card);
+  color: var(--card-foreground);
+}
+
+.detailsCard {
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.sectionHeader,
+.sectionHeaderWithActions {
+  padding: 20px 20px 16px;
+}
+
+.detailsHeader {
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sectionHeaderWithActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.sectionActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.sectionTitle {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.sectionMeta {
+  margin: 6px 0 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.detailsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 24px;
+  padding: 0 0 24px;
+}
+
+.detailPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.detailPanelTitle {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.detailSeparator {
+  height: 1px;
+  width: 100%;
+  background: var(--border);
+}
+
+.panelRows {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.infoItem {
+  min-width: 0;
+}
+
+.infoLabel {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.infoValue {
+  margin-top: 6px;
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.inlineError {
+  margin: 0 20px 16px;
+  padding: 12px;
+  border: 1px solid color-mix(in oklab, var(--destructive) 35%, transparent);
+  border-radius: var(--radius-lg);
+  background: color-mix(in oklab, var(--destructive) 12%, transparent);
+  color: var(--destructive);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.emptyState {
+  padding: 0 20px 20px;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.tableSurface {
+  position: relative;
+  z-index: 1;
+}
+
+.tableFixed {
+  table-layout: fixed;
+  min-width: 100%;
+}
+
+.tableCell {
+  vertical-align: middle;
+}
+
+.fileCell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fileTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fileIcon {
+  color: var(--muted-foreground);
+  flex: 0 0 auto;
+}
+
+.fileName {
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.fileMeta {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.rowActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.inlineAction {
+  min-width: auto;
+  height: 36px;
+  padding: 0 14px;
+}
+
+.colDocFile {
+  width: auto;
+}
+
+.colDocSize {
+  width: 160px;
+}
+
+.colDocActions {
+  width: 420px;
+}
+
+.colHistoryDate {
+  width: 180px;
+}
+
+.colHistoryPrice {
+  width: 170px;
+}
+
+.colHistorySource {
+  width: 220px;
+}
+
+.colHistoryComment {
+  width: auto;
+}
+
+.textRight {
+  text-align: right;
+}
+
+.textRight[data-slot="table-head"],
+.textRight[data-slot="table-cell"] {
+  text-align: right !important;
+}
+
+.tableFixed [data-slot="table-head"].textRight,
+.tableFixed [data-slot="table-cell"].textRight {
+  text-align: right !important;
+}
+
+.previewDialog {
+  width: min(980px, calc(100vw - 32px));
+  max-width: 980px;
+}
+
+.previewHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.previewTitle {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 20px;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.previewDescription {
+  margin-top: 6px;
+}
+
+.previewBody {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: color-mix(in oklab, var(--card) 92%, var(--muted) 8%);
+}
+
+.previewImageWrap {
+  position: relative;
+  width: 100%;
+  height: 75vh;
+}
+
+.previewFrame {
+  width: 100%;
+  height: 75vh;
+  border: 0;
+}
+
+.previewImage {
+  display: block;
+  object-fit: contain;
+}
+
+.previewActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.errorCard {
+  display: flex;
+  min-height: 280px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2xl);
+  background: var(--card);
+  text-align: center;
+}
+
+.errorTitle {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 24px;
+  font-weight: 650;
+}
+
+.errorText {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+@media (max-width: 900px) {
+  .detailsGrid {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+}
+
+@media (max-width: 760px) {
+  .headerActions,
+  .sectionActions,
+  .previewActions {
+    width: 100%;
+  }
+
+  .actionButton,
+  .inlineAction {
+    width: 100%;
+  }
+}
+
+@media (max-width: 560px) {
+  .container {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+}

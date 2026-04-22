@@ -1,0 +1,127 @@
+.container {
+  min-height: 100vh;
+  padding: 2rem 1.5rem;
+  padding-top: 81px;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+.card {
+  overflow: visible;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2xl);
+  background: var(--card);
+  color: var(--card-foreground);
+}
+
+.statsContainer {
+  padding: 20px;
+border-bottom: 1px solid var(--border);
+}
+
+.statsTitle {
+  margin: 0 0 12px;
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+}
+
+.statCard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 16px 20px;
+  text-align: center;
+}
+
+.statCard:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 25%;
+  right: 0;
+  width: 1px;
+  height: 50%;
+  background: var(--border);
+}
+
+.statValue {
+  margin-bottom: 4px;
+  color: var(--foreground);
+  font-size: 24px;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+.statLabel {
+  color: var(--muted-foreground);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.tableContainer {
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  border-top: 1px solid var(--border);
+}
+
+.emptyState {
+  display: flex;
+  min-height: 280px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 32px;
+  color: var(--muted-foreground);
+  text-align: center;
+}
+
+.error {
+  padding: 16px 20px;
+  border: 1px solid color-mix(in oklch, var(--destructive) 24%, var(--border));
+  border-radius: var(--radius-xl);
+  background: color-mix(in oklch, var(--destructive) 6%, var(--card));
+  color: var(--destructive);
+}
+
+@media (max-width: 1200px) {
+  .statsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .statCard:nth-child(2)::after {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 1rem;
+    padding-top: 81px;
+  }
+
+  .statsContainer {
+    padding: 16px;
+  }
+
+  .statsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .statCard {
+    min-height: 96px;
+  }
+
+  .statCard::after {
+    display: none;
+  }
+}

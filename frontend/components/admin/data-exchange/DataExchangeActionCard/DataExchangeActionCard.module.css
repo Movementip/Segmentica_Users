@@ -1,0 +1,62 @@
+.card {
+  width: 100%;
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: 30px;
+  background: var(--card);
+  box-shadow: none;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.sectionTitle {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.sectionText {
+  margin: 8px 0 0;
+  color: var(--muted-foreground);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.selectTrigger {
+  width: 100%;
+  min-height: 50px;
+  border-radius: 18px;
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.primaryButton,
+.secondaryButton {
+  min-height: 48px;
+  border-radius: 18px;
+  font-weight: 600;
+}
+
+.secondaryButton {
+  border-color: var(--border);
+  background: var(--chrome);
+  color: var(--chrome-foreground);
+}
+
+.secondaryButton:hover {
+  background: var(--chrome-hover);
+  color: var(--chrome-foreground);
+}
+
+@media (max-width: 720px) {
+  .card {
+    padding: 22px 18px;
+    border-radius: 24px;
+  }
+}

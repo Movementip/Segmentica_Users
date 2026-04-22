@@ -1,0 +1,110 @@
+.modalContent {
+  width: min(860px, calc(100vw - 32px));
+  max-width: min(860px, calc(100vw - 32px));
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.formGroup {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.label {
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.textField {
+  height: 44px;
+  border-radius: 14px;
+  width: 100%;
+  padding-inline: 14px;
+}
+
+.selectedCard {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: color-mix(in oklab, var(--card) 88%, var(--muted) 12%);
+}
+
+.selectedTitle {
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.selectedName {
+  color: var(--foreground);
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.selectedMeta {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.descriptionAccent {
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.errorBox {
+  border: 1px solid color-mix(in oklab, var(--destructive) 22%, transparent);
+  border-radius: 16px;
+  background: color-mix(in oklab, var(--destructive) 10%, var(--card));
+  color: var(--destructive);
+  padding: 12px 14px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  padding-top: 8px;
+}
+
+.primaryButton,
+.secondaryButton {
+  min-height: 48px;
+  padding-inline: 24px;
+  border-radius: 16px;
+}
+
+@media (max-width: 760px) {
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .actions {
+    flex-direction: column;
+  }
+
+  .primaryButton,
+  .secondaryButton {
+    width: 100%;
+  }
+}

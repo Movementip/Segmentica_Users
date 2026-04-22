@@ -1,0 +1,95 @@
+.modalContent {
+  width: min(960px, calc(100vw - 32px));
+  max-width: 960px;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: end;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.formGroup {
+  display: flex;
+  min-width: 220px;
+  flex: 0 1 220px;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.label {
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.selectTrigger {
+  width: 100%;
+}
+
+.toolbarAction {
+  margin-left: auto;
+}
+
+.headerActionButton {
+  min-width: 198px;
+}
+
+.error {
+  padding: 12px;
+  border: 1px solid color-mix(in oklab, var(--destructive) 35%, transparent);
+  border-radius: var(--radius-lg);
+  background: color-mix(in oklab, var(--destructive) 12%, transparent);
+  color: var(--destructive);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.tableContainer {
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+}
+
+.table {
+  width: 100%;
+}
+
+.textRight {
+  text-align: right;
+}
+
+.mutedText {
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.modalActions {
+  justify-content: flex-end;
+}
+
+@media (max-width: 768px) {
+  .toolbar {
+    align-items: stretch;
+  }
+
+  .formGroup,
+  .toolbarAction,
+  .headerActionButton,
+  .modalActions :global(button) {
+    width: 100%;
+  }
+
+  .toolbarAction {
+    margin-left: 0;
+  }
+}

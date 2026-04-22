@@ -1,0 +1,106 @@
+.table {
+  table-layout: fixed;
+}
+
+.table :global([data-slot="table-head"]) {
+  height: 52px;
+}
+
+.table :global([data-slot="table-cell"]) {
+  height: 64px;
+}
+
+.tableRow {
+  transition: background-color 0.15s ease;
+}
+
+.tableRowClickable {
+  cursor: pointer;
+}
+
+.tableCell {
+  vertical-align: middle;
+}
+
+.textRight {
+  text-align: right;
+}
+
+.idValue,
+.itemTitle {
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.itemSub,
+.mutedText,
+.dateText {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.actionsCell {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.menuButton {
+  color: var(--muted-foreground);
+}
+
+.rowMenuIcon,
+.rowMenuIconDel {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.rowMenuItemDanger {
+  color: var(--destructive);
+}
+
+.rowMenuIconDel {
+  color: var(--destructive);
+}
+
+.contactsCell {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.attachmentWrap {
+  min-height: 22px;
+}
+
+.colId {
+  width: 126px;
+}
+
+.colName {
+  width: 26%;
+}
+
+.colPosition {
+  width: 20%;
+}
+
+.colHireDate {
+  width: 180px;
+}
+
+.colContacts {
+  width: 20%;
+}
+
+.colStatus {
+  width: 150px;
+}
+
+.colActions {
+  width: 72px;
+}

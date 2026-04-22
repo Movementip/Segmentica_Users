@@ -1,0 +1,46 @@
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--card);
+}
+
+.table th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    background: var(--card);
+    color: var(--foreground);
+    font-size: 14px;
+    font-weight: 650;
+    text-align: left;
+}
+
+.table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    color: var(--foreground);
+    font-size: 14px;
+    vertical-align: middle;
+}
+
+.table tbody tr {
+    background: var(--card);
+}
+
+.table tbody tr:hover {
+    background: var(--chrome-hover);
+}
+
+.table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.row {
+    transition: background-color 0.15s ease;
+}
+
+.rowClickable {
+    cursor: pointer;
+}

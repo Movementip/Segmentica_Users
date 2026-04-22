@@ -1,0 +1,446 @@
+.container {
+  padding: 2rem 1.5rem;
+  padding-top: 81px;
+  min-height: 100vh;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 16px 20px;
+}
+
+.headerText {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.headerActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--foreground);
+}
+
+.subtitle {
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+
+.panel {
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--foreground);
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 0 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sectionTitle {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--foreground);
+}
+
+.sectionMeta {
+  font-size: 13px;
+  color: var(--muted-foreground);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 0 0 16px;
+}
+
+.detailsGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(320px, 0.92fr);
+  gap: 0 48px;
+  padding: 20px 0 32px;
+}
+
+.detailsColumn {
+  display: grid;
+  gap: 24px;
+  align-content: start;
+  min-width: 0;
+}
+
+.infoCard {
+  display: grid;
+  gap: 16px;
+  padding: 18px 20px;
+  border: 1px solid color-mix(in oklch, var(--border) 82%, transparent);
+  border-radius: var(--radius-xl);
+  background: color-mix(in oklch, var(--card) 94%, var(--background));
+}
+
+.infoLabel {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  line-height: 1.3;
+}
+
+.infoValue {
+  margin: 6px 0 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--foreground);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.sectionBlock {
+  padding: 24px 0 0;
+  border-top: 1px solid var(--border);
+}
+.sectionBlockOrders {
+    padding: 24px 0 0;
+    margin: 24px 0 0;
+        border-top: 1px solid var(--border);
+
+}
+.inlineSection {
+  display: grid;
+  gap: 18px;
+  padding-top: 8px;
+  margin-top: 4px;
+  border-top: 1px solid color-mix(in oklch, var(--border) 78%, transparent);
+}
+
+.inlineSectionTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--foreground);
+}
+
+.bankAccountsList {
+  display: grid;
+  gap: 18px;
+  padding: 0;
+}
+
+.bankAccount {
+  display: grid;
+  gap: 16px;
+}
+
+.bankAccount + .bankAccount {
+  padding-top: 18px;
+  border-top: 1px solid color-mix(in oklch, var(--border) 78%, transparent);
+}
+
+.bankAccountHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.bankAccountTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--foreground);
+}
+
+.bankAccountMeta {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+
+.bankAccountGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 24px;
+}
+
+.bankAccountColumn {
+  display: grid;
+  gap: 24px;
+  align-content: start;
+  min-width: 0;
+}
+
+.sectionHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.sectionSubTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--foreground);
+}
+
+.sectionTotal {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--foreground);
+}
+
+.buttonGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.actionButton {
+  min-width: 144px;
+}
+
+.hiddenInput {
+  display: none;
+}
+
+.errorCard {
+  display: grid;
+  gap: 12px;
+  max-width: 520px;
+  padding: 24px;
+  border: 1px solid color-mix(in oklch, var(--destructive) 24%, var(--border));
+  border-radius: var(--radius-2xl);
+  background: color-mix(in oklch, var(--destructive) 6%, var(--card));
+}
+
+.errorTitle {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--foreground);
+}
+
+.errorMessage,
+.errorInline {
+  font-size: 14px;
+  color: var(--destructive);
+}
+
+.emptyState {
+  padding: 18px 0;
+  font-size: 14px;
+  color: var(--muted-foreground);
+}
+
+.tableSurface {
+  overflow: hidden;
+  border-radius: var(--radius-2xl);
+}
+
+.textRight {
+  text-align: right !important;
+}
+
+.fileCell {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.fileIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  color: var(--muted-foreground);
+}
+
+.fileName {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--foreground);
+  word-break: break-word;
+}
+
+.fileMeta {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  word-break: break-word;
+}
+
+.inlineActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.inlineLink {
+  display: inline-flex;
+  text-decoration: none;
+}
+
+.clickableRow {
+  cursor: pointer;
+}
+
+.previewContent {
+  width: min(1100px, calc(100vw - 48px));
+  max-width: 1100px;
+}
+
+.previewBody {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 260px;
+  max-height: 75vh;
+  padding: 12px 0 8px;
+}
+
+.previewImage {
+  max-width: 100%;
+  max-height: 70vh;
+  border-radius: var(--radius-xl);
+  object-fit: contain;
+}
+
+.previewFrame {
+  width: 100%;
+  height: 72vh;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--background);
+}
+
+.previewActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 12px;
+}
+
+.previewActionButton {
+  min-width: 128px;
+}
+
+.deleteDetails {
+  display: grid;
+  gap: 8px;
+}
+
+.deleteTitle {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--foreground);
+}
+
+.deleteMeta {
+  font-size: 14px;
+  color: var(--muted-foreground);
+}
+
+@media (max-width: 1280px) {
+  .detailsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px 32px;
+  }
+
+  .detailsColumn:last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 1024px) {
+  .grid,
+  .detailsGrid,
+  .bankAccountGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .detailsGrid {
+    gap: 24px;
+  }
+
+  .detailsColumn:nth-child(n + 2) {
+    padding-top: 24px;
+    border-top: 1px solid color-mix(in oklch, var(--border) 78%, transparent);
+  }
+
+  .bankAccountColumn:nth-child(n + 2) {
+    padding-top: 16px;
+    border-top: 1px solid color-mix(in oklch, var(--border) 78%, transparent);
+  }
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 1rem;
+    padding-top: 81px;
+  }
+
+  .header {
+    flex-direction: column;
+    align-items: stretch;
+    padding: 16px;
+  }
+
+  .headerActions,
+  .buttonGroup,
+  .inlineActions,
+  .previewActions {
+    justify-content: stretch;
+  }
+
+  .actionButton,
+  .previewActionButton,
+  .inlineLink,
+  .inlineActions > * {
+    width: 100%;
+  }
+
+  .sectionHeader,
+  .sectionHeaderRow {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .sectionHeader,
+  .sectionBlock,
+  .grid,
+  .detailsGrid {
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .previewContent {
+    width: min(100vw - 24px, 1000px);
+  }
+
+  .previewFrame {
+    height: 60vh;
+  }
+}

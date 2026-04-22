@@ -1,5 +1,5 @@
-import { getFinancePayload } from './pages/api/admin/finance';
-import { buildFinanceTimesheetBatchTemplatePayload } from './lib/financeTimesheetDocument';
+import { getFinancePayload } from './backend/pages/api/admin/finance';
+import { buildFinanceTimesheetBatchTemplatePayload } from './backend/lib/financeTimesheetDocument';
 
 async function main() {
     const payload = await getFinancePayload(24, '2026-04');

@@ -1,0 +1,425 @@
+.sectionHeader {
+  margin-bottom: 16px;
+}
+
+.sectionActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.surfaceButton {
+  min-height: 40px;
+  min-width: 142px;
+  border-radius: var(--radius-xl);
+  background: var(--chrome);
+  color: var(--chrome-foreground);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.spin {
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.surfaceButton:hover {
+  background: var(--chrome-hover);
+  color: var(--chrome-foreground);
+}
+
+.primaryButton {
+  min-height: 40px;
+  min-width: 142px;
+  border-radius: var(--radius-xl);
+}
+
+.searchRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.searchField {
+  flex: 1 1 auto;
+  min-width: 280px;
+  max-width: 640px;
+}
+
+.stateCard {
+  display: flex;
+  min-height: 220px;
+  align-items: center;
+  justify-content: center;
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2xl);
+  background: var(--card);
+  color: var(--muted-foreground);
+  text-align: center;
+}
+
+.stateCardError {
+  color: var(--destructive);
+}
+
+.mono {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.actionsCell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.rowIconButton {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--chrome);
+  color: var(--foreground);
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.rowIconButton:hover {
+  background: var(--chrome-hover);
+}
+
+.rowIconButtonDanger {
+  color: color-mix(in oklab, var(--destructive) 88%, var(--foreground));
+}
+
+.rowIconButtonDanger:hover {
+  border-color: color-mix(in oklab, var(--destructive) 32%, var(--border));
+  background: color-mix(in oklab, var(--destructive) 16%, var(--chrome));
+}
+
+.roleList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.roleCard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2xl);
+  background: var(--card);
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.roleCardSelected {
+  border-color: color-mix(in oklab, var(--foreground) 18%, var(--border));
+  background: color-mix(in oklab, var(--card) 70%, var(--muted) 30%);
+}
+
+.roleCardClickable {
+  cursor: pointer;
+}
+
+.roleCardClickable:hover {
+  background: color-mix(in oklab, var(--card) 76%, var(--muted) 24%);
+}
+
+.roleCardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.roleCardTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.roleCardTitleText {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.roleCardName {
+  color: var(--foreground);
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.roleCardDesc {
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.roleCardCount {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.checkbox {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+}
+
+.permSections {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.permSection,
+.permGroupCard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2xl);
+  background: color-mix(in oklab, var(--card) 76%, var(--muted) 24%);
+}
+
+.permSubSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.permSectionHeader,
+.permGroupToggle,
+.permGroupToggleLeft,
+.permGroupToggleRight,
+.permCardHeader,
+.permCardTitleRow {
+  display: flex;
+  align-items: center;
+}
+
+.permSectionHeader,
+.permGroupToggle,
+.permCardHeader {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.permGroupToggle {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.permGroupToggleLeft {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+}
+
+.permGroupToggleRight {
+  gap: 10px;
+}
+
+.permGroupChevron {
+  color: var(--muted-foreground);
+  transition: transform 0.15s ease;
+}
+
+.permGroupChevronOpen {
+  transform: rotate(180deg);
+}
+
+.permList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.permCard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--card);
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.permCardAllowed {
+  background: color-mix(in oklab, var(--card) 82%, #16a34a 18%);
+}
+
+.permCardOverride {
+  border-color: color-mix(in oklab, var(--foreground) 16%, var(--border));
+}
+
+.permCardOverrideAllow {
+  background: color-mix(in oklab, var(--card) 78%, #22c55e 22%);
+}
+
+.permCardOverrideDeny {
+  background: color-mix(in oklab, var(--card) 80%, #ef4444 20%);
+}
+
+.permCardInteractive {
+  cursor: pointer;
+}
+
+.permCardInteractive:hover {
+  background: color-mix(in oklab, var(--card) 72%, var(--muted) 28%);
+}
+
+.permCardInteractive.permCardOverrideAllow:hover {
+  background: color-mix(in oklab, var(--card) 72%, #22c55e 28%);
+}
+
+.permCardInteractive.permCardOverrideDeny:hover {
+  background: color-mix(in oklab, var(--card) 74%, #ef4444 26%);
+}
+
+.permCardTitleRow {
+  gap: 12px;
+  min-width: 0;
+  align-items: flex-start;
+}
+
+.permCardTitleText {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.permCardTitle {
+  color: var(--foreground);
+  font-size: 15px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.permKeyText {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.45;
+  word-break: break-word;
+}
+
+.permBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--chrome);
+  color: var(--chrome-foreground);
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.split {
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  gap: 18px;
+  min-height: 0;
+}
+
+.sideColumn,
+.mainColumn {
+  min-width: 0;
+}
+
+.mainColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.panelCard {
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2xl);
+  background: var(--card);
+}
+
+.panelLead {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.panelTitle {
+  color: var(--foreground);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.panelText {
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+@media (max-width: 900px) {
+  .split {
+    grid-template-columns: 1fr;
+  }
+
+  .searchRow {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .searchField {
+    min-width: 0;
+    max-width: none;
+  }
+
+  .sectionActions {
+    width: 100%;
+  }
+
+  .surfaceButton,
+  .primaryButton {
+    width: 100%;
+  }
+}

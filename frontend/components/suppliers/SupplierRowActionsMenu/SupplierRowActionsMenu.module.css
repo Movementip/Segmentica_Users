@@ -1,0 +1,18 @@
+.menuButton {
+  color: var(--muted-foreground);
+}
+
+.menuButton:hover,
+.menuButton:focus-visible {
+  color: var(--foreground);
+}
+
+.rowMenuIcon,
+.rowMenuIconDel {
+  width: 16px;
+  height: 16px;
+}
+
+.rowMenuItemDanger {
+  color: var(--destructive);
+}

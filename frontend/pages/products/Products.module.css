@@ -1,0 +1,361 @@
+.surfaceButton {
+  height: 40px;
+  min-width: 142px;
+  border-radius: var(--radius-xl);
+  white-space: nowrap;
+  background: var(--chrome);
+  color: var(--chrome-foreground);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.surfaceButton:hover,
+.surfaceButton[aria-expanded="true"] {
+  background: var(--chrome-hover);
+  color: inherit;
+}
+
+.container {
+  min-height: 100vh;
+  padding: 81px 24px 32px;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.card {
+  overflow: visible;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2xl);
+  background: var(--card);
+  color: var(--card-foreground);
+}
+
+.createButton {
+  min-width: 142px;
+}
+
+.spinning {
+  animation: spin 0.7s linear infinite;
+}
+
+.controlsSection {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+}
+
+.search {
+  width: min(600px, 100%);
+  flex: 1 1 auto;
+  max-width: 600px;
+  min-width: 250px;
+}
+
+.controlsGroup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.selectWrap {
+  width: 188px;
+  flex: 0 0 auto;
+}
+
+.selectTrigger {
+  width: 100%;
+  min-width: 0;
+}
+
+.sortGroup {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sortLabel {
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.sortWrap {
+  width: 320px;
+}
+
+.sortTrigger {
+  width: 100%;
+  min-width: 0;
+}
+
+.inlineError {
+  margin: 0 20px 16px;
+  padding: 12px;
+  border: 1px solid color-mix(in oklab, var(--destructive) 35%, transparent);
+  border-radius: var(--radius-lg);
+  background: color-mix(in oklab, var(--destructive) 12%, transparent);
+  color: var(--destructive);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.tableSurface {
+  position: relative;
+  z-index: 1;
+}
+
+.table {
+  table-layout: fixed;
+}
+
+.table :global([data-slot="table-head"]) {
+  height: 52px;
+}
+
+.table :global([data-slot="table-cell"]) {
+  height: 64px;
+}
+
+.errorState,
+.emptyState {
+  display: flex;
+  min-height: 280px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 32px;
+  color: var(--muted-foreground);
+  text-align: center;
+}
+
+.errorText {
+  color: var(--destructive);
+  font-weight: 600;
+}
+
+.retryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--primary);
+  color: var(--primary-foreground);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 650;
+}
+
+.retryButton:hover {
+  filter: brightness(0.94);
+}
+
+.tableCell {
+  vertical-align: middle;
+}
+
+.tableRow {
+  transition: background-color 0.18s ease;
+}
+
+.tableRowClickable {
+  cursor: pointer;
+}
+
+.tableRowClickable:hover {
+  background: color-mix(in oklab, var(--card) 86%, var(--muted) 14%);
+}
+
+.itemId,
+.itemTitle {
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.itemTitle,
+.itemSub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.itemSub {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.categoryPill {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  min-height: 28px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--card) 80%, var(--muted) 20%);
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 550;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.amountCell,
+.unitCell {
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.textRight {
+  text-align: right;
+}
+
+.mutedText {
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.actionsCell {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.actionsHeader {
+  text-align: right;
+}
+
+.nameCell,
+.articleCell,
+.categoryCell {
+  min-width: 0;
+}
+
+.colId {
+  width: 96px;
+}
+
+.colName {
+  width: 24%;
+}
+
+.colArticle {
+  width: 15%;
+}
+
+.colCategory {
+  width: 17%;
+}
+
+.colPurchase {
+  width: 13%;
+}
+
+.colSale {
+  width: 13%;
+}
+
+.colUnit {
+  width: 12%;
+}
+
+.colActions {
+  width: 64px;
+}
+
+.menuButton {
+  background: transparent;
+  color: var(--muted-foreground);
+}
+
+.menuButton:hover,
+.menuButton[data-state="open"],
+.menuButton[aria-expanded="true"] {
+  color: var(--foreground);
+  background: var(--chrome-hover);
+}
+
+.rowMenuIcon,
+.rowMenuIconDel {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+}
+
+.rowMenuItemDanger {
+  color: var(--destructive);
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 1180px) {
+  .controlsSection,
+  .controlsGroup {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .controlsGroup {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .search,
+  .selectWrap,
+  .sortWrap {
+    width: 100%;
+    max-width: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .surfaceButton,
+  .selectWrap,
+  .sortGroup,
+  .sortTrigger,
+  .sortWrap,
+  .createButton {
+    width: 100%;
+  }
+
+  .sortGroup {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .sortLabel {
+    white-space: normal;
+  }
+}
+
+@media (max-width: 560px) {
+  .container {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+}

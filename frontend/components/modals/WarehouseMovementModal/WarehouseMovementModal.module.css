@@ -1,0 +1,255 @@
+.modalContent {
+  width: min(560px, calc(100vw - 32px));
+  max-width: 560px;
+}
+
+.productModalContent {
+  width: min(980px, calc(100vw - 32px));
+  max-width: 980px;
+}
+
+.form,
+.productForm {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.formGroup,
+.productFormField {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.productFormRow {
+  display: grid;
+  grid-template-columns: minmax(180px, 230px) minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.productFormLabel {
+  padding-top: 10px;
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.productFormFieldInline {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.subFieldLabel {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.textField,
+.selectFullWidth {
+  width: 100%;
+  min-height: 40px;
+  border-radius: var(--radius-xl);
+  background: var(--chrome);
+  color: var(--foreground);
+  font-size: 14px;
+}
+
+.textField:hover,
+.selectFullWidth:hover,
+.productTextarea:hover {
+  background: var(--chrome-hover);
+}
+
+.productTextarea {
+  min-height: 132px;
+  border-radius: var(--radius-xl);
+  background: var(--chrome);
+  color: var(--foreground);
+  font-size: 14px;
+}
+
+.helper,
+.mutedText {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.notice {
+  margin: -2px 0 2px;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.error {
+  margin-top: -2px;
+  padding: 12px;
+  border: 1px solid color-mix(in oklab, var(--destructive) 35%, transparent);
+  border-radius: var(--radius-lg);
+  background: color-mix(in oklab, var(--destructive) 12%, transparent);
+  color: var(--destructive);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.typePill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 13px;
+  font-weight: 700;
+  width: fit-content;
+}
+
+.typePill[data-type='приход'] {
+  color: #15803d;
+  background: color-mix(in oklab, var(--card) 72%, #22c55e 28%);
+  border-color: color-mix(in oklab, var(--border) 68%, #22c55e 32%);
+}
+
+.typePill[data-type='расход'] {
+  color: #b91c1c;
+  background: color-mix(in oklab, var(--card) 72%, #ef4444 28%);
+  border-color: color-mix(in oklab, var(--border) 68%, #ef4444 32%);
+}
+
+.infoCard {
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: color-mix(in oklab, var(--card) 88%, var(--muted) 12%);
+}
+
+.infoCardTitle {
+  margin: 0 0 8px;
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.infoGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.infoValue {
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.summaryCard {
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--muted);
+}
+
+.summaryLabel {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.summaryValue {
+  margin-top: 4px;
+  color: var(--foreground);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.deltaPositive {
+  color: #16a34a;
+}
+
+.deltaNegative {
+  color: #dc2626;
+}
+
+.deltaNeutral {
+  color: var(--muted-foreground);
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.productActions {
+  justify-content: flex-start;
+}
+
+.productFooter {
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.primaryButton,
+.secondaryButton {
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: var(--radius-xl);
+  font-weight: 650;
+}
+
+.primaryButton {
+  border-color: color-mix(in oklab, var(--foreground) 78%, var(--border));
+  background: color-mix(in oklab, var(--foreground) 86%, var(--background));
+  color: var(--background);
+}
+
+.primaryButton:hover {
+  border-color: color-mix(in oklab, var(--foreground) 92%, var(--border));
+  background: color-mix(in oklab, var(--foreground) 94%, var(--background));
+  color: var(--background);
+}
+
+.secondaryButton {
+  border-color: var(--border);
+  background: var(--chrome);
+  color: var(--chrome-foreground);
+}
+
+.secondaryButton:hover {
+  border-color: var(--border);
+  background: var(--chrome-hover);
+  color: var(--foreground);
+}
+
+@media (max-width: 768px) {
+  .productFormRow {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .productFormLabel {
+    padding-top: 0;
+  }
+
+  .productFormFieldInline,
+  .infoGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .modalActions {
+    flex-direction: column;
+  }
+
+  .modalActions button {
+    width: 100%;
+  }
+}

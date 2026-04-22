@@ -1,0 +1,29 @@
+.actionButton {
+  min-width: 116px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: var(--radius-xl);
+  border-color: var(--border);
+  background: var(--chrome);
+  color: var(--chrome-foreground);
+  box-shadow: none;
+  font-weight: 650;
+}
+
+.actionButton:hover {
+  border-color: var(--border);
+  background: var(--chrome-hover);
+  color: var(--chrome-foreground);
+}
+
+.createButton {
+  min-width: 164px;
+}
+
+@media (max-width: 760px) {
+  .actionButton,
+  .createButton {
+    width: 100%;
+    justify-content: center;
+  }
+}

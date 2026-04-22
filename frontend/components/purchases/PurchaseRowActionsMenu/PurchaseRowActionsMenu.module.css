@@ -1,0 +1,26 @@
+.menuButton {
+  color: var(--muted-foreground);
+}
+
+.menuButton:hover,
+.menuButton[data-state="open"],
+.menuButton[aria-expanded="true"] {
+  background: var(--chrome-hover);
+  color: var(--foreground);
+}
+
+.rowMenuIcon,
+.rowMenuIconDel {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
+
+.rowMenuIcon {
+  color: currentColor;
+}
+
+.rowMenuIconDel,
+.rowMenuItemDanger {
+  color: var(--destructive);
+}

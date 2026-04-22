@@ -1,0 +1,203 @@
+.container {
+  min-height: 100vh;
+  padding: 81px 24px 32px;
+  color: var(--foreground);
+}
+
+
+
+.statsPanel {
+  margin: 0;
+}
+
+.feedbackSurface {
+  display: flex;
+  min-height: 280px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-3xl);
+  background: var(--card);
+  box-shadow: var(--shadow-soft);
+  padding: 32px;
+}
+
+.feedbackTitle {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.feedbackText {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 0.95rem;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.retryButton {
+  min-height: 40px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--chrome);
+  color: var(--chrome-foreground);
+  cursor: pointer;
+  padding: 0 16px;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.retryButton:hover {
+  background: var(--chrome-hover);
+}
+
+.tableSection {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.contentCard {
+  overflow: visible;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2xl);
+  background: var(--card);
+  color: var(--card-foreground);
+}
+
+.tabsWrap {
+  padding: 20px 20px 0;
+}
+
+.tableSurface {
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+}
+
+.tableHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 20px;
+}
+
+.searchField {
+  flex: 1 1 auto;
+  min-width: 250px;
+  max-width: 600px;
+}
+
+.tableHeaderActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.filterSelect {
+  width: 220px;
+  min-width: 220px;
+}
+
+.financeStatsPanel {
+  margin: 0 24px 18px;
+}
+
+.sectionStack {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.table {
+  width: 100%;
+  table-layout: auto;
+}
+
+.tableRow {
+  transition:
+    background-color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.clickableRow {
+  cursor: pointer;
+}
+
+.clickableRow:hover {
+  background: color-mix(in oklab, var(--card) 84%, var(--muted) 16%);
+}
+
+.emptyCell {
+  padding: 40px 16px !important;
+  color: var(--muted-foreground) !important;
+  text-align: center;
+}
+
+@media (max-width: 1100px) {
+  .container {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .tableHeader {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .searchField {
+    max-width: none;
+  }
+
+  .tableHeaderActions {
+    justify-content: stretch;
+  }
+
+  .filterSelect {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .title {
+    font-size: 2rem;
+  }
+
+  .contentCard {
+    padding-top: 0;
+  }
+
+  .tabsWrap {
+    padding: 16px 16px 0;
+  }
+
+  .tableHeader {
+    padding: 16px;
+  }
+
+  .financeStatsPanel {
+    margin: 0 16px 16px;
+  }
+
+  .table :global(th) {
+    padding: 12px;
+  }
+
+  .table :global(td) {
+    padding: 12px;
+  }
+}

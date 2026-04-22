@@ -1,0 +1,67 @@
+.root {
+  height: 40px;
+  min-width: 116px;
+  padding: 0 16px;
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--border);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  box-shadow: none;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.root:active {
+  transform: translateY(1px);
+}
+
+.neutral {
+  background: var(--chrome);
+  color: var(--chrome-foreground);
+}
+
+.neutral:hover,
+.neutral[data-state="open"],
+.neutral[aria-expanded="true"] {
+  border-color: var(--border);
+  background: var(--chrome-hover);
+  color: var(--chrome-foreground);
+}
+
+.danger {
+  border-color: color-mix(in oklch, var(--destructive) 36%, transparent);
+  background: color-mix(in oklch, var(--destructive) 12%, transparent);
+  color: var(--destructive);
+}
+
+.danger:hover,
+.danger[data-state="open"],
+.danger[aria-expanded="true"] {
+  border-color: color-mix(in oklch, var(--destructive) 52%, transparent);
+  background: color-mix(in oklch, var(--destructive) 22%, transparent);
+  color: var(--destructive);
+}
+
+.root:disabled,
+.root[data-disabled] {
+  opacity: 0.55;
+  transform: none;
+}
+
+.root[data-entity-action-layout="print-toolbar"] {
+  height: 42px;
+  min-width: auto;
+  padding: 0 16px;
+  border-radius: 0;
+}
+
+@media (max-width: 480px) {
+  .root {
+    width: 100%;
+  }
+}

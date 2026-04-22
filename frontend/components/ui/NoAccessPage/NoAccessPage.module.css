@@ -1,0 +1,39 @@
+.root {
+  display: flex;
+  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
+  padding: 81px 24px 32px;
+  background: var(--background);
+  color: var(--foreground);
+  text-align: center;
+}
+
+.card {
+  width: min(520px, 100%);
+  padding: 28px 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2xl);
+  background: var(--card);
+  color: var(--card-foreground);
+}
+
+.title {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: pre-line;
+}
+
+@media (max-width: 560px) {
+  .root {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .card {
+    padding: 24px 20px;
+  }
+}

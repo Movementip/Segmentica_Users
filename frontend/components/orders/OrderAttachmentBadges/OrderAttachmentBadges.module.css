@@ -1,0 +1,70 @@
+.attachmentBadges {
+    display: flex;
+    min-height: 22px;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+}
+
+.attachmentBadge {
+    height: 22px;
+    padding: 0 8px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    line-height: 1;
+    text-transform: uppercase;
+}
+
+.attachmentBadge[data-file-type="red"] {
+    border-color: color-mix(in oklab, #ef4444 32%, transparent);
+    background: color-mix(in oklab, var(--card) 72%, #ef4444 28%);
+    color: #b91c1c;
+}
+
+.attachmentBadge[data-file-type="blue"] {
+    border-color: color-mix(in oklab, #3b82f6 32%, transparent);
+    background: color-mix(in oklab, var(--card) 72%, #3b82f6 28%);
+    color: #1d4ed8;
+}
+
+.attachmentBadge[data-file-type="green"] {
+    border-color: color-mix(in oklab, #22c55e 32%, transparent);
+    background: color-mix(in oklab, var(--card) 72%, #22c55e 28%);
+    color: #15803d;
+}
+
+.attachmentBadge[data-file-type="amber"] {
+    border-color: color-mix(in oklab, #f59e0b 32%, transparent);
+    background: color-mix(in oklab, var(--card) 72%, #f59e0b 28%);
+    color: #b45309;
+}
+
+.attachmentBadges[data-empty="true"][data-reserve-space="false"] {
+    display: none;
+}
+
+.attachmentPlaceholder {
+    height: 22px;
+    width: 1px;
+    visibility: hidden;
+}
+
+:global(html.dark) .attachmentBadge[data-file-type="red"] {
+    color: #fca5a5;
+}
+
+:global(html.dark) .attachmentBadge[data-file-type="blue"] {
+    color: #93c5fd;
+}
+
+:global(html.dark) .attachmentBadge[data-file-type="green"] {
+    color: #86efac;
+}
+
+:global(html.dark) .attachmentBadge[data-file-type="amber"] {
+    color: #fcd34d;
+}

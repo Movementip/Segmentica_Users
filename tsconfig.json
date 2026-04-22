@@ -16,6 +16,12 @@
         "esModuleInterop": true,
         "module": "esnext",
         "moduleResolution": "node",
+        "baseUrl": ".",
+        "paths": {
+            "@/*": [
+                "frontend/*"
+            ]
+        },
         "resolveJsonModule": true,
         "isolatedModules": true,
         "jsx": "preserve",

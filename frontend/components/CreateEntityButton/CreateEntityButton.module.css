@@ -1,0 +1,44 @@
+.root {
+  min-width: 142px;
+  height: 40px;
+  padding: 0 18px;
+  border-color: color-mix(in oklab, var(--foreground) 78%, var(--border));
+  border-radius: var(--radius-xl);
+  background: color-mix(in oklab, var(--foreground) 86%, var(--background));
+  color: var(--background);
+  box-shadow: 0 1px 0 rgb(0 0 0 / 0.06);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+.root:hover {
+  border-color: color-mix(in oklab, var(--foreground) 92%, var(--border));
+  background: color-mix(in oklab, var(--foreground) 94%, var(--background));
+  color: var(--background);
+  box-shadow: 0 10px 24px rgb(0 0 0 / 0.14);
+}
+
+.root:active {
+  box-shadow: 0 1px 0 rgb(0 0 0 / 0.06);
+  transform: translateY(0);
+}
+
+:global(html.dark) .root {
+  border-color: color-mix(in oklab, var(--foreground) 72%, var(--border));
+  background: color-mix(in oklab, var(--foreground) 82%, var(--background));
+  color: var(--background);
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.05);
+}
+
+:global(html.dark) .root:hover {
+  border-color: color-mix(in oklab, var(--foreground) 88%, var(--border));
+  background: color-mix(in oklab, var(--foreground) 91%, var(--background));
+  color: var(--background);
+  box-shadow: 0 10px 26px rgb(0 0 0 / 0.34);
+}

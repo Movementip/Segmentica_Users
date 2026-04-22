@@ -1,0 +1,193 @@
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.statsCard,
+.attentionCard,
+.mainCard {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2xl);
+  background: var(--card);
+}
+
+.statsCard {
+  min-height: 156px;
+}
+
+.title {
+  width: 148px;
+  height: 18px;
+  margin: 20px 20px 12px;
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+}
+
+.statCard {
+  position: relative;
+  display: flex;
+  min-height: 106px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 20px;
+  box-sizing: border-box;
+}
+
+.statCard:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 25%;
+  right: 0;
+  width: 1px;
+  height: 50%;
+  background: var(--border);
+}
+
+.statValue {
+  width: 96px;
+  height: 26px;
+  margin-bottom: 10px;
+}
+
+.statLabel {
+  width: 118px;
+  height: 16px;
+}
+
+.attentionCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 22px;
+}
+
+.attentionContent {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.attentionIcon {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+}
+
+.attentionCopy {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.attentionTitle {
+  width: 168px;
+  height: 18px;
+}
+
+.attentionText {
+  width: min(720px, 100%);
+  max-width: 100%;
+  height: 18px;
+  margin-top: 10px;
+}
+
+.attentionAction {
+  width: 164px;
+  height: 40px;
+  border-radius: var(--radius-xl);
+  flex: 0 0 auto;
+}
+
+.tabsRow {
+  padding: 20px 20px 16px;
+}
+
+.tabs {
+  width: 520px;
+  max-width: 100%;
+  height: 68px;
+  border-radius: 999px;
+}
+
+.filtersRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 20px 20px;
+}
+
+.search {
+  flex: 1 1 auto;
+  min-width: 280px;
+  height: 40px;
+  border-radius: var(--radius-xl);
+}
+
+.filterGroup {
+  display: flex;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.filter {
+  width: 172px;
+  height: 40px;
+  border-radius: var(--radius-xl);
+}
+
+.mainCard :global([data-slot="table-head"]) {
+  height: 52px;
+}
+
+.mainCard :global([data-slot="table-cell"]) {
+  height: 64px;
+}
+
+@media (max-width: 980px) {
+  .statsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .statCard:nth-child(2)::after {
+    display: none;
+  }
+
+  .filtersRow,
+  .filterGroup,
+  .attentionCard {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filterGroup {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .search,
+  .filter,
+  .attentionAction,
+  .attentionTitle,
+  .attentionText {
+    width: 100%;
+  }
+}
+
+@media (max-width: 560px) {
+  .statsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .statCard::after {
+    display: none;
+  }
+}

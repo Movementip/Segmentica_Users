@@ -1,0 +1,42 @@
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.actionButton {
+  height: 40px;
+  min-width: 118px;
+  border-radius: var(--radius-xl);
+  border-color: var(--border);
+  background: var(--chrome);
+  color: var(--chrome-foreground);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+.actionButton:hover {
+  border-color: var(--border);
+  background: var(--chrome-hover);
+  color: var(--chrome-foreground);
+}
+
+.actionButton:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.menuContent {
+  min-width: 180px;
+  background: var(--popover);
+  color: var(--popover-foreground);
+}
+
+.menuItem {
+  min-height: 36px;
+  border-radius: 10px;
+  color: var(--popover-foreground);
+}

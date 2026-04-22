@@ -1,0 +1,339 @@
+.modalContent {
+    width: min(1024px, 94vw);
+    max-width: 1024px;
+    max-height: 88vh;
+    overflow: auto;
+}
+
+.header {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.statusPill,
+.modePill {
+    display: inline-flex;
+    min-height: 34px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    padding: 0 16px;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    border: 1px solid transparent;
+}
+
+.statusPill {
+    text-transform: uppercase;
+}
+
+.statusPill[data-color="green"] {
+    background: color-mix(in oklab, #22c55e 16%, transparent);
+    color: #86efac;
+}
+
+.statusPill[data-color="violet"] {
+    background: color-mix(in oklab, #8b5cf6 18%, transparent);
+    color: #c4b5fd;
+}
+
+.statusPill[data-color="orange"],
+.statusPill[data-color="amber"] {
+    background: color-mix(in oklab, #f59e0b 18%, transparent);
+    color: #fcd34d;
+}
+
+.statusPill[data-color="cyan"] {
+    background: color-mix(in oklab, #06b6d4 18%, transparent);
+    color: #67e8f9;
+}
+
+.statusPill[data-color="red"] {
+    background: color-mix(in oklab, #ef4444 16%, transparent);
+    color: #fca5a5;
+}
+
+.statusPill[data-color="blue"],
+.modePill {
+    background: color-mix(in oklab, var(--foreground) 10%, transparent);
+    color: var(--foreground);
+}
+
+.modePill[data-color="cyan"] {
+    background: color-mix(in oklab, #06b6d4 16%, transparent);
+    color: #67e8f9;
+}
+
+.modePill[data-color="indigo"] {
+    background: color-mix(in oklab, #6366f1 18%, transparent);
+    color: #c7d2fe;
+}
+
+.modeBanner {
+    margin-bottom: 16px;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-2xl);
+    background: var(--chrome);
+    color: var(--muted-foreground);
+    font-size: 14px;
+    line-height: 1.5;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+}
+
+.card,
+.timeline {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-2xl);
+    background: var(--card);
+    color: var(--card-foreground);
+}
+
+.card {
+    padding: 18px 20px;
+}
+
+.cardTitle {
+    margin-bottom: 10px;
+    color: var(--foreground);
+}
+
+.cardLine {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 8px 0;
+    border-top: 1px solid var(--border);
+}
+
+.cardLine:first-of-type {
+    border-top: none;
+    padding-top: 0;
+}
+
+.timeline {
+    margin-top: 18px;
+    padding: 16px 18px;
+}
+
+.timelineList {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.timelineList::before {
+    content: "";
+    position: absolute;
+    top: 6px;
+    bottom: 6px;
+    left: 5px;
+    width: 2px;
+    background: var(--border);
+}
+
+.timelineItem {
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr);
+    gap: 12px;
+}
+
+.timelineDot {
+    position: relative;
+    z-index: 1;
+    width: 12px;
+    height: 12px;
+    margin-top: 6px;
+    border-radius: 999px;
+    background: var(--muted-foreground);
+}
+
+.timelineDotDone {
+    background: #22c55e;
+}
+
+.timelineDotActive {
+    background: var(--foreground);
+}
+
+.timelineDotWarn {
+    background: #f59e0b;
+}
+
+.timelineTitle {
+    color: var(--foreground);
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.timelineText {
+    margin-top: 4px;
+    color: var(--muted-foreground);
+    font-size: 14px;
+    line-height: 1.45;
+}
+
+.detailList {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.detailItem {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    background: var(--chrome);
+}
+
+.detailLabel {
+    color: var(--muted-foreground);
+    font-size: 13px;
+}
+
+.detailValue {
+    color: var(--foreground);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.detailCard {
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xl);
+    background: var(--chrome);
+}
+
+.detailCardTitle {
+    color: var(--foreground);
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.detailCardMeta {
+    margin-top: 4px;
+    color: var(--muted-foreground);
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.sectionNote {
+    padding: 10px 12px;
+    border-radius: var(--radius-xl);
+    background: var(--chrome);
+    color: var(--muted-foreground);
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+.actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    margin-top: 20px;
+}
+
+.actionButton,
+.actionPrimary {
+    height: 40px;
+    border-radius: var(--radius-xl);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    font-weight: 500;
+    transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.actionButton {
+    background: var(--chrome);
+    color: var(--chrome-foreground);
+}
+
+.actionButton:hover {
+    background: var(--chrome-hover);
+}
+
+.actionPrimary:hover {
+    transform: translateY(-1px);
+}
+
+html:not(.dark) .statusPill[data-color="green"] {
+    border-color: color-mix(in oklab, #15803d 22%, transparent);
+    background: color-mix(in oklab, #22c55e 22%, white);
+    color: #14532d;
+}
+
+html:not(.dark) .statusPill[data-color="violet"] {
+    border-color: color-mix(in oklab, #6d28d9 22%, transparent);
+    background: color-mix(in oklab, #8b5cf6 20%, white);
+    color: #4c1d95;
+}
+
+html:not(.dark) .statusPill[data-color="orange"],
+html:not(.dark) .statusPill[data-color="amber"] {
+    border-color: color-mix(in oklab, #b45309 24%, transparent);
+    background: color-mix(in oklab, #f59e0b 24%, white);
+    color: #78350f;
+}
+
+html:not(.dark) .statusPill[data-color="cyan"] {
+    border-color: color-mix(in oklab, #0e7490 22%, transparent);
+    background: color-mix(in oklab, #06b6d4 20%, white);
+    color: #164e63;
+}
+
+html:not(.dark) .statusPill[data-color="red"] {
+    border-color: color-mix(in oklab, #b91c1c 20%, transparent);
+    background: color-mix(in oklab, #ef4444 18%, white);
+    color: #7f1d1d;
+}
+
+html:not(.dark) .statusPill[data-color="blue"] {
+    border-color: color-mix(in oklab, var(--foreground) 14%, transparent);
+    background: color-mix(in oklab, var(--foreground) 8%, white);
+    color: var(--foreground);
+}
+
+html:not(.dark) .modePill[data-color="cyan"] {
+    border-color: color-mix(in oklab, #0e7490 22%, transparent);
+    background: color-mix(in oklab, #06b6d4 20%, white);
+    color: #164e63;
+}
+
+html:not(.dark) .modePill[data-color="indigo"] {
+    border-color: color-mix(in oklab, #4338ca 22%, transparent);
+    background: color-mix(in oklab, #6366f1 20%, white);
+    color: #312e81;
+}
+
+@media (max-width: 760px) {
+    .grid {
+        grid-template-columns: 1fr;
+    }
+
+    .detailItem {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .actions {
+        flex-direction: column;
+    }
+
+    .actions button {
+        width: 100%;
+    }
+}

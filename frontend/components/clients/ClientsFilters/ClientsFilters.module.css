@@ -1,0 +1,118 @@
+.searchSection {
+  position: relative;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  font-family: var(--font-sans);
+}
+
+.searchInputWrapper {
+  flex: 1 1 auto;
+  min-width: 250px;
+  max-width: 600px;
+}
+
+.filterGroup {
+  position: relative;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+  flex-wrap: nowrap;
+}
+
+.filterDropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.filterSelectTrigger {
+  height: 40px;
+  min-width: 142px;
+  border-radius: var(--radius-xl);
+  white-space: nowrap;
+  background: var(--chrome);
+  color: color-mix(in oklab, var(--chrome-foreground) 82%, transparent);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.filterSelectTrigger:hover {
+  background: var(--chrome-hover);
+  color: color-mix(in oklab, var(--chrome-foreground) 82%, transparent);
+}
+
+.filterSelectTrigger[aria-expanded="true"],
+.filterSelectTrigger:focus-visible {
+  border-color: var(--ring);
+  background: var(--chrome-hover);
+  color: color-mix(in oklab, var(--chrome-foreground) 82%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--ring) 30%, transparent);
+}
+
+.triggerLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+
+.icon {
+  width: 16px;
+  height: 16px;
+}
+
+.sortDropdown {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+}
+
+.sortDropdown span {
+  color: color-mix(in oklab, var(--foreground) 70%, transparent);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.sortSelectTrigger {
+  min-width: 248px;
+  border-radius: var(--radius-xl);
+}
+
+@media (max-width: 900px) {
+  .searchSection {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .searchInputWrapper {
+    max-width: none;
+  }
+
+  .filterGroup {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
+    margin-left: 0;
+  }
+
+  .filterDropdown,
+  .filterSelectTrigger,
+  .sortDropdown,
+  .sortSelectTrigger {
+    width: 100%;
+  }
+
+  .sortDropdown {
+    align-items: stretch;
+    flex-direction: column;
+    height: auto;
+  }
+}

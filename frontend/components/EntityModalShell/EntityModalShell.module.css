@@ -1,0 +1,63 @@
+.content {
+  position: relative;
+}
+
+.closeButton {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  z-index: 1;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  background: var(--chrome);
+  color: var(--chrome-foreground);
+}
+
+.closeButton:hover {
+  background: var(--chrome-hover);
+  color: var(--foreground);
+}
+
+.header {
+  margin-bottom: 18px;
+  padding-right: 52px;
+}
+
+.title {
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.description {
+  margin-top: 4px;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.body {
+  min-width: 0;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+@media (max-width: 640px) {
+  .header {
+    padding-right: 44px;
+  }
+
+  .title {
+    font-size: 24px;
+  }
+
+  .footer {
+    width: 100%;
+  }
+}

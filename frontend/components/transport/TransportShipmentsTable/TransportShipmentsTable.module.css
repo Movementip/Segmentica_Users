@@ -1,0 +1,25 @@
+.tableRow {
+  transition: background-color 0.18s ease;
+}
+
+.tableCell {
+  vertical-align: middle;
+}
+
+.primaryText {
+  color: var(--foreground);
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 600;
+}
+
+.secondaryText {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.actionsCell {
+  display: flex;
+  justify-content: flex-end;
+}

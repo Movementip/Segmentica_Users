@@ -1,0 +1,68 @@
+.tableRow {
+    transition: background-color 0.15s ease;
+}
+
+.tableRowClickable {
+    cursor: pointer;
+}
+
+.tableCell {
+    vertical-align: middle;
+}
+
+.textRight {
+    text-align: right;
+}
+
+.sumColumn {
+    white-space: nowrap;
+}
+
+.sumColumnInner {
+    display: flex;
+    width: 100%;
+    justify-content: flex-end;
+}
+
+.purchaseId {
+    margin-right: 8px;
+    color: var(--foreground);
+    font-size: 14px;
+    font-weight: 650;
+}
+
+.supplierCell {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.supplierName {
+    color: var(--foreground);
+    font-size: 14px;
+    font-weight: 550;
+}
+
+.supplierMeta,
+.orderCell {
+    color: var(--muted-foreground);
+    font-size: 14px;
+}
+
+.dateCell {
+    color: var(--muted-foreground);
+    font-size: 13px;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+
+.amountCell {
+    color: var(--foreground);
+    font-size: 14px;
+    font-weight: 650;
+}
+
+.actionsCell {
+    display: flex;
+    justify-content: flex-end;
+}

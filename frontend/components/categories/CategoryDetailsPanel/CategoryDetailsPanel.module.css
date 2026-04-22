@@ -1,0 +1,178 @@
+.root {
+  display: flex;
+  min-height: 100%;
+  flex-direction: column;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2xl);
+  background: var(--card);
+}
+
+.header {
+  padding: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.title {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.description {
+  margin: 6px 0 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  padding: 20px;
+}
+
+.hero {
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.heroTitle {
+  color: var(--foreground);
+  font-size: 30px;
+  font-weight: 750;
+  line-height: 1.1;
+}
+
+.heroMeta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.heroId {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.statusBadge {
+  font-weight: 700;
+}
+
+.activeBadge {
+  border-color: color-mix(in oklab, #22c55e 32%, var(--border));
+  background: color-mix(in oklab, #22c55e 14%, transparent);
+  color: #22c55e;
+}
+
+.inactiveBadge {
+  border-color: color-mix(in oklab, #ef4444 32%, var(--border));
+  background: color-mix(in oklab, #ef4444 12%, transparent);
+  color: #ef4444;
+}
+
+.details {
+  display: flex;
+  flex-direction: column;
+  padding-top: 12px;
+}
+
+.detailRow {
+  padding: 18px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.detailLabel {
+  margin-bottom: 6px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.detailValue {
+  color: var(--foreground);
+  font-size: 14px;
+  line-height: 1.5;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 20px;
+}
+
+.actionButton,
+.deleteButton {
+  width: 100%;
+  height: 40px;
+  justify-content: center;
+  border-radius: var(--radius-xl);
+  font-size: 15px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+.actionButton {
+  border-color: color-mix(in oklab, var(--foreground) 12%, var(--border));
+  background: color-mix(in oklab, var(--foreground) 6%, var(--card));
+  color: var(--foreground);
+}
+
+.actionButton:hover {
+  border-color: color-mix(in oklab, var(--foreground) 18%, var(--border));
+  background: color-mix(in oklab, var(--foreground) 9%, var(--card));
+  color: var(--foreground);
+}
+
+.deleteButton {
+  border-color: color-mix(in oklab, var(--destructive) 34%, var(--border));
+  background: color-mix(in oklab, var(--destructive) 20%, transparent);
+  color: var(--destructive);
+}
+
+.deleteButton:hover {
+  border-color: color-mix(in oklab, var(--destructive) 44%, var(--border));
+  background: color-mix(in oklab, var(--destructive) 24%, transparent);
+  color: var(--destructive);
+}
+
+.actionButton :global(svg),
+.deleteButton :global(svg) {
+  width: 18px;
+  height: 18px;
+}
+
+.emptyState {
+  display: flex;
+  min-height: 320px;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px;
+  text-align: center;
+  color: var(--muted-foreground);
+}
+
+.emptyTitle {
+  color: var(--foreground);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.emptyText {
+  max-width: 280px;
+  font-size: 14px;
+  line-height: 1.5;
+}

@@ -1,0 +1,104 @@
+.surfaceButton {
+  height: 40px;
+  min-width: 142px;
+  border-radius: var(--radius-xl);
+  white-space: nowrap;
+  background: var(--chrome);
+  color: var(--chrome-foreground);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.surfaceButton:hover,
+.surfaceButton[aria-expanded="true"] {
+  background: var(--chrome-hover);
+  color: inherit;
+}
+
+.container {
+  min-height: 100vh;
+  padding: 81px 24px 32px;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.card {
+  overflow: hidden;
+  border-radius: var(--radius-2xl);
+  background: var(--card);
+  color: var(--card-foreground);
+}
+
+.workspaceSection {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 20px;
+  padding: 20px;
+}
+
+.errorState {
+  display: flex;
+  min-height: 280px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 32px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2xl);
+  background: var(--card);
+  color: var(--muted-foreground);
+  text-align: center;
+}
+
+.deletePreview {
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: color-mix(in oklab, var(--card) 90%, var(--muted) 10%);
+}
+
+.deletePreviewTitle {
+  color: var(--foreground);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.deletePreviewText {
+  margin-top: 6px;
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 1180px) {
+  .workspaceSection {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .container {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .surfaceButton {
+    width: 100%;
+  }
+}
