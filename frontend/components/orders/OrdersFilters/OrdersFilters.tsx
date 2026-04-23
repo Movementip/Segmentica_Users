@@ -11,7 +11,7 @@ import {
   DataFilterTextArea,
 } from "@/components/DataFiltersPanel/DataFiltersPanel"
 import { DataSearchField } from "@/components/DataSearchField/DataSearchField"
-import type { ClientOption, OrdersFiltersState } from "@/components/orders/types"
+import type { ClientOption, OrdersFiltersState } from "@/types/pages/orders"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 import { getOrderExecutionModeLabel } from "@/lib/orderModes"

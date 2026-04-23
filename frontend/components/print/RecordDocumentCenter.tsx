@@ -542,7 +542,11 @@ export const RecordDocumentCenter = ({ documents, buttonClassName, saveTarget, o
                                     {saveLoading ? 'Сохранение...' : 'Сохранить'}
                                 </EntityActionButton>
                             ) : null}
-                            <DocumentPreviewZoomControls value={previewZoom} onChange={updatePreviewZoom} />
+                            <DocumentPreviewZoomControls
+                                className={styles.previewZoomControls}
+                                value={previewZoom}
+                                onChange={updatePreviewZoom}
+                            />
                         </div>
                         {pdfError ? <div className={styles.previewError}>{pdfError}</div> : null}
                         {saveMessage ? <div className={styles.previewSuccess}>{saveMessage}</div> : null}

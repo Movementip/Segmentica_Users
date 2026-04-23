@@ -8,11 +8,11 @@ import {
 
 import { entityTableClassName } from "@/components/EntityDataTable/EntityDataTable"
 import { EntityStatusBadge } from "@/components/EntityStatusBadge/EntityStatusBadge"
-import type { MissingProduct } from "@/components/missing-products/types"
+import type { MissingProduct } from "@/types/pages/missing-products"
 import {
   getMissingProductDeficitPercentage,
   getMissingProductStatusLabel,
-} from "@/components/missing-products/types"
+} from "@/lib/missingProductsMeta"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,

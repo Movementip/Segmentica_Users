@@ -41,9 +41,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { useAuth } from "@/context/AuthContext"
-import { usePageTitle } from "@/context/PageTitleContext"
+import { useAuth } from "@/hooks/use-auth"
+import { usePageTitle } from "@/hooks/use-page-title"
 import { withLayout } from "@/layout"
+import type { AttachmentItem } from "@/types/attachments"
 
 import styles from "./ProductDetail.module.css"
 
@@ -109,14 +110,6 @@ interface ProductDetail {
   created_at: string
   категория_id?: number
   история_цен?: ProductPriceHistory[]
-}
-
-interface AttachmentItem {
-  id: string
-  filename: string
-  mime_type: string
-  size_bytes: number
-  created_at: string
 }
 
 const EMPTY_HISTORY: ProductPriceHistory[] = []

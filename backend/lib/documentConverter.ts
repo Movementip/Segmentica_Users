@@ -1,11 +1,14 @@
 import path from 'path';
 import { promises as fs } from 'fs';
 import { spawn } from 'child_process';
+import {
+    buildDocumentRendererError,
+    getDocumentRendererBaseUrls,
+} from './documentRendererUrls';
 
 const LIBREOFFICE_BIN = process.env.LIBREOFFICE_BIN || 'soffice';
 const LIBREOFFICE_TIMEOUT_MS = Number(process.env.LIBREOFFICE_TIMEOUT_MS || 30000);
 const GOTENBERG_URL = String(process.env.GOTENBERG_URL || '').trim().replace(/\/+$/, '');
-const DOCUMENT_RENDERER_URL = String(process.env.DOCUMENT_RENDERER_URL || '').trim().replace(/\/+$/, '');
 
 const waitForChild = (child: ReturnType<typeof spawn>, timeoutMs: number): Promise<void> =>
     new Promise((resolve, reject) => {
@@ -59,29 +62,43 @@ export const convertOfficeDocumentToPdf = async (inputPath: string): Promise<str
 
     await fs.rm(pdfPath, { force: true }).catch(() => undefined);
 
-    if (DOCUMENT_RENDERER_URL) {
+    const rendererBaseUrls = getDocumentRendererBaseUrls();
+    if (rendererBaseUrls.length > 0) {
         const fileBuffer = await fs.readFile(sourcePath);
-        const formData = new FormData();
-        const blob = new Blob([fileBuffer], {
-            type: 'application/octet-stream',
-        });
-        formData.append('file', blob, path.basename(sourcePath));
+        const attempts: string[] = [];
 
-        const response = await fetch(`${DOCUMENT_RENDERER_URL}/convert/office-to-pdf`, {
-            method: 'POST',
-            body: formData,
-        });
+        for (const baseUrl of rendererBaseUrls) {
+            const requestUrl = `${baseUrl}/convert/office-to-pdf`;
+            const formData = new FormData();
+            const blob = new Blob([fileBuffer], {
+                type: 'application/octet-stream',
+            });
+            formData.append('file', blob, path.basename(sourcePath));
 
-        if (!response.ok) {
-            const errorText = await response.text().catch(() => '');
-            throw new Error(
-                `Document renderer conversion failed with status ${response.status}. ${errorText || 'No response body from renderer.'}`
-            );
+            try {
+                const response = await fetch(requestUrl, {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text().catch(() => '');
+                    attempts.push(`${requestUrl} -> ${response.status}${errorText ? `: ${errorText}` : ''}`);
+                    continue;
+                }
+
+                const pdfBuffer = Buffer.from(await response.arrayBuffer());
+                await fs.writeFile(pdfPath, pdfBuffer);
+                return pdfPath;
+            } catch (error) {
+                const message = error instanceof Error ? error.message : 'Unknown fetch error';
+                attempts.push(`${requestUrl} -> ${message}`);
+            }
         }
 
-        const pdfBuffer = Buffer.from(await response.arrayBuffer());
-        await fs.writeFile(pdfPath, pdfBuffer);
-        return pdfPath;
+        if (!GOTENBERG_URL) {
+            throw buildDocumentRendererError('convert office document to PDF', attempts);
+        }
     }
 
     if (GOTENBERG_URL) {

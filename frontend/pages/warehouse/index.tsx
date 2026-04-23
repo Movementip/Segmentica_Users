@@ -19,13 +19,14 @@ import {
   type WarehouseViewTab,
 } from "@/components/warehouse/WarehouseViewTabs/WarehouseViewTabs"
 import { getWarehouseStockStatusLabel } from "@/components/warehouse/utils"
-import { useAuth } from "@/context/AuthContext"
+import { useAuth } from "@/hooks/use-auth"
 import { withLayout } from "@/layout"
 import { AdjustStockModal } from "@/components/modals/AdjustStockModal/AdjustStockModal"
 import { CreateProductModal } from "@/components/modals/CreateProductModal/CreateProductModal"
 import { EditProductModal } from "@/components/modals/EditProductModal/EditProductModal"
 import { WarehouseMovementModal } from "@/components/modals/WarehouseMovementModal/WarehouseMovementModal"
 import type { WarehouseData, WarehouseItem } from "@/types/pages/warehouse"
+import { formatRuCurrency, formatRuDate, formatRuDateTime } from "@/utils/formatters"
 
 import styles from "./Warehouse.module.css"
 
@@ -274,10 +275,9 @@ function WarehousePage(): JSX.Element {
     return many
   }
 
-  const formatDate = (value: string) => new Date(value).toLocaleDateString("ru-RU")
-  const formatDateTime = (value: string) => new Date(value).toLocaleString("ru-RU")
-  const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB" }).format(amount)
+  const formatDate = (value: string) => formatRuDate(value)
+  const formatDateTime = (value: string) => formatRuDateTime(value)
+  const formatCurrency = (amount: number) => formatRuCurrency(amount)
 
   const filteredItems = useMemo(() => {
     const items = data?.warehouse || []

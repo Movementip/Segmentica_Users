@@ -1,6 +1,6 @@
 import { FiEdit2, FiExternalLink, FiEye, FiMoreHorizontal, FiTrash2 } from "react-icons/fi"
 
-import type { Purchase } from "@/components/purchases/types"
+import type { Purchase } from "@/types/pages/purchases"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,

@@ -1,16 +1,14 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useState } from 'react';
 
-interface PageTitleContextType {
+export interface PageTitleContextType {
     pageTitle: string;
     setPageTitle: (title: string) => void;
 }
 
-const PageTitleContext = createContext<PageTitleContextType>({
+export const PageTitleContext = createContext<PageTitleContextType>({
     pageTitle: 'Дашборд',
     setPageTitle: () => { }
 });
-
-export const usePageTitle = () => useContext(PageTitleContext);
 
 interface PageTitleProviderProps {
     children: React.ReactNode;

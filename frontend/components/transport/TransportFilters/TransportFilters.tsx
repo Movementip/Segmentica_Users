@@ -15,8 +15,8 @@ import {
   transportRateOptions,
   transportSortOptions,
   transportTotalShipmentOptions,
-  type TransportFiltersState,
-} from "@/components/transport/types"
+} from "@/lib/transportMeta"
+import type { TransportFiltersState } from "@/types/pages/transport"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 

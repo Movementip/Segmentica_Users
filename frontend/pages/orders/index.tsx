@@ -8,7 +8,7 @@ import { CreateShipmentModal } from '../../components/modals/CreateShipmentModal
 import { OrderWorkflowModal, type OrderWorkflowModalSummary } from '../../components/modals/OrderWorkflowModal/OrderWorkflowModal';
 import DeleteConfirmation from '../../components/modals/DeleteConfirmation/DeleteConfirmation';
 import styles from './Orders.module.css';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/use-auth';
 import { NoAccessPage } from '../../components/ui/NoAccessPage/NoAccessPage';
 import { PageLoader } from '../../components/ui/PageLoader/PageLoader';
 import { Button } from '../../components/ui/button';
@@ -21,7 +21,8 @@ import { OrdersPageHeader } from '../../components/orders/OrdersPageHeader/Order
 import { OrdersPageSkeleton } from '../../components/orders/OrdersPageSkeleton/OrdersPageSkeleton';
 import { OrdersStats } from '../../components/orders/OrdersStats/OrdersStats';
 import { OrdersTable } from '../../components/orders/OrdersTable/OrdersTable';
-import type { AttachmentSummaryItem, ClientOption, LinkedPurchase, Order } from '../../components/orders/types';
+import type { AttachmentSummaryItem, ClientOption, LinkedPurchase, Order } from '../../types/pages/orders';
+import { formatRuCurrency, formatRuDateTime } from '../../utils/formatters';
 
 function OrdersPage(): JSX.Element {
     const router = useRouter();
@@ -646,22 +647,9 @@ function OrdersPage(): JSX.Element {
         <OrderAttachmentBadges types={attachmentsTypesByOrderId[orderId] || []} />
     );
 
-    const formatDate = (dateString: string) => {
-        return new Date(dateString).toLocaleDateString('ru-RU', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-    };
+    const formatDate = (dateString: string) => formatRuDateTime(dateString);
 
-    const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat('ru-RU', {
-            style: 'currency',
-            currency: 'RUB'
-        }).format(amount);
-    };
+    const formatCurrency = (amount: number) => formatRuCurrency(amount);
 
     // CRUD operations
     const handleCreateOrder = async (orderData: any) => {

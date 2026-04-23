@@ -10,7 +10,7 @@ import type {
   TransportMonthShipmentRow,
   TransportPerformanceRow,
   TransportStatsResponse,
-} from "@/components/transport/types"
+} from "@/types/pages/transport"
 import {
   getTransportShipmentStatusLabel,
   getTransportShipmentStatusTone,

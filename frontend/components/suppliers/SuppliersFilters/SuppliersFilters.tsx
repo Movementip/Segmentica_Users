@@ -14,13 +14,13 @@ import { DataSearchField } from "@/components/DataSearchField/DataSearchField"
 import type {
   SupplierOption,
   SuppliersFiltersState,
-} from "@/components/suppliers/types"
+} from "@/types/pages/suppliers"
 import {
   defaultSuppliersFilters,
   suppliersInTransitOptions,
   suppliersRatingOptions,
   suppliersSortOptions,
-} from "@/components/suppliers/types"
+} from "@/lib/suppliersMeta"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 import {

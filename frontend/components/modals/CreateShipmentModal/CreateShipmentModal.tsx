@@ -1,6 +1,20 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Box, Button, Dialog, Flex, Select, Text, TextField } from '@radix-ui/themes';
-import { fetchOrderDefaults } from '../../../lib/orderModes';
+
+import { EntityModalShell } from '@/components/EntityModalShell/EntityModalShell';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import { fetchOrderDefaults } from '@/lib/orderModes';
+
 import OrderSearchSelect from '../../ui/OrderSearchSelect/OrderSearchSelect';
 import styles from './CreateShipmentModal.module.css';
 
@@ -31,7 +45,20 @@ type TransportOption = {
     название?: string;
 };
 
-export function CreateShipmentModal({ isOpen, onClose, onCreated, transportId, initialOrderId, lockOrderId = false }: CreateShipmentModalProps): JSX.Element {
+const STATUS_OPTIONS = [
+    { value: 'в пути', label: 'в пути' },
+    { value: 'доставлено', label: 'доставлено' },
+    { value: 'отменено', label: 'отменено' },
+];
+
+export function CreateShipmentModal({
+    isOpen,
+    onClose,
+    onCreated,
+    transportId,
+    initialOrderId,
+    lockOrderId = false,
+}: CreateShipmentModalProps): JSX.Element | null {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
@@ -100,7 +127,7 @@ export function CreateShipmentModal({ isOpen, onClose, onCreated, transportId, i
             }
         };
 
-        loadOrders();
+        void loadOrders();
     }, [isOpen]);
 
     useEffect(() => {
@@ -122,6 +149,7 @@ export function CreateShipmentModal({ isOpen, onClose, onCreated, transportId, i
                     : Array.isArray((json as any)?.transport)
                         ? (json as any).transport
                         : [];
+
                 setTransports(
                     list
                         .map((item: any) => ({
@@ -138,20 +166,21 @@ export function CreateShipmentModal({ isOpen, onClose, onCreated, transportId, i
             }
         };
 
-        loadTransports();
+        void loadTransports();
     }, [isOpen, transportId]);
 
     const canSubmit = useMemo(() => {
-        const statusOk = ['в пути', 'доставлено', 'отменено'].includes(formData.статус);
+        const statusOk = STATUS_OPTIONS.some((item) => item.value === formData.статус);
         const transportOk = !formData.использовать_доставку || Number(transportId ?? selectedTransportId) > 0;
         return statusOk && transportOk && !loading;
     }, [formData.использовать_доставку, formData.статус, loading, selectedTransportId, transportId]);
 
     const transportSelectOptions = useMemo(
-        () => transports.map((item) => ({
-            value: String(item.id),
-            label: item.название || `ТК #${item.id}`,
-        })),
+        () =>
+            transports.map((item) => ({
+                value: String(item.id),
+                label: item.название || `ТК #${item.id}`,
+            })),
         [transports]
     );
 
@@ -166,16 +195,25 @@ export function CreateShipmentModal({ isOpen, onClose, onCreated, transportId, i
         [orders]
     );
 
+    const selectedOrderLabel = useMemo(() => {
+        if (!formData.заявка_id) return '';
+        const selectedOrder = orders.find((item) => String(item.id) === formData.заявка_id);
+        return selectedOrder
+            ? `#${selectedOrder.id}${selectedOrder.клиент_название ? ` — ${selectedOrder.клиент_название}` : ''}`
+            : `#${formData.заявка_id}`;
+    }, [formData.заявка_id, orders]);
+
     const handleClose = () => {
         if (loading) return;
         setError(null);
         setLoading(false);
         setOrdersError(null);
+        setTransportsError(null);
         onClose();
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
+    const handleSubmit = async (event: React.FormEvent) => {
+        event.preventDefault();
         if (!canSubmit) return;
 
         setLoading(true);
@@ -186,11 +224,12 @@ export function CreateShipmentModal({ isOpen, onClose, onCreated, transportId, i
                 заявка_id: formData.заявка_id.trim() ? Number(formData.заявка_id) : null,
                 использовать_доставку: formData.использовать_доставку,
                 транспорт_id: formData.использовать_доставку ? Number(transportId ?? selectedTransportId) : null,
-                статус: formData.статус?.trim() || 'в пути',
+                статус: formData.статус.trim() || 'в пути',
                 номер_отслеживания: formData.номер_отслеживания.trim() || null,
-                стоимость_доставки: formData.использовать_доставку && formData.стоимость_доставки.trim()
-                    ? Number(formData.стоимость_доставки)
-                    : null,
+                стоимость_доставки:
+                    formData.использовать_доставку && formData.стоимость_доставки.trim()
+                        ? Number(formData.стоимость_доставки)
+                        : null,
             };
 
             const resp = await fetch('/api/shipments', {
@@ -213,195 +252,175 @@ export function CreateShipmentModal({ isOpen, onClose, onCreated, transportId, i
         }
     };
 
-    if (!isOpen) return <></>;
+    if (!isOpen) return null;
 
     return (
-        <Dialog.Root open={isOpen} onOpenChange={(open) => (!open ? handleClose() : undefined)}>
-            <Dialog.Content className={styles.modalContent}>
-                <Dialog.Title>Создать отгрузку</Dialog.Title>
-                <Dialog.Description className={styles.description}>
-                    Заполните данные отгрузки. Транспорт будет привязан к текущей компании.
-                </Dialog.Description>
-
-                <form onSubmit={handleSubmit} className={styles.form}>
-                    <Flex direction="column" gap="4">
-                        <div className={styles.formGrid}>
-                            <Box className={styles.formGroup}>
-                                <label className={styles.checkboxRow}>
-                                    <input
-                                        type="checkbox"
-                                        checked={formData.использовать_доставку}
-                                        onChange={(e) => {
-                                            const checked = e.target.checked;
-                                            setFormData((p) => ({
-                                                ...p,
-                                                использовать_доставку: checked,
-                                                номер_отслеживания: checked ? p.номер_отслеживания : '',
-                                                стоимость_доставки: checked ? p.стоимость_доставки : '',
-                                            }));
-                                        }}
-                                        className={styles.checkboxInput}
-                                        disabled={loading}
-                                    />
-                                    <span>Использовать доставку</span>
-                                </label>
-                                <Text as="p" size="1" color="gray" className={styles.fieldHint}>
-                                    Если выключено, отгрузка оформляется как передача без доставки.
-                                </Text>
-                            </Box>
-
-                            {!transportId && formData.использовать_доставку ? (
-                                <Box className={styles.formGroup}>
-                                    <Text as="label" size="2" weight="medium">
-                                        Транспортная компания
-                                    </Text>
-                                    <OrderSearchSelect
-                                        value={selectedTransportId ? String(selectedTransportId) : ''}
-                                        onValueChange={(value) => setSelectedTransportId(value ? Number(value) : 0)}
-                                        options={transportSelectOptions}
-                                        placeholder="Выберите транспорт"
-                                        disabled={transportsLoading || loading}
-                                        emptyText={transportsLoading ? 'Загрузка...' : 'Нет транспортных компаний'}
-                                    />
-                                </Box>
-                            ) : null}
-
-                            <Box className={styles.formGroup}>
-                                <Text as="label" size="2" weight="medium">
-                                    Заявка
-                                </Text>
-                                {lockOrderId ? (
-                                    <TextField.Root
-                                        value={
-                                            formData.заявка_id
-                                                ? `#${formData.заявка_id}${orders.find((item) => String(item.id) === formData.заявка_id)?.клиент_название ? ` — ${orders.find((item) => String(item.id) === formData.заявка_id)?.клиент_название}` : ''}`
-                                                : ''
-                                        }
-                                        readOnly
-                                        className={styles.textField}
-                                        size="2"
-                                    />
-                                ) : (
-                                    <OrderSearchSelect
-                                        value={formData.заявка_id}
-                                        onValueChange={(value) => setFormData((p) => ({ ...p, заявка_id: value }))}
-                                        options={orderSelectOptions}
-                                        placeholder="Выберите заявку"
-                                        disabled={ordersLoading || loading}
-                                        emptyText={ordersLoading ? 'Загрузка...' : 'Нет заявок'}
-                                    />
-                                )}
-                                {!formData.заявка_id ? (
-                                    <Text as="p" size="1" color="gray" className={styles.fieldHint}>
-                                        Если заявку не выбирать, отгрузка будет создана как самостоятельная складская отгрузка без автоподбора позиций из заявки.
-                                    </Text>
-                                ) : null}
-                            </Box>
-
-                            <Box className={styles.formGroup}>
-                                <Text as="label" size="2" weight="medium">
-                                    Статус
-                                </Text>
-                                <Select.Root
-                                    value={formData.статус}
-                                    onValueChange={(value) => setFormData((p) => ({ ...p, статус: value }))}
+        <Dialog open={isOpen} onOpenChange={(open) => (!open ? handleClose() : undefined)}>
+            <EntityModalShell
+                className={styles.modalContent}
+                onClose={handleClose}
+                title="Создать отгрузку"
+                description="Заполните данные отгрузки. Транспорт будет привязан к текущей компании."
+                footerClassName={styles.actions}
+                footer={
+                    <>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            className={styles.secondaryButton}
+                            onClick={handleClose}
+                            disabled={loading}
+                        >
+                            Отмена
+                        </Button>
+                        <Button
+                            type="submit"
+                            form="create-shipment-form"
+                            className={styles.primaryButton}
+                            disabled={!canSubmit}
+                        >
+                            {loading ? 'Создание...' : 'Создать'}
+                        </Button>
+                    </>
+                }
+            >
+                <form id="create-shipment-form" onSubmit={handleSubmit} className={styles.form}>
+                    <div className={styles.formGrid}>
+                        <div className={`${styles.formGroup} ${styles.spanAll}`}>
+                            <Label className={styles.checkboxRow} htmlFor="shipment-use-delivery">
+                                <Checkbox
+                                    id="shipment-use-delivery"
+                                    checked={formData.использовать_доставку}
                                     disabled={loading}
-                                >
-                                    <Select.Trigger variant="surface" color="gray" className={styles.textField} placeholder="Выберите статус" />
-                                    <Select.Content position="popper" variant="solid" color="gray" highContrast>
-                                        <Select.Item value="в пути">в пути</Select.Item>
-                                        <Select.Item value="доставлено">доставлено</Select.Item>
-                                        <Select.Item value="отменено">отменено</Select.Item>
-                                    </Select.Content>
-                                </Select.Root>
-                            </Box>
-
-                            <Box className={styles.formGroup}>
-                                <Text as="label" size="2" weight="medium">
-                                    Номер отслеживания (опц.)
-                                </Text>
-                                <TextField.Root
-                                    value={formData.номер_отслеживания}
-                                    onChange={(e) => setFormData((p) => ({ ...p, номер_отслеживания: e.target.value }))}
-                                    placeholder={'TRACK-001'}
-                                    className={styles.textField}
-                                    size="2"
-                                    disabled={!formData.использовать_доставку}
+                                    onCheckedChange={(checked) => {
+                                        const nextValue = checked === true;
+                                        setFormData((previous) => ({
+                                            ...previous,
+                                            использовать_доставку: nextValue,
+                                            номер_отслеживания: nextValue ? previous.номер_отслеживания : '',
+                                            стоимость_доставки: nextValue ? previous.стоимость_доставки : '',
+                                        }));
+                                    }}
                                 />
-                            </Box>
-
-                            <Box className={styles.formGroup}>
-                                <Text as="label" size="2" weight="medium">
-                                    Стоимость доставки (опц.)
-                                </Text>
-                                <TextField.Root
-                                    value={formData.стоимость_доставки}
-                                    onChange={(e) => setFormData((p) => ({ ...p, стоимость_доставки: e.target.value }))}
-                                    placeholder={'400.00'}
-                                    className={styles.textField}
-                                    size="2"
-                                    disabled={!formData.использовать_доставку || autoCalculateDeliveryCost}
-                                />
-                                <Text as="p" size="1" color="gray" className={styles.fieldHint}>
-                                    {!formData.использовать_доставку
-                                        ? 'Стоимость доставки не используется, потому что отгрузка оформляется без доставки.'
-                                        : autoCalculateDeliveryCost
-                                        ? 'Стоимость будет рассчитана автоматически по тарифу выбранной транспортной компании.'
-                                        : 'Стоимость доставки можно ввести вручную. По умолчанию используется именно этот режим.'}
-                                </Text>
-                            </Box>
+                                <span>Использовать доставку</span>
+                            </Label>
+                            <p className={styles.fieldHint}>
+                                Если выключено, отгрузка оформляется как передача без доставки.
+                            </p>
                         </div>
 
-                        {error ? (
-                            <Box className={styles.error}>
-                                <Text as="div" size="2" color="red">
-                                    {error}
-                                </Text>
-                            </Box>
+                        {!transportId && formData.использовать_доставку ? (
+                            <div className={styles.formGroup}>
+                                <Label className={styles.fieldLabel}>Транспортная компания</Label>
+                                <OrderSearchSelect
+                                    value={selectedTransportId ? String(selectedTransportId) : ''}
+                                    onValueChange={(value) => setSelectedTransportId(value ? Number(value) : 0)}
+                                    options={transportSelectOptions}
+                                    placeholder="Выберите транспорт"
+                                    disabled={transportsLoading || loading}
+                                    emptyText={transportsLoading ? 'Загрузка...' : 'Нет транспортных компаний'}
+                                />
+                            </div>
                         ) : null}
 
-                        {ordersError ? (
-                            <Box className={styles.error}>
-                                <Text as="div" size="2" color="red">
-                                    {ordersError}
-                                </Text>
-                            </Box>
-                        ) : null}
+                        <div className={styles.formGroup}>
+                            <Label className={styles.fieldLabel} htmlFor="shipment-order">
+                                Заявка
+                            </Label>
+                            {lockOrderId ? (
+                                <Input
+                                    id="shipment-order"
+                                    value={selectedOrderLabel}
+                                    readOnly
+                                    className={styles.textField}
+                                />
+                            ) : (
+                                <OrderSearchSelect
+                                    value={formData.заявка_id}
+                                    onValueChange={(value) => setFormData((previous) => ({ ...previous, заявка_id: value }))}
+                                    options={orderSelectOptions}
+                                    placeholder="Выберите заявку"
+                                    disabled={ordersLoading || loading}
+                                    emptyText={ordersLoading ? 'Загрузка...' : 'Нет заявок'}
+                                />
+                            )}
+                            {!formData.заявка_id ? (
+                                <p className={styles.fieldHint}>
+                                    Если заявку не выбирать, отгрузка будет создана как самостоятельная складская
+                                    отгрузка без автоподбора позиций из заявки.
+                                </p>
+                            ) : null}
+                        </div>
 
-                        {transportsError ? (
-                            <Box className={styles.error}>
-                                <Text as="div" size="2" color="red">
-                                    {transportsError}
-                                </Text>
-                            </Box>
-                        ) : null}
-
-                        <Flex gap="3" justify="end" className={styles.actions}>
-                            <Button
-                                type="button"
-                                variant="surface"
-                                color="gray"
-                                highContrast
-                                onClick={handleClose}
-                                className={styles.secondaryButton}
+                        <div className={styles.formGroup}>
+                            <Label className={styles.fieldLabel}>Статус</Label>
+                            <Select
+                                value={formData.статус}
+                                onValueChange={(value) => {
+                                    if (typeof value === 'string') {
+                                        setFormData((previous) => ({ ...previous, статус: value }));
+                                    }
+                                }}
                                 disabled={loading}
                             >
-                                Отмена
-                            </Button>
-                            <Button
-                                type="submit"
-                                variant="solid"
-                                color="gray"
-                                highContrast
-                                className={styles.primaryButton}
-                                disabled={!canSubmit}
-                            >
-                                {loading ? 'Создание...' : 'Создать'}
-                            </Button>
-                        </Flex>
-                    </Flex>
+                                <SelectTrigger className={styles.selectTrigger}>
+                                    <SelectValue placeholder="Выберите статус" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {STATUS_OPTIONS.map((status) => (
+                                        <SelectItem key={status.value} value={status.value}>
+                                            {status.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className={styles.formGroup}>
+                            <Label className={styles.fieldLabel} htmlFor="shipment-tracking">
+                                Номер отслеживания
+                            </Label>
+                            <Input
+                                id="shipment-tracking"
+                                value={formData.номер_отслеживания}
+                                onChange={(event) =>
+                                    setFormData((previous) => ({ ...previous, номер_отслеживания: event.target.value }))
+                                }
+                                placeholder="TRACK-001"
+                                className={styles.textField}
+                                disabled={!formData.использовать_доставку}
+                            />
+                        </div>
+
+                        <div className={styles.formGroup}>
+                            <Label className={styles.fieldLabel} htmlFor="shipment-cost">
+                                Стоимость доставки
+                            </Label>
+                            <Input
+                                id="shipment-cost"
+                                value={formData.стоимость_доставки}
+                                onChange={(event) =>
+                                    setFormData((previous) => ({ ...previous, стоимость_доставки: event.target.value }))
+                                }
+                                placeholder="400.00"
+                                className={styles.textField}
+                                disabled={!formData.использовать_доставку || autoCalculateDeliveryCost}
+                            />
+                            <p className={styles.fieldHint}>
+                                {!formData.использовать_доставку
+                                    ? 'Стоимость доставки не используется, потому что отгрузка оформляется без доставки.'
+                                    : autoCalculateDeliveryCost
+                                        ? 'Стоимость будет рассчитана автоматически по тарифу выбранной транспортной компании.'
+                                        : 'Стоимость доставки можно ввести вручную. По умолчанию используется именно этот режим.'}
+                            </p>
+                        </div>
+                    </div>
+
+                    {error ? <div className={styles.error}>{error}</div> : null}
+                    {ordersError ? <div className={styles.error}>{ordersError}</div> : null}
+                    {transportsError ? <div className={styles.error}>{transportsError}</div> : null}
                 </form>
-            </Dialog.Content>
-        </Dialog.Root>
+            </EntityModalShell>
+        </Dialog>
     );
 }

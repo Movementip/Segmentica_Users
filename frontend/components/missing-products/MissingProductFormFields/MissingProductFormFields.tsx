@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from "react"
 
-import type { MissingProductFormData } from "@/components/missing-products/types"
-import { missingProductEditStatusOptions } from "@/components/missing-products/types"
+import type { MissingProductFormData } from "@/types/pages/missing-products"
+import { missingProductEditStatusOptions } from "@/lib/missingProductsMeta"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import OrderSearchSelect from "@/components/ui/OrderSearchSelect/OrderSearchSelect"

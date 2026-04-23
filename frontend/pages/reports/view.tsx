@@ -24,7 +24,7 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table"
-import { useAuth } from "@/context/AuthContext"
+import { useAuth } from "@/hooks/use-auth"
 import { withLayout } from "@/layout"
 import {
     REPORT_EXPORT_EXCEL_PERMISSIONS,
@@ -32,11 +32,10 @@ import {
     REPORT_VIEW_PERMISSIONS,
 } from "@/lib/reportsRbac"
 import { cn } from "@/lib/utils"
+import type { ReportPeriod } from "@/types/pages/reports"
 import { exportToWord } from "@/utils/exportUtils"
 
 import styles from "./ReportView.module.css"
-
-type ReportPeriod = "all" | "6m" | "3m" | "1m"
 
 const PERIOD_OPTIONS: Array<{ value: ReportPeriod; label: string }> = [
     { value: "all", label: "Весь период" },

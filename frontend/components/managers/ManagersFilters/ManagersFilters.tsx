@@ -9,7 +9,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-import type { ActivityFilter, SortOption } from "../types"
+import type { ActivityFilter, SortOption } from "@/types/pages/managers"
 import styles from "./ManagersFilters.module.css"
 
 const positionFilterOptions = [

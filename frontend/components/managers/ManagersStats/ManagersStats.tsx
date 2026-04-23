@@ -1,6 +1,6 @@
 import { EntityStatsPanel } from "@/components/EntityStatsPanel/EntityStatsPanel"
 
-import type { Manager } from "../types"
+import type { Manager } from "@/types/pages/managers"
 
 type ManagersStatsProps = {
   managers: Manager[]

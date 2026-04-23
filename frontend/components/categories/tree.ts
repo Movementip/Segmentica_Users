@@ -1,4 +1,4 @@
-import type { Category, CategoryTreeNode, TreeColumn } from "@/components/categories/types"
+import type { Category, CategoryTreeNode, TreeColumn } from "@/types/pages/categories"
 
 export function filterCategories(categories: Category[], searchTerm: string): Category[] {
   const normalizedSearch = searchTerm.trim().toLowerCase()

@@ -1,7 +1,7 @@
 import { CreateEntityButton } from "@/components/CreateEntityButton/CreateEntityButton"
 import { PageHeader } from "@/components/PageHeader/PageHeader"
 import { RefreshButton } from "@/components/RefreshButton/RefreshButton"
-import { ReferenceDataActions } from "@/components/pages/ReferenceDataActions/ReferenceDataActions"
+import { ReferenceDataActions } from "@/components/reference-data/ReferenceDataActions/ReferenceDataActions"
 
 import styles from "./SuppliersPageHeader.module.css"
 

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 
 import { withLayout } from '../../layout';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/use-auth';
 import { DataExchangeActionCard } from '../../components/admin/data-exchange/DataExchangeActionCard/DataExchangeActionCard';
 import { DataExchangeCatalogCard } from '../../components/admin/data-exchange/DataExchangeCatalogCard/DataExchangeCatalogCard';
 import { NoAccessPage } from '../../components/ui/NoAccessPage/NoAccessPage';

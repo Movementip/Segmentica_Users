@@ -76,7 +76,7 @@
 }
 
 .surfaceButton:hover {
-  background: var(--chrome-hover) !important;
+  background: var(--chrome-hover);
   border-color: var(--border);
 }
 
@@ -224,7 +224,7 @@
 }
 
 .profileTabContent {
-  margin-top: 0 !important;
+  margin-top: 0;
 }
 
 .profileCardTitleRow {
@@ -262,7 +262,7 @@
 .primaryActionButton {
   height: 46px;
   padding: 0 20px;
-  border-radius: 9999px !important;
+  border-radius: 9999px;
 }
 
 .permissionGroups {
@@ -695,14 +695,14 @@
 .passwordInputField {
   height: 46px;
   border: 0;
-  background: transparent !important;
+  background: transparent;
   padding-inline: 0;
-  box-shadow: none !important;
+  box-shadow: none;
 }
 
 .passwordInputField:focus-visible {
   border: 0;
-  box-shadow: none !important;
+  box-shadow: none;
 }
 
 .passwordSlot {

@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { cn } from "@/lib/utils"
 
-import { EmployeeSchedulePanel } from "@/components/pages/EmployeeSchedulePanel/EmployeeSchedulePanel"
+import { EmployeeSchedulePanel } from "@/components/managers/EmployeeSchedulePanel/EmployeeSchedulePanel"
 
 import styles from "./ManagerWorkScheduleSection.module.css"
 

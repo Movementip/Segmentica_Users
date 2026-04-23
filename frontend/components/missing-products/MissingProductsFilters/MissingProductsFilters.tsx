@@ -12,12 +12,12 @@ import type {
   MissingProductsFiltersState,
   MissingProductsOrderOption,
   MissingProductsProductOption,
-} from "@/components/missing-products/types"
+} from "@/types/pages/missing-products"
 import {
   defaultMissingProductsFilters,
   missingProductSortOptions,
   missingProductStatusOptions,
-} from "@/components/missing-products/types"
+} from "@/lib/missingProductsMeta"
 import { Button } from "@/components/ui/button"
 import OrderSearchSelect from "@/components/ui/OrderSearchSelect/OrderSearchSelect"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"

@@ -43,7 +43,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { useAuth } from "@/context/AuthContext"
+import { useAuth } from "@/hooks/use-auth"
 import { withLayout } from "@/layout"
 import { getDashboardAccess } from "@/lib/dashboardRbac"
 import { cn } from "@/lib/utils"

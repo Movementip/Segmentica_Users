@@ -5,7 +5,7 @@ import { CreateClientModal } from '../../components/modals/CreateClientModal/Cre
 import EditClientModal from '../../components/modals/EditClientModal/EditClientModal';
 import ClientOrdersHistoryModal from '../../components/modals/ClientOrdersHistoryModal/ClientOrdersHistoryModal';
 import styles from './Clients.module.css';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/use-auth';
 import { NoAccessPage } from '../../components/ui/NoAccessPage/NoAccessPage';
 import { PageLoader } from '../../components/ui/PageLoader/PageLoader';
 import DeleteConfirmation from '../../components/modals/DeleteConfirmation/DeleteConfirmation';
@@ -17,6 +17,7 @@ import { EntityTableSkeleton, EntityTableSurface } from '../../components/Entity
 import { EntityIndexPageSkeleton } from '../../components/EntityIndexPageSkeleton/EntityIndexPageSkeleton';
 import { EntityStatsPanel } from '../../components/EntityStatsPanel/EntityStatsPanel';
 import { isPersonContragentType, normalizeClientContragentType, type ClientContragent } from '../../lib/clientContragents';
+import { formatRuCurrency } from '../../utils/formatters';
 
 type Client = ClientContragent;
 type ClientSortBy = 'id-asc' | 'id-desc' | 'name-asc' | 'name-desc';
@@ -304,13 +305,7 @@ function ClientsPage(): JSX.Element {
         return () => clearTimeout(timer);
     }, [authLoading, canList, fetchClients, searchQuery]);
 
-    const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat('ru-RU', {
-            style: 'currency',
-            currency: 'RUB',
-            maximumFractionDigits: 0,
-        }).format(amount);
-    };
+    const formatCurrency = (amount: number) => formatRuCurrency(amount);
 
     const countNewThisMonth = (items: Client[]) => {
         const now = new Date();

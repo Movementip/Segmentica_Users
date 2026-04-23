@@ -8,8 +8,8 @@ import {
   DataFiltersPanelActions,
 } from "@/components/DataFiltersPanel/DataFiltersPanel"
 import { DataSearchField } from "@/components/DataSearchField/DataSearchField"
-import type { StatusFilter } from "@/components/shipments/types"
-import { shipmentStatusOptions } from "@/components/shipments/types"
+import type { StatusFilter } from "@/types/pages/shipments"
+import { shipmentStatusOptions } from "@/lib/shipmentsMeta"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 

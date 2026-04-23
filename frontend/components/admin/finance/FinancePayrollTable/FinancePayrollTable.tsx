@@ -3,20 +3,8 @@ import { CheckIcon, MinusIcon } from 'lucide-react';
 
 import { Card } from '../../../ui/card';
 import { Checkbox } from '../../../ui/checkbox';
+import type { FinanceColumn, FinanceEmployeeBase } from '../../../../types/pages/finance';
 import styles from '../../../../pages/admin/AdminFinance.module.css';
-
-type FinanceColumn<Employee> = {
-  key: string;
-  label: React.ReactNode;
-  render: (employee: Employee) => string;
-  total?: (employees: Employee[]) => string;
-};
-
-type FinanceEmployeeBase = {
-  id: number;
-  fio: string;
-  position: string | null;
-};
 
 type FinancePayrollTableProps<Employee extends FinanceEmployeeBase> = {
   monthLabel: string;

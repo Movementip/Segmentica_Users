@@ -26,7 +26,7 @@ import { EntityStatusBadge } from '../../components/EntityStatusBadge/EntityStat
 import { EntityTableSurface, entityTableClassName } from '../../components/EntityDataTable/EntityDataTable';
 import DeleteConfirmation from '../../components/modals/DeleteConfirmation/DeleteConfirmation';
 import { ShipmentEditorModal } from '../../components/modals/ShipmentEditorModal/ShipmentEditorModal';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/use-auth';
 import { NoAccessPage } from '../../components/ui/NoAccessPage/NoAccessPage';
 import { PageLoader } from '../../components/ui/PageLoader/PageLoader';
 import {
@@ -59,6 +59,8 @@ import {
     type ShipmentDocumentDefinition,
     type ShipmentDocumentKey,
 } from '../../lib/shipmentDocumentDefinitions';
+import type { AttachmentItem } from '../../types/attachments';
+import type { DocumentPreviewPageImage, DocumentPreviewStateBase, PdfJsModule } from '../../types/document-preview';
 
 interface ShipmentDetail {
     id: number;
@@ -116,14 +118,6 @@ interface OrderPosition {
     товар_единица_измерения: string;
 }
 
-interface AttachmentItem {
-    id: string;
-    filename: string;
-    mime_type: string;
-    size_bytes: number;
-    created_at: string;
-}
-
 interface ManualShipmentPosition {
     id?: number;
     товар_id: number;
@@ -132,38 +126,9 @@ interface ManualShipmentPosition {
     ндс_id: number;
 }
 
-type ShipmentDocumentPreviewState = {
+type ShipmentDocumentPreviewState = DocumentPreviewStateBase & {
     key: ShipmentDocumentKey;
-    title: string;
-    description: string;
-    fileNameBase: string;
-    previewUrl: string;
     excelUrl: string;
-};
-
-type PreviewPageImage = {
-    src: string;
-    width: number;
-    height: number;
-};
-
-type PdfJsModule = {
-    GlobalWorkerOptions: {
-        workerSrc: string;
-    };
-    getDocument: (source: { data: Uint8Array }) => {
-        promise: Promise<{
-            numPages: number;
-            getPage: (pageNumber: number) => Promise<{
-                getViewport: (params: { scale: number }) => { width: number; height: number };
-                render: (params: {
-                    canvasContext: CanvasRenderingContext2D;
-                    viewport: { width: number; height: number };
-                    background: string;
-                }) => { promise: Promise<void> };
-            }>;
-        }>;
-    };
 };
 
 const PREVIEW_ZOOM_MIN = 0.6;
@@ -223,7 +188,7 @@ function ShipmentDetailPage(): JSX.Element {
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
     const [previewAttachment, setPreviewAttachment] = useState<AttachmentItem | null>(null);
     const [documentPreview, setDocumentPreview] = useState<ShipmentDocumentPreviewState | null>(null);
-    const [documentPreviewPages, setDocumentPreviewPages] = useState<PreviewPageImage[]>([]);
+    const [documentPreviewPages, setDocumentPreviewPages] = useState<DocumentPreviewPageImage[]>([]);
     const [documentPreviewLoading, setDocumentPreviewLoading] = useState(false);
     const [documentPreviewError, setDocumentPreviewError] = useState<string | null>(null);
     const [documentPreviewSaveMessage, setDocumentPreviewSaveMessage] = useState<string | null>(null);
@@ -1073,7 +1038,7 @@ function ShipmentDetailPage(): JSX.Element {
                 const pdf = await loadingTask.promise;
 
                 const availableWidth = Math.max((documentPreviewStageRef.current?.clientWidth ?? 1200) - 8, 320);
-                const pages: PreviewPageImage[] = [];
+                const pages: DocumentPreviewPageImage[] = [];
 
                 for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
                     const page = await pdf.getPage(pageNumber);
@@ -1615,7 +1580,13 @@ function ShipmentDetailPage(): JSX.Element {
             {documentPreview ? (
                 <div className={styles.previewScreen}>
                     <div className={styles.previewBackdrop} />
-                    <div className={styles.previewPanel} role="dialog" aria-modal="true" aria-label={documentPreview.title}>
+                    <div
+                        className={styles.previewPanel}
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label={documentPreview.title}
+                        data-scroll-lock-allow="true"
+                    >
                         <div className={styles.previewPanelHeader}>
                                 <div className={styles.previewPanelTitleBlock}>
                                     <h2 className={styles.previewPanelTitle}>{documentPreview.title}</h2>
@@ -1636,10 +1607,11 @@ function ShipmentDetailPage(): JSX.Element {
                                 <EntityActionButton
                                     type="button"
                                     className={styles.previewToolbarAction}
+                                    data-entity-action-layout="print-toolbar"
                                     onClick={handlePrintDocumentPreview}
                                     disabled={!documentPreviewPdfObjectUrl}
                                 >
-                                    <FiPrinter />
+                                    <FiPrinter className={styles.icon} />
                                     Напечатать
                                 </EntityActionButton>
                             ) : null}
@@ -1647,9 +1619,10 @@ function ShipmentDetailPage(): JSX.Element {
                                 <EntityActionButton
                                     type="button"
                                     className={styles.previewToolbarAction}
+                                    data-entity-action-layout="print-toolbar"
                                     onClick={() => handleDocumentPreviewDownload('pdf')}
                                 >
-                                    <BsFillFileEarmarkPdfFill className={styles.pdfIcon} />
+                                    <BsFillFileEarmarkPdfFill className={`${styles.icon} ${styles.pdfIcon}`} />
                                     PDF
                                 </EntityActionButton>
                             ) : null}
@@ -1657,33 +1630,40 @@ function ShipmentDetailPage(): JSX.Element {
                                 <EntityActionButton
                                     type="button"
                                     className={styles.previewToolbarAction}
+                                    data-entity-action-layout="print-toolbar"
                                     onClick={() => handleDocumentPreviewDownload('excel')}
                                 >
-                                    <BsFillFileEarmarkExcelFill className={styles.excelIcon} />
+                                    <BsFillFileEarmarkExcelFill className={`${styles.icon} ${styles.excelIcon}`} />
                                     Excel
                                 </EntityActionButton>
                             ) : null}
                             <EntityActionButton
                                 type="button"
                                 className={styles.previewToolbarAction}
+                                data-entity-action-layout="print-toolbar"
                                 onClick={() => window.open(documentPreview.previewUrl, '_blank', 'noopener,noreferrer')}
                                 disabled={!documentPreview.previewUrl}
                             >
-                                <FiExternalLink />
+                                <FiExternalLink className={styles.icon} />
                                 Открыть
                             </EntityActionButton>
                             {canShipmentsAttachmentsUpload ? (
                                 <EntityActionButton
                                     type="button"
                                     className={styles.previewToolbarAction}
+                                    data-entity-action-layout="print-toolbar"
                                     onClick={handleDocumentPreviewSave}
                                     disabled={documentPreviewSaving}
                                 >
-                                    <FiSave />
+                                    <FiSave className={styles.icon} />
                                     {documentPreviewSaving ? 'Сохранение...' : 'Сохранить'}
                                 </EntityActionButton>
                             ) : null}
-                            <DocumentPreviewZoomControls value={documentPreviewZoom} onChange={updateDocumentPreviewZoom} />
+                            <DocumentPreviewZoomControls
+                                className={styles.previewZoomControls}
+                                value={documentPreviewZoom}
+                                onChange={updateDocumentPreviewZoom}
+                            />
                         </div>
                         {documentPreviewSaveMessage ? (
                             <div className={styles.previewSuccess}>{documentPreviewSaveMessage}</div>
@@ -1692,28 +1672,30 @@ function ShipmentDetailPage(): JSX.Element {
                             <div className={styles.previewError}>{documentPreviewError}</div>
                         ) : null}
 
-                        <div className={styles.previewStage} ref={documentPreviewStageRef}>
-                            {documentPreviewLoading ? (
-                                <div className={styles.previewLoading}>Готовим предпросмотр PDF...</div>
-                            ) : (
-                                <div className={styles.previewPages}>
-                                    {documentPreviewPages.map((page, index) => (
-                                        <Image
-                                            key={`${documentPreview.previewUrl}-${index + 1}`}
-                                            src={page.src}
-                                            alt={`${documentPreview.description}, страница ${index + 1}`}
-                                            width={Math.max(1, Math.round(page.width))}
-                                            height={Math.max(1, Math.round(page.height))}
-                                            unoptimized
-                                            sizes={`${Math.max(1, Math.round(page.width))}px`}
-                                            className={styles.previewPageImage}
-                                        />
-                                    ))}
-                                </div>
-                            )}
-                            {!documentPreviewLoading && !documentPreviewPages.length && !documentPreviewError ? (
-                                <div className={styles.previewLoading}>Не удалось подготовить страницы документа.</div>
-                            ) : null}
+                        <div className={styles.previewCanvas}>
+                            <div className={styles.previewStage} ref={documentPreviewStageRef}>
+                                {documentPreviewLoading ? (
+                                    <div className={styles.previewLoading}>Готовим предпросмотр PDF...</div>
+                                ) : (
+                                    <div className={styles.previewPages}>
+                                        {documentPreviewPages.map((page, index) => (
+                                            <Image
+                                                key={`${documentPreview.previewUrl}-${index + 1}`}
+                                                src={page.src}
+                                                alt={`${documentPreview.description}, страница ${index + 1}`}
+                                                width={Math.max(1, Math.round(page.width))}
+                                                height={Math.max(1, Math.round(page.height))}
+                                                unoptimized
+                                                sizes={`${Math.max(1, Math.round(page.width))}px`}
+                                                className={styles.previewPageImage}
+                                            />
+                                        ))}
+                                    </div>
+                                )}
+                                {!documentPreviewLoading && !documentPreviewPages.length && !documentPreviewError ? (
+                                    <div className={styles.previewLoading}>Не удалось подготовить страницы документа.</div>
+                                ) : null}
+                            </div>
                         </div>
                     </div>
                     <iframe ref={documentPreviewPrintFrameRef} title="Печать документа" className={styles.hiddenPrintFrame} />

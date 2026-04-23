@@ -142,8 +142,8 @@
 }
 
 .emptyCell {
-  padding: 40px 16px !important;
-  color: var(--muted-foreground) !important;
+  padding: 40px 16px;
+  color: var(--muted-foreground);
   text-align: center;
 }
 

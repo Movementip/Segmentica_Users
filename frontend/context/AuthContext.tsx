@@ -1,18 +1,14 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useCallback, useEffect, useMemo, useState } from 'react';
+import { emitAuthSyncEvent } from '../lib/auth-sync';
+import {
+    isPublicAuthPath,
+    redirectAuthenticatedLogin,
+    redirectToLogin,
+    useAuthSync,
+} from '../hooks/use-auth-sync';
+import type { AuthUser } from '../types/auth';
 
-export type AuthEmployee = {
-    id: number;
-    fio: string;
-    position: string | null;
-};
-
-export type AuthUser = {
-    userId: number;
-    employee: AuthEmployee;
-    roles: string[];
-    permissions: string[];
-    preferences: Record<string, unknown>;
-};
+export type { AuthEmployee, AuthUser } from '../types/auth';
 
 type AuthContextValue = {
     user: AuthUser | null;
@@ -22,29 +18,13 @@ type AuthContextValue = {
     logout: () => Promise<void>;
 };
 
-const AuthContext = createContext<AuthContextValue>({
+export const AuthContext = createContext<AuthContextValue>({
     user: null,
     loading: true,
     refresh: async () => { },
     setTheme: async () => { },
     logout: async () => { },
 });
-
-export const useAuth = () => useContext(AuthContext);
-
-const isPublicAuthPath = (path: string) => {
-    return path === '/login';
-};
-
-const redirectToLogin = () => {
-    if (typeof window === 'undefined') return;
-    if (isPublicAuthPath(window.location.pathname)) return;
-    const next = `${window.location.pathname}${window.location.search || ''}${window.location.hash || ''}`;
-    const target = `/login?next=${encodeURIComponent(next)}`;
-    if (window.location.pathname !== '/login') {
-        window.location.replace(target);
-    }
-};
 
 export function AuthProvider({
     children,
@@ -56,25 +36,38 @@ export function AuthProvider({
     const [user, setUser] = useState<AuthUser | null>(null);
     const [loading, setLoading] = useState(true);
 
+    const handleUnauthorized = useCallback((options?: { broadcast?: boolean }) => {
+        setUser(null);
+        setLoading(false);
+        if (options?.broadcast !== false) {
+            emitAuthSyncEvent('logout');
+        }
+        redirectToLogin();
+    }, []);
+
     const refresh = useCallback(async () => {
         try {
             setLoading(true);
             const res = await fetch('/api/auth/me');
             if (!res.ok) {
-                setUser(null);
                 if (res.status === 401) {
-                    redirectToLogin();
+                    handleUnauthorized();
+                } else {
+                    setUser(null);
                 }
                 return;
             }
             const data = (await res.json()) as AuthUser;
             setUser(data);
+            if (isPublicAuthPath(window.location.pathname)) {
+                redirectAuthenticatedLogin();
+            }
         } catch {
             setUser(null);
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [handleUnauthorized]);
 
     const setTheme = useCallback(async (theme: 'light' | 'dark') => {
         setUser((currentUser) => {
@@ -105,6 +98,7 @@ export function AuthProvider({
             await fetch('/api/auth/logout', { method: 'POST' });
         } finally {
             setUser(null);
+            emitAuthSyncEvent('logout');
         }
     }, []);
 
@@ -116,68 +110,11 @@ export function AuthProvider({
         void refresh();
     }, [refresh, skipInitialRefresh]);
 
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-
-        const originalFetch = window.fetch.bind(window);
-        const wrappedFetch: typeof window.fetch = async (input, init) => {
-            const response = await originalFetch(input, init);
-
-            try {
-                const requestUrl = typeof input === 'string'
-                    ? input
-                    : input instanceof URL
-                        ? input.toString()
-                        : input.url;
-                const normalizedUrl = requestUrl.startsWith('http')
-                    ? requestUrl
-                    : `${window.location.origin}${requestUrl.startsWith('/') ? requestUrl : `/${requestUrl}`}`;
-                const url = new URL(normalizedUrl);
-                const isSameOrigin = url.origin === window.location.origin;
-                const isApiCall = url.pathname.startsWith('/api/');
-                const isPublicApi =
-                    url.pathname.startsWith('/api/auth/login')
-                    || url.pathname.startsWith('/api/auth/logout')
-                    || url.pathname.startsWith('/api/employees/search');
-
-                if (response.status === 401 && isSameOrigin && isApiCall && !isPublicApi) {
-                    setUser(null);
-                    redirectToLogin();
-                }
-            } catch {
-                // ignore URL parse errors
-            }
-
-            return response;
-        };
-
-        window.fetch = wrappedFetch;
-
-        return () => {
-            window.fetch = originalFetch;
-        };
-    }, []);
-
-    useEffect(() => {
-        if (skipInitialRefresh) return;
-
-        const intervalId = window.setInterval(() => {
-            void refresh();
-        }, 5 * 60 * 1000);
-
-        const onVisibilityChange = () => {
-            if (document.visibilityState === 'visible') {
-                void refresh();
-            }
-        };
-
-        document.addEventListener('visibilitychange', onVisibilityChange);
-
-        return () => {
-            window.clearInterval(intervalId);
-            document.removeEventListener('visibilitychange', onVisibilityChange);
-        };
-    }, [refresh, skipInitialRefresh]);
+    useAuthSync({
+        skipInitialRefresh,
+        refresh,
+        onUnauthorized: handleUnauthorized,
+    });
 
     const value = useMemo(() => ({ user, loading, refresh, setTheme, logout }), [user, loading, refresh, setTheme, logout]);
 

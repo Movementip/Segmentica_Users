@@ -4,7 +4,7 @@ import { FiMail, FiPhone } from "react-icons/fi"
 
 import { entityTableClassName } from "@/components/EntityDataTable/EntityDataTable"
 import { TransportCompanyRowActionsMenu } from "@/components/transport/TransportCompanyRowActionsMenu/TransportCompanyRowActionsMenu"
-import type { TransportCompany } from "@/components/transport/types"
+import type { TransportCompany } from "@/types/pages/transport"
 import {
   Table,
   TableBody,

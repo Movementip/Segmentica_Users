@@ -16,8 +16,8 @@ import type {
   MissingProductsFiltersState,
   MissingProductsOrderOption,
   MissingProductsProductOption,
-} from "@/components/missing-products/types"
-import { defaultMissingProductsFilters } from "@/components/missing-products/types"
+} from "@/types/pages/missing-products"
+import { defaultMissingProductsFilters } from "@/lib/missingProductsMeta"
 import DeleteConfirmation from "@/components/modals/DeleteConfirmation/DeleteConfirmation"
 import deleteConfirmationStyles from "@/components/modals/DeleteConfirmation/DeleteConfirmation.module.css"
 import { AddMissingProductModal } from "@/components/modals/AddMissingProductModal/AddMissingProductModal"
@@ -26,7 +26,7 @@ import { NoAccessPage } from "@/components/ui/NoAccessPage/NoAccessPage"
 import { PageLoader } from "@/components/ui/PageLoader/PageLoader"
 import { Button } from "@/components/ui/button"
 import { WarehouseAttentionBanner } from "@/components/warehouse/WarehouseAttentionBanner/WarehouseAttentionBanner"
-import { useAuth } from "@/context/AuthContext"
+import { useAuth } from "@/hooks/use-auth"
 import { withLayout } from "@/layout"
 
 import styles from "./MissingProducts.module.css"

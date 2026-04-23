@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import styles from '../CreateOrderModal/CreateOrderModal.module.css';
 import { EntityModalShell } from '../../EntityModalShell/EntityModalShell';
 import OrderSearchSelect from '../../ui/OrderSearchSelect/OrderSearchSelect';
-import { Box, Button, Flex, Select, Text, TextField } from '../OrderModalPrimitives/OrderModalPrimitives';
+import { Box, Button, Flex, Select, Text, TextField } from '../shared/ModalLayoutPrimitives';
 import { Dialog } from '../../ui/dialog';
 import { calculateVatAmountsFromLine, DEFAULT_VAT_RATE_ID, getVatRateOption, VAT_RATE_OPTIONS } from '../../../lib/vat';
 import {

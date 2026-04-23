@@ -24,9 +24,9 @@ import { EntityStatusBadge } from "@/components/EntityStatusBadge/EntityStatusBa
 import DeleteConfirmation from "@/components/modals/DeleteConfirmation/DeleteConfirmation"
 import { ShipmentEditorModal } from "@/components/modals/ShipmentEditorModal/ShipmentEditorModal"
 import {
-  EditTransportModalNew,
+  EditTransportModal,
   type EditTransportModalTransportCompany,
-} from "@/components/modals/EditTransportModalNew/EditTransportModalNew"
+} from "@/components/modals/EditTransportModal/EditTransportModal"
 import {
   RecordDocumentCenter,
   RecordPrintSheet,
@@ -48,8 +48,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { useAuth } from "@/context/AuthContext"
-import { usePageTitle } from "@/context/PageTitleContext"
+import { useAuth } from "@/hooks/use-auth"
+import { usePageTitle } from "@/hooks/use-page-title"
 import { withLayout } from "@/layout"
 import {
   getTransportShipmentStatusLabel,
@@ -61,6 +61,7 @@ import {
   getVatRateOption,
 } from "@/lib/vat"
 import { cn } from "@/lib/utils"
+import type { AttachmentItem } from "@/types/attachments"
 
 import styles from "./TransportDetail.module.css"
 
@@ -159,14 +160,6 @@ interface TransportDetailData {
   shipments: Shipment[]
   performance: Performance[]
   activeShipments: Shipment[]
-}
-
-interface AttachmentItem {
-  id: string
-  filename: string
-  mime_type: string
-  size_bytes: number
-  created_at: string
 }
 
 type TransportDetailTab = "active" | "history" | "months"
@@ -2018,7 +2011,7 @@ function TransportDetailPage(): JSX.Element {
       />
 
       {canEdit ? (
-        <EditTransportModalNew
+        <EditTransportModal
           isOpen={isEditModalOpen}
           onClose={() => setIsEditModalOpen(false)}
           onUpdated={() => {

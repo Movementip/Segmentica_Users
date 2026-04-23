@@ -219,12 +219,12 @@
 
 .textRight[data-slot="table-head"],
 .textRight[data-slot="table-cell"] {
-  text-align: right !important;
+  text-align: right;
 }
 
 .tableFixed [data-slot="table-head"].textRight,
 .tableFixed [data-slot="table-cell"].textRight {
-  text-align: right !important;
+  text-align: right;
 }
 
 .itemTitle {
@@ -393,16 +393,13 @@
   position: fixed;
   inset: 0;
   z-index: 100000100;
-  overflow: hidden;
-  overscroll-behavior: contain;
-  touch-action: none;
 }
 
 .previewBackdrop {
   position: fixed;
   inset: 0;
-  background: color-mix(in oklch, black 48%, transparent);
-  backdrop-filter: blur(6px);
+  background: rgb(0 0 0 / 0.56);
+  backdrop-filter: blur(8px);
 }
 
 .previewPanel {
@@ -410,20 +407,16 @@
   top: 0;
   right: 0;
   bottom: 0;
-  width: min(1120px, calc(100vw - 232px));
-  min-width: min(1120px, calc(100vw - 232px));
+  width: min(1120px, calc(100vw - 220px));
+  min-width: min(1120px, calc(100vw - 220px));
   background: var(--background);
   color: var(--foreground);
-  box-shadow: -24px 0 60px color-mix(in oklch, black 18%, transparent);
+  border-left: 1px solid var(--border);
+  box-shadow: -24px 0 60px rgb(0 0 0 / 0.22);
   padding: 24px 28px 28px;
   display: flex;
   flex-direction: column;
   gap: 18px;
-  overflow: hidden;
-  box-sizing: border-box;
-  contain: layout paint;
-  overscroll-behavior: contain;
-  touch-action: auto;
   animation: previewPanelIn 180ms ease-out;
 }
 
@@ -437,7 +430,7 @@
 .previewPanelTitleBlock {
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 4px;
 }
 
 .previewPanelTitle {
@@ -457,17 +450,20 @@
 .previewCloseButton {
   width: 44px;
   height: 44px;
+  padding: 0;
   border: none;
+  border-radius: 0;
   background: transparent;
   color: var(--muted-foreground);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: color 0.18s ease;
+  transition: color 0.15s ease;
 }
 
 .previewCloseButton:hover {
+  background: transparent;
   color: var(--foreground);
 }
 
@@ -482,15 +478,14 @@
   gap: 12px;
   flex-wrap: wrap;
   justify-content: flex-start;
-  min-height: 46px;
-  flex: 0 0 auto;
 }
 
 .previewToolbarAction {
-  height: 42px;
+  min-height: 42px;
   min-width: auto;
-  padding: 0 16px;
+  padding-inline: 16px;
   flex: 0 0 auto;
+  border-radius: 0;
 }
 
 .previewToolbarAction svg {
@@ -516,17 +511,20 @@
   line-height: 1.4;
 }
 
-.previewStage {
+.previewZoomControls {
+  margin-left: auto;
+}
+
+.previewCanvas {
   flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.previewStage {
+  width: 100%;
   min-height: calc(100vh - 240px);
   overflow: auto;
-  scrollbar-gutter: stable both-edges;
-  background: var(--background);
-  display: grid;
-  justify-items: center;
-  align-items: start;
-  padding: 8px 0 32px;
-  contain: layout paint;
 }
 
 .previewPages {
@@ -535,13 +533,13 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
-  align-items: center;
+  align-items: flex-start;
 }
 
 .previewPageImage {
   display: block;
-  background: #fff;
-  box-shadow: 0 8px 24px rgb(17 17 17 / 0.08);
+  background: white;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.16);
 }
 
 .previewLoading {
@@ -560,6 +558,19 @@
   opacity: 0;
   pointer-events: none;
   border: 0;
+}
+
+.icon {
+  width: 16px;
+  height: 16px;
+}
+
+.pdfIcon {
+  color: #b42318;
+}
+
+.excelIcon {
+  color: #217346;
 }
 
 .deleteDetails {
@@ -679,7 +690,7 @@
   .header,
   .previewScreen,
   .noPrint {
-    display: none !important;
+    display: none;
   }
 
   .container {

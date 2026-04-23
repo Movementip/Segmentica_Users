@@ -1,6 +1,6 @@
 import { EntityStatsPanel } from "@/components/EntityStatsPanel/EntityStatsPanel"
 
-import type { UserRow } from "../types"
+import type { UserRow } from "@/types/pages/admin-rbac"
 
 type UsersStatsProps = {
   users: UserRow[]

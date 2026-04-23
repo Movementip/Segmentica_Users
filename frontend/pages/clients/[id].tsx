@@ -22,13 +22,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import DeleteConfirmation from '../../components/modals/DeleteConfirmation/DeleteConfirmation';
 import EditClientModal from '../../components/modals/EditClientModal/EditClientModal';
 import { RecordDocumentCenter, RecordPrintSheet, type RecordPrintDocument } from '../../components/print/RecordDocumentCenter';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/use-auth';
 import { withLayout } from '../../layout/Layout';
 import {
     getClientContragentTypeLabel,
     normalizeClientContragentType,
     type ClientContragent,
 } from '../../lib/clientContragents';
+import type { AttachmentItem } from '../../types/attachments';
 import styles from './ClientDetail.module.css';
 
 type Client = ClientContragent;
@@ -39,14 +40,6 @@ interface Order {
     дата_создания: string;
     статус: string;
     общая_сумма: number;
-}
-
-interface AttachmentItem {
-    id: string;
-    filename: string;
-    mime_type: string;
-    size_bytes: number;
-    created_at: string;
 }
 
 function InfoItem({

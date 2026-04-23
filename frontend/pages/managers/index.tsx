@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { withLayout } from '../../layout/Layout';
-import { CreateManagerModalV2 } from '../../components/modals/CreateManagerModalV2/CreateManagerModalV2';
-import { EditManagerModalV2 } from '../../components/modals/EditManagerModalV2/EditManagerModalV2';
+import { CreateManagerModal } from '../../components/modals/CreateManagerModal/CreateManagerModal';
+import { EditManagerModal } from '../../components/modals/EditManagerModal/EditManagerModal';
 import styles from './ManagersPage.module.css';
 import DeleteConfirmation from '../../components/modals/DeleteConfirmation/DeleteConfirmation';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/use-auth';
 import { NoAccessPage } from '../../components/ui/NoAccessPage/NoAccessPage';
 import { PageLoader } from '../../components/ui/PageLoader/PageLoader';
 import { EntityTableSurface } from '../../components/EntityDataTable/EntityDataTable';
@@ -14,8 +14,9 @@ import { ManagersPageHeader } from '../../components/managers/ManagersPageHeader
 import { ManagersPageSkeleton } from '../../components/managers/ManagersPageSkeleton/ManagersPageSkeleton';
 import { ManagersStats } from '../../components/managers/ManagersStats/ManagersStats';
 import { ManagersTable } from '../../components/managers/ManagersTable/ManagersTable';
-import type { ActivityFilter, Manager, SortOption } from '../../components/managers/types';
+import type { ActivityFilter, Manager, SortOption } from '../../types/pages/managers';
 import { Button as UiButton } from '../../components/ui/button';
+import { formatRuDate } from '../../utils/formatters';
 
 type AttachmentSummaryItem = {
     entity_id: number;
@@ -213,12 +214,7 @@ function ManagersPage(): JSX.Element {
         return bySort;
     }, [activityFilter, managers, positionFilter, searchTerm, sortBy]);
 
-    const formatDate = (value?: string) => {
-        if (!value) return '—';
-        const d = new Date(value);
-        if (Number.isNaN(d.getTime())) return '—';
-        return d.toLocaleDateString('ru-RU');
-    };
+    const formatDate = (value?: string) => formatRuDate(value);
 
     if (authLoading) {
         return <PageLoader label="Загрузка..." fullPage />;
@@ -297,14 +293,14 @@ function ManagersPage(): JSX.Element {
                 </div>
             )}
 
-            <CreateManagerModalV2
+            <CreateManagerModal
                 isOpen={isCreateModalOpen}
                 onClose={() => setIsCreateModalOpen(false)}
                 onManagerCreated={handleManagerCreated}
                 canCreate={canCreate}
             />
 
-            <EditManagerModalV2
+            <EditManagerModal
                 isOpen={isEditModalOpen}
                 manager={editingManager}
                 onClose={() => {

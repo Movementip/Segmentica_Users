@@ -1,4 +1,4 @@
-import type { LinkedPurchase } from "@/components/orders/types"
+import type { LinkedPurchase } from "@/types/pages/orders"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,

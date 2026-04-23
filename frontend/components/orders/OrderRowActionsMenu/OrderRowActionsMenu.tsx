@@ -10,7 +10,7 @@ import {
   FiTruck,
 } from "react-icons/fi"
 
-import type { Order } from "@/components/orders/types"
+import type { Order } from "@/types/pages/orders"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,

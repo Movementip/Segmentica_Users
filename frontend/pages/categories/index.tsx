@@ -13,15 +13,15 @@ import {
   buildTreeColumns,
   filterCategories,
 } from "@/components/categories/tree"
-import type { Category } from "@/components/categories/types"
+import type { Category } from "@/types/pages/categories"
 import { CreateEntityButton } from "@/components/CreateEntityButton/CreateEntityButton"
 import DeleteConfirmation from "@/components/modals/DeleteConfirmation/DeleteConfirmation"
-import { ReferenceDataActions } from "@/components/pages/ReferenceDataActions/ReferenceDataActions"
+import { ReferenceDataActions } from "@/components/reference-data/ReferenceDataActions/ReferenceDataActions"
 import { PageHeader } from "@/components/PageHeader/PageHeader"
 import { RefreshButton } from "@/components/RefreshButton/RefreshButton"
 import { NoAccessPage } from "@/components/ui/NoAccessPage/NoAccessPage"
 import { PageLoader } from "@/components/ui/PageLoader/PageLoader"
-import { useAuth } from "@/context/AuthContext"
+import { useAuth } from "@/hooks/use-auth"
 import { withLayout } from "@/layout"
 
 import { CreateCategoryModal } from "../../components/modals/CreateCategoryModal/CreateCategoryModal"

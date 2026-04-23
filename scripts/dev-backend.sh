@@ -8,10 +8,12 @@ set +a
 
 BACKEND_PORT="${BACKEND_PORT:-3001}"
 DOCUMENT_RENDERER_URL="${DOCUMENT_RENDERER_URL:-http://127.0.0.1:3010}"
+DOCUMENT_RENDERER_FALLBACK_URLS="${DOCUMENT_RENDERER_FALLBACK_URLS:-http://localhost:3010,http://host.docker.internal:3010,http://127.0.0.1:3001,http://localhost:3001,http://host.docker.internal:3001}"
 NEXTAUTH_URL="${NEXTAUTH_URL:-http://localhost:3000}"
 
 export PORT="$BACKEND_PORT"
 export DOCUMENT_RENDERER_URL
+export DOCUMENT_RENDERER_FALLBACK_URLS
 export NEXTAUTH_URL
 
 cd backend || exit 1

@@ -379,12 +379,12 @@
 
 .textRight[data-slot="table-head"],
 .textRight[data-slot="table-cell"] {
-  text-align: right !important;
+  text-align: right;
 }
 
 .tableFixed [data-slot="table-head"].textRight,
 .tableFixed [data-slot="table-cell"].textRight {
-  text-align: right !important;
+  text-align: right;
 }
 
 .fileCell {

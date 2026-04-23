@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 
-import type { UserRow } from "../types"
+import type { UserRow } from "@/types/pages/admin-rbac"
 import styles from "./UsersTable.module.css"
 
 const MotionTableRow = motion(TableRow)

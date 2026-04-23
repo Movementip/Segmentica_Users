@@ -1,6 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { query } from '../../../lib/db';
 import { setSessionCookie } from '../../../lib/auth';
+import { enterRequestContext } from '../../../lib/requestContext';
 
 const getNextMondayExpiration = (now: Date): Date => {
     const next = new Date(now);
@@ -13,11 +14,13 @@ const getNextMondayExpiration = (now: Date): Date => {
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+    enterRequestContext(req, null);
 
-    const { employee_id, password, rememberMe } = req.body || {};
+    const { employee_id, password, rememberMe, theme } = req.body || {};
     const employeeId = Number(employee_id);
     const pwd = typeof password === 'string' ? password : '';
     const rem = Boolean(rememberMe);
+    const nextTheme = theme === 'dark' ? 'dark' : theme === 'light' ? 'light' : null;
 
     if (!Number.isInteger(employeeId) || employeeId <= 0) {
         return res.status(400).json({ error: 'Некорректный сотрудник' });
@@ -53,6 +56,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         const ok = Boolean(verifyRes.rows?.[0]?.ok);
         if (!ok) {
             return res.status(401).json({ error: 'Неверные учетные данные' });
+        }
+
+        if (nextTheme) {
+            await query(
+                `UPDATE public.users
+                 SET preferences = COALESCE(preferences, '{}'::jsonb) || $2::jsonb
+                 WHERE id = $1`,
+                [userRow.id, JSON.stringify({ theme: nextTheme })]
+            );
         }
 
         const now = new Date();

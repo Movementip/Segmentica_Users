@@ -1,6 +1,6 @@
 import { CreateEntityButton } from "@/components/CreateEntityButton/CreateEntityButton"
 import { PageHeader } from "@/components/PageHeader/PageHeader"
-import { ReferenceDataActions } from "@/components/pages/ReferenceDataActions/ReferenceDataActions"
+import { ReferenceDataActions } from "@/components/reference-data/ReferenceDataActions/ReferenceDataActions"
 import { RefreshButton } from "@/components/RefreshButton/RefreshButton"
 import { cn } from "@/lib/utils"
 

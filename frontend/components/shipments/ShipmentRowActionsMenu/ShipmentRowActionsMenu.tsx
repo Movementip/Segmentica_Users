@@ -7,7 +7,7 @@ import {
   FiTruck,
 } from "react-icons/fi"
 
-import type { Shipment } from "@/components/shipments/types"
+import type { Shipment } from "@/types/pages/shipments"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,

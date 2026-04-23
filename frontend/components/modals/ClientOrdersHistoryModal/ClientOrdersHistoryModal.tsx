@@ -9,6 +9,7 @@ import { EntityTableSurface, entityTableClassName } from '../../EntityDataTable/
 import { Dialog } from '../../ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '../../ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../ui/table';
+import { formatRuCurrency, formatRuDateTime } from '../../../utils/formatters';
 
 import styles from './ClientOrdersHistoryModal.module.css';
 
@@ -117,23 +118,9 @@ const ClientOrdersHistoryModal: React.FC<ClientOrdersHistoryModalProps> = ({
         [sortBy]
     );
 
-    const formatDate = (dateString: string) => {
-        return new Date(dateString).toLocaleDateString('ru-RU', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-        });
-    };
+    const formatDate = (dateString: string) => formatRuDateTime(dateString);
 
-    const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat('ru-RU', {
-            style: 'currency',
-            currency: 'RUB',
-            maximumFractionDigits: 0,
-        }).format(amount);
-    };
+    const formatCurrency = (amount: number) => formatRuCurrency(amount);
 
     if (!isOpen || !clientId) return null;
 

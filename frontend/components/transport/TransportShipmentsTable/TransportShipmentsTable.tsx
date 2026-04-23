@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "framer-motion"
 import { entityTableClassName } from "@/components/EntityDataTable/EntityDataTable"
 import { EntityStatusBadge } from "@/components/EntityStatusBadge/EntityStatusBadge"
 import { TransportShipmentRowActionsMenu } from "@/components/transport/TransportShipmentRowActionsMenu/TransportShipmentRowActionsMenu"
-import type { TransportShipment } from "@/components/transport/types"
+import type { TransportShipment } from "@/types/pages/transport"
 import {
   getTransportShipmentStatusLabel,
   getTransportShipmentStatusTone,

@@ -34,7 +34,7 @@ import {
     TableHeader,
     TableRow,
 } from '../../components/ui/table';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/use-auth';
 import { NoAccessPage } from '../../components/ui/NoAccessPage/NoAccessPage';
 import { PageLoader } from '../../components/ui/PageLoader/PageLoader';
 import { withLayout } from '../../layout';
@@ -44,6 +44,7 @@ import {
     getWarehouseStockStatusTone,
     isWarehouseIncomingMovement,
 } from '../../components/warehouse/utils';
+import type { AttachmentItem } from '../../types/attachments';
 
 import styles from './WarehouseDetail.module.css';
 
@@ -149,14 +150,6 @@ interface WarehouseDetailData {
     movements: Movement[];
     waitingOrders: WaitingOrder[];
     pendingPurchases: PendingPurchase[];
-}
-
-interface AttachmentItem {
-    id: string;
-    filename: string;
-    mime_type: string;
-    size_bytes: number;
-    created_at: string;
 }
 
 const EMPTY_MOVEMENTS: Movement[] = [];

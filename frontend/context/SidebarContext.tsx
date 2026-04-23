@@ -1,18 +1,16 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useState } from 'react';
 
-interface SidebarContextType {
+export interface SidebarContextType {
     isMobileMenuOpen: boolean;
     toggleMobileMenu: () => void;
     closeMobileMenu: () => void;
 }
 
-const SidebarContext = createContext<SidebarContextType>({
+export const SidebarContext = createContext<SidebarContextType>({
     isMobileMenuOpen: false,
     toggleMobileMenu: () => {},
     closeMobileMenu: () => {}
 });
-
-export const useSidebarContext = () => useContext(SidebarContext);
 
 interface SidebarProviderProps {
     children: React.ReactNode;

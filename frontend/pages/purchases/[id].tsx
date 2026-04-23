@@ -42,7 +42,7 @@ import { DocumentPreviewZoomControls } from '../../components/DocumentPreviewCon
 import { EntityActionButton } from '../../components/EntityActionButton/EntityActionButton';
 import { EntityStatusBadge } from '../../components/EntityStatusBadge/EntityStatusBadge';
 import { EntityTableSurface, entityTableClassName } from '../../components/EntityDataTable/EntityDataTable';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/use-auth';
 import { NoAccessPage } from '../../components/ui/NoAccessPage/NoAccessPage';
 import { PageLoader } from '../../components/ui/PageLoader/PageLoader';
 import { calculateVatAmountsFromLine, getVatRateOption } from '../../lib/vat';
@@ -56,6 +56,8 @@ import {
     type PurchaseDocumentDefinition,
     type PurchaseDocumentKey,
 } from '../../lib/purchaseDocumentDefinitions';
+import type { AttachmentItem } from '../../types/attachments';
+import type { DocumentPreviewPageImage, DocumentPreviewStateBase, PdfJsModule } from '../../types/document-preview';
 
 interface PurchasePosition {
     id: number;
@@ -150,47 +152,10 @@ type EditPurchaseSubmitData = {
     }>;
 };
 
-interface AttachmentItem {
-    id: string;
-    filename: string;
-    mime_type: string;
-    size_bytes: number;
-    created_at: string;
-}
-
-type PurchaseDocumentPreviewState = {
+type PurchaseDocumentPreviewState = DocumentPreviewStateBase & {
     key: PurchaseDocumentKey;
-    title: string;
-    description: string;
-    fileNameBase: string;
-    previewUrl: string;
     downloadUrl: string;
     downloadFormat: 'excel' | 'word';
-};
-
-type PreviewPageImage = {
-    src: string;
-    width: number;
-    height: number;
-};
-
-type PdfJsModule = {
-    GlobalWorkerOptions: {
-        workerSrc: string;
-    };
-    getDocument: (source: { data: Uint8Array }) => {
-        promise: Promise<{
-            numPages: number;
-            getPage: (pageNumber: number) => Promise<{
-                getViewport: (params: { scale: number }) => { width: number; height: number };
-                render: (params: {
-                    canvasContext: CanvasRenderingContext2D;
-                    viewport: { width: number; height: number };
-                    background: string;
-                }) => { promise: Promise<void> };
-            }>;
-        }>;
-    };
 };
 
 const PREVIEW_ZOOM_MIN = 0.6;
@@ -351,7 +316,7 @@ function PurchaseDetailPage(): JSX.Element {
     const [isPreviewOpen, setIsPreviewOpen] = useState(false);
     const [previewAttachment, setPreviewAttachment] = useState<AttachmentItem | null>(null);
     const [documentPreview, setDocumentPreview] = useState<PurchaseDocumentPreviewState | null>(null);
-    const [documentPreviewPages, setDocumentPreviewPages] = useState<PreviewPageImage[]>([]);
+    const [documentPreviewPages, setDocumentPreviewPages] = useState<DocumentPreviewPageImage[]>([]);
     const [documentPreviewLoading, setDocumentPreviewLoading] = useState(false);
     const [documentPreviewError, setDocumentPreviewError] = useState<string | null>(null);
     const [documentPreviewSaveMessage, setDocumentPreviewSaveMessage] = useState<string | null>(null);
@@ -543,7 +508,7 @@ function PurchaseDetailPage(): JSX.Element {
                 const pdf = await loadingTask.promise;
 
                 const availableWidth = Math.max((documentPreviewStageRef.current?.clientWidth ?? 1200) - 8, 320);
-                const pages: PreviewPageImage[] = [];
+                const pages: DocumentPreviewPageImage[] = [];
 
                 for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
                     const page = await pdf.getPage(pageNumber);

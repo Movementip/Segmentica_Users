@@ -26,8 +26,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { useAuth } from "@/context/AuthContext"
-import { usePageTitle } from "@/context/PageTitleContext"
+import { useAuth } from "@/hooks/use-auth"
+import { usePageTitle } from "@/hooks/use-page-title"
 import { withLayout } from "@/layout"
 
 import styles from "./CategoryDetail.module.css"

@@ -11,17 +11,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea"
 
 import type { ManagerIdentityDocument, ManagerHrProfile } from "@/lib/managerHr"
+import type { AttachmentItem } from "@/types/attachments"
 
 import { ManagerHrSelect, type ManagerHrSelectOption } from "./ManagerHrSelect"
 import styles from "./ManagerHrSections.module.css"
-
-type AttachmentItem = {
-  id: string
-  filename: string
-  mime_type: string
-  size_bytes: number
-  created_at: string
-}
 
 type ManagerHrMainSectionProps = {
   managerId: number

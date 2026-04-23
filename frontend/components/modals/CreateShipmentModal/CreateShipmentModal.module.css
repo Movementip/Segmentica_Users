@@ -1,144 +1,111 @@
 .modalContent {
-    max-width: 720px;
-    width: 92vw;
-    max-height: 90vh;
-    overflow: auto;
-}
-
-.description {
-    margin-top: 6px;
+  width: min(720px, calc(100vw - 32px));
+  max-width: 720px;
 }
 
 .form {
-    margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .formGrid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 16px;
-}
-
-@media (max-width: 640px) {
-    .formGrid {
-        grid-template-columns: 1fr;
-    }
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
 }
 
 .formGroup {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.spanAll {
+  grid-column: 1 / -1;
+}
+
+.fieldLabel {
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.4;
 }
 
 .checkboxRow {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-height: 40px;
-    font-size: 14px;
-    color: #111111;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--foreground);
+  font-size: 14px;
 }
 
-.checkboxInput {
-    width: 16px;
-    height: 16px;
-    accent-color: #111111;
-    cursor: pointer;
+.textField,
+.selectTrigger {
+  min-height: 40px;
+  border-radius: var(--radius-xl);
 }
 
 .fieldHint {
-    margin: 0;
-    color: #6b7280;
-    line-height: 1.45;
-}
-
-.textField {
-    height: 40px;
-    border-radius: 15px;
-    width: 100%;
-}
-
-.textField:global(.rt-TextFieldRoot),
-.textField:global(.rt-SelectTrigger) {
-    border: 1px solid #e0e0e0;
-    background: #ffffff;
-    color: #424242;
-    line-height: 1;
-    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
-}
-
-.textField:global(.rt-TextFieldRoot):hover,
-.textField:global(.rt-SelectTrigger):hover {
-    background: #f5f5f5;
-    border-color: #d0d0d0;
-}
-
-.textField:global(.rt-TextFieldRoot):focus-within,
-.textField:global(.rt-SelectTrigger):focus-visible {
-    outline: none !important;
-    border-color: #000000 !important;
-    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12) !important;
-}
-
-.actions :global(.rt-BaseButton.rt-variant-surface):hover,
-.actions :global(.rt-Button.rt-variant-surface):hover {
-    background: #f5f5f5 !important;
-    border-color: #d0d0d0 !important;
-}
-
-.actions :global(.rt-BaseButton.rt-variant-surface):hover::before,
-.actions :global(.rt-BaseButton.rt-variant-surface):hover::after,
-.actions :global(.rt-Button.rt-variant-surface):hover::before,
-.actions :global(.rt-Button.rt-variant-surface):hover::after {
-    background: #f5f5f5 !important;
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .error {
-    margin-top: 12px;
-    padding: 12px 14px;
-    background: #ffebee;
-    border: 1px solid #ffcdd2;
-    border-radius: 10px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in oklab, var(--destructive) 24%, var(--border));
+  border-radius: var(--radius-xl);
+  background: color-mix(in oklab, var(--card) 82%, var(--destructive) 18%);
+  color: color-mix(in oklab, var(--destructive) 88%, var(--foreground));
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .actions {
-    padding-top: 4px;
+  gap: 10px;
+}
+
+.secondaryButton,
+.primaryButton {
+  min-height: 40px;
+  min-width: 132px;
+  border-radius: var(--radius-xl);
+  font-weight: 650;
 }
 
 .secondaryButton {
-    height: 44px;
-    padding: 0 20px;
-    border-radius: 18px;
-    border: 1px solid #c7c7d2;
-    background: #ffffff;
-    color: #111111;
+  background: var(--chrome);
+  color: var(--chrome-foreground);
 }
 
-.secondaryButton:global(.rt-BaseButton.rt-variant-surface),
-.secondaryButton:global(.rt-Button.rt-variant-surface) {
-    border-color: #e0e0e0;
-    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.12);
-}
-
-.secondaryButton:global(.rt-BaseButton.rt-variant-surface):hover,
-.secondaryButton:global(.rt-Button.rt-variant-surface):hover {
-    background: #f5f5f5 !important;
-    border-color: #d0d0d0 !important;
-}
-
-.secondaryButton:global(.rt-BaseButton.rt-variant-surface):hover::before,
-.secondaryButton:global(.rt-BaseButton.rt-variant-surface):hover::after,
-.secondaryButton:global(.rt-Button.rt-variant-surface):hover::before,
-.secondaryButton:global(.rt-Button.rt-variant-surface):hover::after {
-    background: #f5f5f5 !important;
+.secondaryButton:hover {
+  background: var(--chrome-hover);
+  color: var(--chrome-foreground);
 }
 
 .primaryButton {
-    height: 44px;
-    padding: 0 22px;
-    border-radius: 18px;
-    background: #0f0f12;
-    border: 1px solid #0f0f12;
-    color: #ffffff;
+  background: color-mix(in oklab, var(--foreground) 90%, var(--background));
+  color: var(--background);
+}
+
+.primaryButton:hover {
+  background: color-mix(in oklab, var(--foreground) 96%, var(--background));
+  color: var(--background);
+}
+
+@media (max-width: 640px) {
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .actions {
+    flex-direction: column-reverse;
+  }
+
+  .secondaryButton,
+  .primaryButton {
+    width: 100%;
+  }
 }

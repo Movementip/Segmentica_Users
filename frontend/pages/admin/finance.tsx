@@ -8,7 +8,7 @@ import {
     FiX,
 } from 'react-icons/fi';
 import { BsFillFileEarmarkExcelFill, BsFillFileEarmarkPdfFill } from 'react-icons/bs';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/use-auth';
 import { SegmentedTabs } from '../../components/SegmentedTabs/SegmentedTabs';
 import { Button } from '../../components/ui/button';
 import {
@@ -26,130 +26,20 @@ import { FinanceHero } from '../../components/admin/finance/FinanceHero/FinanceH
 import { FinancePayrollTable } from '../../components/admin/finance/FinancePayrollTable/FinancePayrollTable';
 import { FinancePaymentsJournal } from '../../components/admin/finance/FinancePaymentsJournal/FinancePaymentsJournal';
 import { lockBodyScroll, openInNewTabWithUnlock, scheduleForceUnlockBodyScroll } from '../../utils/bodyScrollLock';
+import type { DocumentPreviewPageImage, DocumentPreviewStateBase, PdfJsModule } from '../../types/document-preview';
+import type {
+    FinanceColumn,
+    FinanceEmployee,
+    FinancePayload,
+    FinanceSettings,
+    FinanceSuggestedPayment,
+} from '../../types/pages/finance';
 import styles from './AdminFinance.module.css';
 
-type FinanceSettings = {
-    paymentsPerMonth: 1 | 2;
-    firstDay: number;
-    secondDay: number | null;
-};
-
-type FinanceSuggestedPayment = {
-    key: string;
-    type: 'advance' | 'salary_cycle' | 'vacation' | 'bonus' | 'sick_leave';
-    encodedType: string;
-    label: string;
-    amount: number;
-    accruedAmount: number;
-    withheldAmount: number;
-    paidAmount: number;
-    payableAmount: number;
-    recommendedDate: string;
-    periodFrom: string | null;
-    periodTo: string | null;
-    note: string | null;
-    sourceSummary: string | null;
-};
-
-type FinancePayment = {
-    id: string;
-    employeeId: number | null;
-    employeeName: string | null;
-    amount: number;
-    date: string;
-    type: string | null;
-    status: string | null;
-    comment: string | null;
-    accruedAmount: number;
-    withheldAmount: number;
-    paidAmount: number;
-    payableAmount: number;
-    paymentKind: string | null;
-    periodFrom: string | null;
-    periodTo: string | null;
-    calculation: Record<string, any> | null;
-};
-
-type FinanceEmployee = {
-    id: number;
-    fio: string;
-    position: string | null;
-    rate: number | null;
-    active: boolean;
-    totalPaid: number;
-    paymentCount: number;
-    lastPaymentDate: string | null;
-    currentAccrued: number;
-    currentWithheld: number;
-    currentPaid: number;
-    currentPayable: number;
-    currentOrgDebt: number;
-    currentEmployeeDebt: number;
-    currentContributions: number;
-    currentContributionDetails: {
-        taxableIncomeMonth: number;
-        contributionBaseMonth: number;
-        contributionYearBase30: number;
-        contributionYearBase151: number;
-    };
-    currentBreakdown: {
-        advance: number;
-        salary: number;
-        vacation: number;
-        bonus: number;
-        sickLeave: number;
-    };
-    suggestedPayments: FinanceSuggestedPayment[];
-    paymentHistory: FinancePayment[];
-};
-
-type FinancePayload = {
-    settings: FinanceSettings;
-    paymentTableAvailable: boolean;
-    selectedMonth: string;
-    selectedMonthLabel: string;
-    employees: FinanceEmployee[];
-    recentPayments: FinancePayment[];
-    totals: {
-        activeEmployees: number;
-        totalPaid: number;
-        paymentCount: number;
-    };
-};
-
-type StatementPreviewState = {
-    title: string;
-    description: string;
-    fileNameBase: string;
-    previewUrl: string;
+type StatementPreviewState = DocumentPreviewStateBase & {
     kind: 'batch-payroll' | 'single-statement' | 'selected-statements' | 'timesheet';
     employeeIds: number[];
     employeeId?: number;
-};
-
-type PreviewPageImage = {
-    src: string;
-    width: number;
-    height: number;
-};
-
-type PdfJsModule = {
-    GlobalWorkerOptions: {
-        workerSrc: string;
-    };
-    getDocument: (source: { data: Uint8Array }) => {
-        promise: Promise<{
-            numPages: number;
-            getPage: (pageNumber: number) => Promise<{
-                getViewport: (params: { scale: number }) => { width: number; height: number };
-                render: (params: {
-                    canvasContext: CanvasRenderingContext2D;
-                    viewport: { width: number; height: number };
-                    background: string;
-                }) => { promise: Promise<void> };
-            }>;
-        }>;
-    };
 };
 
 const PREVIEW_ZOOM_MIN = 0.6;
@@ -158,12 +48,7 @@ const PREVIEW_ZOOM_STEP = 0.2;
 
 type FinanceTabKey = 'summary' | 'accruals' | 'withheld' | 'paid' | 'contributions';
 
-type PayrollColumn = {
-    key: string;
-    label: React.ReactNode;
-    render: (employee: FinanceEmployee) => string;
-    total?: (employees: FinanceEmployee[]) => string;
-};
+type PayrollColumn = FinanceColumn<FinanceEmployee>;
 
 const TABS: Array<{ key: FinanceTabKey; label: string }> = [
     { key: 'summary', label: 'Сводка' },
@@ -309,7 +194,7 @@ function AdminFinancePage(): JSX.Element {
         comment: '',
     });
     const [statementPreview, setStatementPreview] = useState<StatementPreviewState | null>(null);
-    const [previewPages, setPreviewPages] = useState<PreviewPageImage[]>([]);
+    const [previewPages, setPreviewPages] = useState<DocumentPreviewPageImage[]>([]);
     const [previewLoading, setPreviewLoading] = useState(false);
     const [previewError, setPreviewError] = useState<string | null>(null);
     const [previewPdfObjectUrl, setPreviewPdfObjectUrl] = useState<string | null>(null);
@@ -385,7 +270,7 @@ function AdminFinancePage(): JSX.Element {
                 const pdf = await loadingTask.promise;
 
                 const availableWidth = Math.max((previewStageRef.current?.clientWidth ?? 1200) - 8, 320);
-                const pages: PreviewPageImage[] = [];
+                const pages: DocumentPreviewPageImage[] = [];
 
                 for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
                     const page = await pdf.getPage(pageNumber);

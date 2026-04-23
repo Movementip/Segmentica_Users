@@ -3,7 +3,7 @@
   display: inline-flex;
   align-items: center;
   border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border-radius: 18px;
   background: var(--chrome);
   overflow: hidden;
 }
@@ -11,20 +11,20 @@
 .zoomButton,
 .zoomValue {
   min-width: 46px;
-  height: 42px;
+  height: 44px;
+  padding: 0 14px;
   border: 0;
   border-left: 1px solid var(--border);
   background: transparent;
-  color: var(--chrome-foreground);
+  color: var(--foreground);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font: inherit;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
-  transition:
-    background-color 0.15s ease,
-    color 0.15s ease,
-    opacity 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease, opacity 0.15s ease;
 }
 
 .zoomControls > :first-child {
@@ -34,7 +34,7 @@
 .zoomButton:hover,
 .zoomValue:hover {
   background: var(--chrome-hover);
-  color: var(--chrome-foreground);
+  color: var(--foreground);
 }
 
 .zoomButton:disabled,
@@ -46,9 +46,6 @@
 
 .zoomValue {
   min-width: 72px;
-  padding: 0 14px;
-  font-size: 14px;
-  font-weight: 650;
 }
 
 .zoomButton svg {
@@ -59,24 +56,21 @@
 .closeButton {
   width: 44px;
   height: 44px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-lg);
+  padding: 0;
+  border: none;
+  border-radius: 0;
   background: transparent;
   color: var(--muted-foreground);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition:
-    background-color 0.15s ease,
-    border-color 0.15s ease,
-    color 0.15s ease;
+  transition: color 0.15s ease;
 }
 
 .closeButton:hover {
-  border-color: var(--border);
-  background: var(--chrome-hover);
-  color: var(--chrome-foreground);
+  background: transparent;
+  color: var(--foreground);
 }
 
 .closeButton svg {

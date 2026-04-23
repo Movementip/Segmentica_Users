@@ -34,7 +34,7 @@ function Dialog({
   return createPortal(
     <div
       data-slot="dialog-overlay"
-      className="fixed inset-0 z-50 overflow-y-auto bg-black/55 backdrop-blur-md backdrop-saturate-75"
+      className="fixed inset-0 z-[1000] overflow-y-auto bg-black/55 backdrop-blur-md backdrop-saturate-75"
       onMouseDown={() => onOpenChange?.(false)}
     >
       <div className="flex min-h-full items-start justify-center p-4 sm:items-center">

@@ -1,19 +1,20 @@
 import type { AppProps } from 'next/app';
 import Head from 'next/head';
 import '../styles/globals.css';
-import '@radix-ui/themes/styles.css';
-import { Theme } from '@radix-ui/themes';
 import React, { useEffect, useMemo } from 'react';
-import { useTheme } from 'next-themes';
 import { useRouter } from 'next/router';
 import { ThemeProvider } from '../components/theme-provider';
+import { useThemeSync } from '../hooks/use-theme-sync';
+import { createThemeInitScript, THEME_STORAGE_KEY } from '../lib/theme-runtime';
 import { Sidebar } from '../layout/Sidebar/Sidebar';
 import { Header } from '../layout/Header/Header';
 import { SidebarProvider } from '../context/SidebarContext';
-import { PageTitleProvider, usePageTitle } from '../context/PageTitleContext';
-import { AuthProvider, useAuth } from '../context/AuthContext';
+import { PageTitleProvider } from '../context/PageTitleContext';
+import { AuthProvider } from '../context/AuthContext';
+import { useAuth } from '../hooks/use-auth';
+import { usePageTitle } from '../hooks/use-page-title';
 
-const THEME_STORAGE_KEY = 'segmentica-theme';
+const themeInitScript = createThemeInitScript(THEME_STORAGE_KEY);
 
 function DocumentTitle(): JSX.Element {
     const { pageTitle } = usePageTitle();
@@ -30,26 +31,31 @@ function MyApp({ Component, pageProps }: AppProps) {
     const isLoginPage = useRouter().pathname === '/login';
 
     return (
-        <ThemeProvider
-            attribute="class"
-            defaultTheme="light"
-            enableSystem={false}
-            disableTransitionOnChange
-            storageKey={THEME_STORAGE_KEY}
-        >
-            <AuthProvider skipInitialRefresh={isLoginPage}>
-                <ThemedAppShell isLoginPage={isLoginPage}>
-                    <SidebarProvider>
-                        <PageTitleProvider>
-                            <DocumentTitle />
-                            <ProtectedLayoutGate isLoginPage={isLoginPage}>
-                                <Component {...pageProps} />
-                            </ProtectedLayoutGate>
-                        </PageTitleProvider>
-                    </SidebarProvider>
-                </ThemedAppShell>
-            </AuthProvider>
-        </ThemeProvider>
+        <>
+            <Head>
+                <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+            </Head>
+            <ThemeProvider
+                attribute="class"
+                defaultTheme="light"
+                enableSystem={false}
+                disableTransitionOnChange
+                storageKey={THEME_STORAGE_KEY}
+            >
+                <AuthProvider skipInitialRefresh={isLoginPage}>
+                    <ThemedAppShell>
+                        <SidebarProvider>
+                            <PageTitleProvider>
+                                <DocumentTitle />
+                                <ProtectedLayoutGate isLoginPage={isLoginPage}>
+                                    <Component {...pageProps} />
+                                </ProtectedLayoutGate>
+                            </PageTitleProvider>
+                        </SidebarProvider>
+                    </ThemedAppShell>
+                </AuthProvider>
+            </ThemeProvider>
+        </>
     );
 }
 
@@ -92,50 +98,10 @@ function ProtectedLayoutGate({
     );
 }
 
-function ThemedAppShell({ children }: { isLoginPage: boolean; children: React.ReactNode }): JSX.Element {
-    const { user } = useAuth();
-    const { theme, resolvedTheme, setTheme } = useTheme();
+function ThemedAppShell({ children }: { children: React.ReactNode }): JSX.Element {
+    useThemeSync();
 
-    const savedTheme = (user?.preferences?.theme === 'dark' || user?.preferences?.theme === 'light')
-        ? (user.preferences.theme as 'light' | 'dark')
-        : null;
-
-    useEffect(() => {
-        if (!savedTheme) return;
-        if (theme === savedTheme) return;
-        setTheme(savedTheme);
-    }, [savedTheme, setTheme, theme]);
-
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        if (!savedTheme) return;
-        window.localStorage.setItem(THEME_STORAGE_KEY, savedTheme);
-    }, [savedTheme]);
-
-    const appearance = theme === 'dark'
-        ? 'dark'
-        : theme === 'light'
-            ? 'light'
-            : savedTheme ?? (resolvedTheme === 'dark' ? 'dark' : 'light');
-
-    useEffect(() => {
-        const root = document.documentElement;
-        const body = document.body;
-        root.classList.toggle('dark', appearance === 'dark');
-        root.classList.toggle('light', appearance === 'light');
-        root.dataset.theme = appearance;
-        root.style.colorScheme = appearance;
-        body.classList.toggle('dark', appearance === 'dark');
-        body.classList.toggle('light', appearance === 'light');
-        body.dataset.theme = appearance;
-        body.style.colorScheme = appearance;
-    }, [appearance]);
-
-    return (
-        <Theme appearance={appearance}>
-            {children}
-        </Theme>
-    );
+    return <>{children}</>;
 }
 
 export default MyApp;

@@ -257,6 +257,17 @@ const inferEntityIdFromReq = (req: any): string | number | null => {
     return Number.isFinite(asNum) && String(v).trim() !== '' ? asNum : String(v);
 };
 
+const normalizeIntegerEntityId = (value: string | number | null | undefined): number | null => {
+    if (value == null) return null;
+    if (typeof value === 'number') {
+        return Number.isInteger(value) ? value : null;
+    }
+    const trimmed = String(value).trim();
+    if (!/^\d+$/.test(trimmed)) return null;
+    const asNum = Number(trimmed);
+    return Number.isInteger(asNum) ? asNum : null;
+};
+
 const sanitizeParam = (v: any): any => {
     if (v == null) return v;
     if (Buffer.isBuffer(v)) return { type: 'Buffer', length: v.length };
@@ -372,8 +383,11 @@ const writeSqlAudit = async (
     }
 
     if (entityId != null) {
-        if (meta.cols.has('entity_id')) push('entity_id', safeStr(entityId, 200));
-        else if (meta.cols.has('target_id')) push('target_id', safeStr(entityId, 200));
+        const normalizedEntityId = normalizeIntegerEntityId(entityId);
+        if (normalizedEntityId != null) {
+            if (meta.cols.has('entity_id')) push('entity_id', normalizedEntityId);
+            else if (meta.cols.has('target_id')) push('target_id', normalizedEntityId);
+        }
     }
 
     if (meta.cols.has('ip')) push('ip', safeStr(ctx.req.headers['x-forwarded-for'] || ctx.req.socket.remoteAddress || '', 200));

@@ -8,7 +8,7 @@ import { Button } from "../../../ui/button"
 import { Card } from "../../../ui/card"
 import { Checkbox } from "../../../ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../../ui/select"
-import type { SettingsPayload } from "./types"
+import type { SettingsPayload } from "@/types/pages/settings"
 import styles from "./SystemSettingsCard.module.css"
 
 type SystemSettingsCardProps = {

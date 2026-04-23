@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { withLayout } from '../../layout';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/use-auth';
 import { NoAccessPage } from '../../components/ui/NoAccessPage/NoAccessPage';
 import { PageLoader } from '../../components/ui/PageLoader/PageLoader';
 import { ScheduleBoardGrid } from '../../components/admin/schedule-board/ScheduleBoardGrid/ScheduleBoardGrid';

@@ -4,7 +4,7 @@ import { withLayout } from '../../layout/Layout';
 import pageStyles from './ShipmentsPage.module.css';
 import deleteConfirmStyles from '../../components/modals/DeleteConfirmation/DeleteConfirmation.module.css';
 import * as XLSX from 'xlsx';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/use-auth';
 import { NoAccessPage } from '../../components/ui/NoAccessPage/NoAccessPage';
 import { PageLoader } from '../../components/ui/PageLoader/PageLoader';
 import DeleteConfirmation from '../../components/modals/DeleteConfirmation/DeleteConfirmation';
@@ -17,9 +17,10 @@ import { ShipmentsPageSkeleton } from '../../components/shipments/ShipmentsPageS
 import { ShipmentsStats } from '../../components/shipments/ShipmentsStats/ShipmentsStats';
 import { ShipmentsTable } from '../../components/shipments/ShipmentsTable/ShipmentsTable';
 import { ShipmentsViewTabs } from '../../components/shipments/ShipmentsViewTabs/ShipmentsViewTabs';
-import type { Shipment, ShipmentsTab, StatusFilter } from '../../components/shipments/types';
+import type { Shipment, ShipmentsTab, StatusFilter } from '../../types/pages/shipments';
 import { calculateVatAmountsFromLine, DEFAULT_VAT_RATE_ID, getVatRateOption } from '../../lib/vat';
 import { getShipmentDeliveryLabel } from '../../lib/logisticsDeliveryLabels';
+import { formatRuCurrency, formatRuDateTime } from '../../utils/formatters';
 
 const EMPTY_SELECT_VALUE = '__empty__';
 
@@ -906,22 +907,9 @@ function ShipmentsPage(): JSX.Element {
         }
     }, [canShipmentsImportExcel, fetchShipments, parseExcelToRows]);
 
-    const formatDateTime = (dateString: string) => {
-        return new Date(dateString).toLocaleString('ru-RU', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-    };
+    const formatDateTime = (dateString: string) => formatRuDateTime(dateString);
 
-    const formatCurrency = (amount: number) => {
-        return new Intl.NumberFormat('ru-RU', {
-            style: 'currency',
-            currency: 'RUB'
-        }).format(amount);
-    };
+    const formatCurrency = (amount: number) => formatRuCurrency(amount);
 
     const getStatusText = (status: string) => {
         switch (status) {

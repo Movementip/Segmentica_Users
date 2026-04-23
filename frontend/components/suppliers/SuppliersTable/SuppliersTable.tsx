@@ -5,7 +5,7 @@ import { FiMail, FiPhone } from "react-icons/fi"
 
 import { entityTableClassName } from "@/components/EntityDataTable/EntityDataTable"
 import { SupplierRowActionsMenu } from "@/components/suppliers/SupplierRowActionsMenu/SupplierRowActionsMenu"
-import type { Supplier } from "@/components/suppliers/types"
+import type { Supplier } from "@/types/pages/suppliers"
 import {
   Table,
   TableBody,

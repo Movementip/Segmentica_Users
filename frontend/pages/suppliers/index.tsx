@@ -6,7 +6,7 @@ import {
   EntityTableSkeleton,
   EntityTableSurface,
 } from "@/components/EntityDataTable/EntityDataTable"
-import { CreateSupplierModalV2 } from "@/components/modals/CreateSupplierModalV2/CreateSupplierModalV2"
+import { CreateSupplierModal } from "@/components/modals/CreateSupplierModal/CreateSupplierModal"
 import deleteConfirmationStyles from "@/components/modals/DeleteConfirmation/DeleteConfirmation.module.css"
 import DeleteConfirmation from "@/components/modals/DeleteConfirmation/DeleteConfirmation"
 import {
@@ -24,14 +24,15 @@ import type {
   SupplierAttachmentSummaryItem,
   SupplierOption,
   SuppliersFiltersState,
-} from "@/components/suppliers/types"
-import { defaultSuppliersFilters } from "@/components/suppliers/types"
+} from "@/types/pages/suppliers"
+import { defaultSuppliersFilters } from "@/lib/suppliersMeta"
 import { Button } from "@/components/ui/button"
 import { NoAccessPage } from "@/components/ui/NoAccessPage/NoAccessPage"
 import { PageLoader } from "@/components/ui/PageLoader/PageLoader"
-import { useAuth } from "@/context/AuthContext"
+import { useAuth } from "@/hooks/use-auth"
 import { withLayout } from "@/layout"
 import { normalizeSupplierContragentType } from "@/lib/supplierContragents"
+import { formatRuCurrency } from "@/utils/formatters"
 
 import styles from "./Suppliers.module.css"
 
@@ -311,11 +312,7 @@ function SuppliersPage(): JSX.Element {
     void fetchSuppliers("initial")
   }, [authLoading, canList, fetchSuppliers])
 
-  const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat("ru-RU", {
-      style: "currency",
-      currency: "RUB",
-    }).format(amount)
+  const formatCurrency = (amount: number) => formatRuCurrency(amount)
 
   const supplierNameOptions = useMemo((): SupplierOption[] => {
     const map = new Map<number, string>()
@@ -593,7 +590,7 @@ function SuppliersPage(): JSX.Element {
         </div>
       )}
 
-      <CreateSupplierModalV2
+      <CreateSupplierModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onSupplierCreated={() => {

@@ -8,7 +8,7 @@ import {
     FiTruck,
     FiDatabase
 } from 'react-icons/fi';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/use-auth';
 import { canUseAdminDataExchangePage } from '../../lib/dataExchangeConfig';
 import { SystemGuidePopup, type SystemGuideStep } from './SystemGuidePopup';
 import { ModeToggle } from '../../components/mode-toggle';

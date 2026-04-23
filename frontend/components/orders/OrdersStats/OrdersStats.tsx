@@ -1,4 +1,4 @@
-import type { Order } from "@/components/orders/types"
+import type { Order } from "@/types/pages/orders"
 import { EntityStatsPanel } from "@/components/EntityStatsPanel/EntityStatsPanel"
 
 type OrdersStatsProps = {

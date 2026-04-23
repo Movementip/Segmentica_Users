@@ -2,16 +2,13 @@
     position: fixed;
     inset: 0;
     z-index: 100000100;
-    overflow: hidden;
-    overscroll-behavior: contain;
-    touch-action: none;
 }
 
 .previewBackdrop {
     position: fixed;
     inset: 0;
-    background: color-mix(in oklch, black 48%, transparent);
-    backdrop-filter: blur(6px);
+    background: rgb(0 0 0 / 0.56);
+    backdrop-filter: blur(8px);
 }
 
 .previewPanel {
@@ -19,20 +16,16 @@
     top: 0;
     right: 0;
     bottom: 0;
-    width: min(1120px, calc(100vw - 232px));
-    min-width: min(1120px, calc(100vw - 232px));
+    width: min(1120px, calc(100vw - 220px));
+    min-width: min(1120px, calc(100vw - 220px));
     background: var(--background);
     color: var(--foreground);
-    box-shadow: -24px 0 60px color-mix(in oklch, black 18%, transparent);
+    border-left: 1px solid var(--border);
+    box-shadow: -24px 0 60px rgb(0 0 0 / 0.22);
     padding: 24px 28px 28px;
     display: flex;
     flex-direction: column;
     gap: 18px;
-    overflow: hidden;
-    box-sizing: border-box;
-    contain: layout paint;
-    overscroll-behavior: contain;
-    touch-action: auto;
     animation: previewPanelIn 180ms ease-out;
 }
 
@@ -46,7 +39,7 @@
 .previewPanelTitleBlock {
     display: flex;
     flex-direction: column;
-    gap: 0;
+    gap: 4px;
 }
 
 .previewPanelTitle {
@@ -65,17 +58,20 @@
 .previewCloseButton {
     width: 44px;
     height: 44px;
+    padding: 0;
     border: none;
+    border-radius: 0;
     background: transparent;
     color: var(--muted-foreground);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: color 0.18s ease;
+    transition: color 0.15s ease;
 }
 
 .previewCloseButton:hover {
+    background: transparent;
     color: var(--foreground);
 }
 
@@ -90,16 +86,13 @@
     gap: 12px;
     flex-wrap: wrap;
     justify-content: flex-start;
-    min-height: 46px;
-    flex: 0 0 auto;
 }
 
 .previewToolbarAction {
-    height: 42px;
+    min-height: 42px;
     min-width: auto;
-    padding: 0 16px;
+    padding-inline: 16px;
     border-radius: 0;
-    flex: 0 0 auto;
 }
 
 .previewToolbar svg {
@@ -129,6 +122,10 @@
     line-height: 1.4;
 }
 
+.previewZoomControls {
+    width: fit-content;
+}
+
 .previewStage {
     flex: 1;
     min-height: calc(100vh - 240px);
@@ -139,7 +136,6 @@
     justify-items: center;
     align-items: start;
     padding: 8px 0 32px;
-    contain: layout paint;
 }
 
 .sheetPreview {

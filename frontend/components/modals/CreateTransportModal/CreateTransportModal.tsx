@@ -1,256 +1,176 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from "react"
 
-interface CreateTransportModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onTransportCreated: () => void;
+import { EntityModalShell } from "@/components/EntityModalShell/EntityModalShell"
+import { Button } from "@/components/ui/button"
+import { Dialog } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+
+import styles from "./CreateTransportModal.module.css"
+
+type FormState = {
+  email: string
+  название: string
+  тариф: string
+  телефон: string
 }
 
-export const CreateTransportModal: React.FC<CreateTransportModalProps> = ({
+interface CreateTransportModalProps {
+  isOpen: boolean
+  onClose: () => void
+  onCreated: () => void
+}
+
+const initialFormState: FormState = {
+  название: "",
+  телефон: "",
+  email: "",
+  тариф: "",
+}
+
+export function CreateTransportModal({
   isOpen,
   onClose,
-  onTransportCreated
-}) => {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [формаДанные, setФормаДанные] = useState({
-    название: '',
-    телефон: '',
-    email: '',
-    тариф: ''
-  });
+  onCreated,
+}: CreateTransportModalProps): JSX.Element | null {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [formData, setFormData] = useState<FormState>(initialFormState)
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setФормаДанные(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
+  useEffect(() => {
+    if (!isOpen) return
+    setError(null)
+    setLoading(false)
+    setFormData(initialFormState)
+  }, [isOpen])
 
-  const validateForm = () => {
-    if (!формаДанные.название.trim()) {
-      setError('Название компании обязательно');
-      return false;
-    }
+  const canSubmit = useMemo(
+    () => formData.название.trim().length > 0 && !loading,
+    [formData.название, loading]
+  )
 
-    if (формаДанные.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(формаДанные.email)) {
-      setError('Некорректный формат email');
-      return false;
-    }
+  const handleClose = () => {
+    setError(null)
+    setLoading(false)
+    onClose()
+  }
 
-    if (формаДанные.тариф && isNaN(parseFloat(формаДанные.тариф))) {
-      setError('Тариф должен быть числом');
-      return false;
-    }
-
-    return true;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError(null);
-
-    if (!validateForm()) {
-      return;
-    }
-
-    setLoading(true);
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (!formData.название.trim()) return
 
     try {
-      const requestBody = {
-        название: формаДанные.название.trim(),
-        телефон: формаДанные.телефон.trim() || null,
-        email: формаДанные.email.trim() || null,
-        тариф: формаДанные.тариф ? parseFloat(формаДанные.тариф) : null
-      };
+      setLoading(true)
+      setError(null)
 
-      const response = await fetch('/api/transport', {
-        method: 'POST',
+      const response = await fetch("/api/transport", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify(requestBody),
-      });
+        body: JSON.stringify({
+          название: formData.название.trim(),
+          телефон: formData.телефон.trim() ? formData.телефон.trim() : null,
+          email: formData.email.trim() ? formData.email.trim() : null,
+          тариф: formData.тариф.trim() ? Number(formData.тариф) : null,
+        }),
+      })
 
-      console.log('Response status:', response.status);
-      const responseData = await response.json();
-      console.log('Response data:', responseData);
+      const result = await response.json().catch(() => ({}))
 
       if (!response.ok) {
-        throw new Error(responseData.error || 'Ошибка создания транспортной компании');
+        throw new Error(result?.error || "Ошибка создания транспортной компании")
       }
 
-      console.log('Транспортная компания создана:', responseData.companyName);
-      onTransportCreated();
-      onClose();
-      // Reset form
-      setФормаДанные({
-        название: '',
-        телефон: '',
-        email: '',
-        тариф: ''
-      });
-    } catch (error) {
-      setError(error instanceof Error ? error.message : 'Неизвестная ошибка');
+      onCreated()
+      handleClose()
+    } catch (submitError) {
+      setError(
+        submitError instanceof Error
+          ? submitError.message
+          : "Неизвестная ошибка при создании"
+      )
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
-  if (!isOpen) return null;
+  if (!isOpen) return null
 
   return (
-    <div style={{
-      position: 'fixed',
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      zIndex: 1000
-    }} onClick={onClose}>
-      <div style={{
-        backgroundColor: 'white',
-        padding: '24px',
-        borderRadius: '8px',
-        maxWidth: '500px',
-        width: '90%',
-        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
-      }} onClick={(e) => e.stopPropagation()}>
-        <h2 style={{ margin: '0 0 16px 0' }}>Добавить транспортную компанию</h2>
-
-        {error && (
-          <div style={{
-            padding: '12px',
-            backgroundColor: '#ffebee',
-            color: '#c62828',
-            borderRadius: '4px',
-            marginBottom: '16px'
-          }}>
-            {error}
+    <Dialog open={isOpen} onOpenChange={(open) => (!open ? handleClose() : undefined)}>
+      <EntityModalShell
+        className={styles.modalContent}
+        title="Добавить транспортную компанию"
+        description="Заполните данные компании и контакты."
+        onClose={handleClose}
+        footer={(
+          <div className={styles.actions}>
+            <Button type="button" variant="outline" onClick={handleClose} disabled={loading}>
+              Отмена
+            </Button>
+            <Button type="submit" form="create-transport-company-form" disabled={!canSubmit}>
+              {loading ? "Создание..." : "Создать"}
+            </Button>
           </div>
         )}
+      >
+        <form id="create-transport-company-form" onSubmit={handleSubmit} className={styles.form}>
+          <div className={styles.formGrid}>
+            <div className={styles.formGroup}>
+              <Label htmlFor="transport-create-name">Название компании</Label>
+              <Input
+                id="transport-create-name"
+                value={formData.название}
+                onChange={(event) =>
+                  setFormData((previous) => ({ ...previous, название: event.target.value }))
+                }
+                placeholder='ООО "Компания"'
+              />
+            </div>
 
-        <form onSubmit={handleSubmit}>
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '4px', fontWeight: '600' }}>
-              Название компании: *
-            </label>
-            <input
-              type="text"
-              name="название"
-              value={формаДанные.название}
-              onChange={handleInputChange}
-              required
-              placeholder="Например: Деловые линии"
-              style={{
-                width: '100%',
-                padding: '8px',
-                border: '1px solid #ccc',
-                borderRadius: '4px'
-              }}
-            />
+            <div className={styles.formGroup}>
+              <Label htmlFor="transport-create-rate">Тариф</Label>
+              <Input
+                id="transport-create-rate"
+                value={formData.тариф}
+                onChange={(event) =>
+                  setFormData((previous) => ({ ...previous, тариф: event.target.value }))
+                }
+                placeholder="50"
+                inputMode="decimal"
+              />
+            </div>
+
+            <div className={styles.formGroup}>
+              <Label htmlFor="transport-create-phone">Телефон</Label>
+              <Input
+                id="transport-create-phone"
+                value={formData.телефон}
+                onChange={(event) =>
+                  setFormData((previous) => ({ ...previous, телефон: event.target.value }))
+                }
+                placeholder="+7 (999) 123-45-67"
+              />
+            </div>
+
+            <div className={styles.formGroup}>
+              <Label htmlFor="transport-create-email">Email</Label>
+              <Input
+                id="transport-create-email"
+                value={formData.email}
+                onChange={(event) =>
+                  setFormData((previous) => ({ ...previous, email: event.target.value }))
+                }
+                placeholder="info@company.com"
+                type="email"
+              />
+            </div>
           </div>
 
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '4px', fontWeight: '600' }}>
-              Телефон:
-            </label>
-            <input
-              type="tel"
-              name="телефон"
-              value={формаДанные.телефон}
-              onChange={handleInputChange}
-              placeholder="Например: 88001234567"
-              style={{
-                width: '100%',
-                padding: '8px',
-                border: '1px solid #ccc',
-                borderRadius: '4px'
-              }}
-            />
-          </div>
-
-          <div style={{ marginBottom: '16px' }}>
-            <label style={{ display: 'block', marginBottom: '4px', fontWeight: '600' }}>
-              Email:
-            </label>
-            <input
-              type="email"
-              name="email"
-              value={формаДанные.email}
-              onChange={handleInputChange}
-              placeholder="Например: info@company.ru"
-              style={{
-                width: '100%',
-                padding: '8px',
-                border: '1px solid #ccc',
-                borderRadius: '4px'
-              }}
-            />
-          </div>
-
-          <div style={{ marginBottom: '24px' }}>
-            <label style={{ display: 'block', marginBottom: '4px', fontWeight: '600' }}>
-              Тариф за доставку (₽):
-            </label>
-            <input
-              type="number"
-              name="тариф"
-              value={формаДанные.тариф}
-              onChange={handleInputChange}
-              min="0"
-              step="0.01"
-              placeholder="Например: 50.00"
-              style={{
-                width: '100%',
-                padding: '8px',
-                border: '1px solid #ccc',
-                borderRadius: '4px'
-              }}
-            />
-            <small style={{ color: '#666', fontSize: '12px' }}>
-              Базовый тариф за единицу доставки
-            </small>
-          </div>
-
-          <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={loading}
-              style={{
-                padding: '10px 20px',
-                backgroundColor: '#e0e0e0',
-                color: '#333',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: loading ? 'not-allowed' : 'pointer'
-              }}
-            >
-              Отмена
-            </button>
-            <button
-              type="submit"
-              disabled={loading || !формаДанные.название.trim()}
-              style={{
-                padding: '10px 20px',
-                backgroundColor: loading || !формаДанные.название.trim() ? '#ccc' : '#4caf50',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: loading || !формаДанные.название.trim() ? 'not-allowed' : 'pointer'
-              }}
-            >
-              {loading ? 'Создание...' : 'Создать компанию'}
-            </button>
-          </div>
+          {error ? <div className={styles.error}>{error}</div> : null}
         </form>
-      </div>
-    </div>
-  );
-};
+      </EntityModalShell>
+    </Dialog>
+  )
+}

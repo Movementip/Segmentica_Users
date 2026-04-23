@@ -2,13 +2,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { AnimatePresence, motion } from "framer-motion"
 import {
-  FiDownload,
-  FiExternalLink,
   FiFilter,
   FiLink2,
-  FiMoreHorizontal,
   FiPaperclip,
-  FiTrash2,
   FiUploadCloud,
 } from "react-icons/fi"
 
@@ -20,6 +16,7 @@ import {
 } from "@/components/DataFiltersPanel/DataFiltersPanel"
 import { DataSearchField } from "@/components/DataSearchField/DataSearchField"
 import { CreateEntityButton } from "@/components/CreateEntityButton/CreateEntityButton"
+import { DocumentsRowActionsMenu } from "@/components/documents/DocumentsRowActionsMenu/DocumentsRowActionsMenu"
 import {
   EntityTableSurface,
   entityTableClassName,
@@ -34,13 +31,6 @@ import { Button } from "@/components/ui/button"
 import {
   Dialog,
 } from "@/components/ui/dialog"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import { NoAccessPage } from "@/components/ui/NoAccessPage/NoAccessPage"
 import {
@@ -57,62 +47,25 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { useAuth } from "@/context/AuthContext"
+import { useAuth } from "@/hooks/use-auth"
 import { Layout } from "@/layout/Layout"
 import { cn } from "@/lib/utils"
+import type {
+  AttachmentRegistryItem,
+  EntityTypeValue,
+  FileTypeFilterValue,
+  FilterTab,
+  RelationFilterValue,
+  SortValue,
+  TargetOption,
+} from "@/types/pages/documents"
+import { formatFileSize, formatRuDateTime } from "@/utils/formatters"
 
 import headerStyles from "@/components/orders/OrdersPageHeader/OrdersPageHeader.module.css"
 
 import styles from "./DocumentsPage.module.css"
 
 const MotionTableRow = motion(TableRow)
-
-type AttachmentRegistryLink = {
-  entity_type: string
-  entity_id: number
-  entity_label: string
-  title: string
-  subtitle: string | null
-  href: string | null
-}
-
-type AttachmentRegistryItem = {
-  id: string
-  filename: string
-  mime_type: string
-  size_bytes: number | string | null
-  created_at: string
-  links: AttachmentRegistryLink[]
-  is_unattached: boolean
-}
-
-type TargetOption = {
-  id: number
-  title: string
-  subtitle: string | null
-}
-
-type EntityTypeValue =
-  | "order"
-  | "client"
-  | "purchase"
-  | "shipment"
-  | "supplier"
-  | "transport"
-  | "manager"
-  | "product"
-
-type RelationFilterValue = "all" | "unattached" | EntityTypeValue
-type FileTypeFilterValue = "all" | "pdf" | "word" | "excel" | "image" | "file"
-type SortValue =
-  | "date-desc"
-  | "date-asc"
-  | "name-asc"
-  | "name-desc"
-  | "size-desc"
-  | "size-asc"
-
-type FilterTab = "relation" | "type"
 
 const ENTITY_OPTIONS: Array<{ value: EntityTypeValue; label: string }> = [
   { value: "order", label: "Заявка" },
@@ -175,25 +128,9 @@ const normalizeBytes = (value: number | string | null | undefined) => {
   return Number.isFinite(normalized) ? normalized : 0
 }
 
-const formatBytes = (bytes: number) => {
-  if (!Number.isFinite(bytes) || bytes <= 0) return "0 Б"
-  const units = ["Б", "КБ", "МБ", "ГБ"]
-  const power = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
-  const value = bytes / 1024 ** power
-  return `${value.toFixed(power === 0 ? 0 : 1)} ${units[power]}`
-}
+const formatBytes = (bytes: number) => formatFileSize(bytes)
 
-const formatDateTime = (value: string) => {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return "Неизвестно"
-  return new Intl.DateTimeFormat("ru-RU", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(date)
-}
+const formatDateTime = (value: string) => formatRuDateTime(value, "Неизвестно")
 
 const formatMimeType = (value: string) => {
   if (!value) return "Не указан"
@@ -236,71 +173,6 @@ const getDocumentVisualType = (
   if (normalizedMime.startsWith("image/")) return "image"
 
   return "file"
-}
-
-function DocumentsRowActionsMenu({
-  canAttach,
-  canDelete,
-  item,
-  onAttach,
-  onDelete,
-}: {
-  canAttach: boolean
-  canDelete: boolean
-  item: AttachmentRegistryItem
-  onAttach: (item: AttachmentRegistryItem) => void
-  onDelete: (item: AttachmentRegistryItem) => void
-}) {
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={(
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            className={styles.menuButton}
-            aria-label="Действия"
-            title="Действия"
-          />
-        )}
-      >
-        <FiMoreHorizontal size={18} />
-      </DropdownMenuTrigger>
-
-      <DropdownMenuContent align="end" sideOffset={6}>
-        <DropdownMenuItem onClick={() => window.open(`/api/attachments/${encodeURIComponent(item.id)}/download`, "_blank", "noopener,noreferrer")}>
-          <FiDownload className={styles.rowMenuIcon} />
-          Скачать
-        </DropdownMenuItem>
-
-        <DropdownMenuItem onClick={() => window.open(`/api/attachments/${encodeURIComponent(item.id)}/inline`, "_blank", "noopener,noreferrer")}>
-          <FiExternalLink className={styles.rowMenuIcon} />
-          Открыть
-        </DropdownMenuItem>
-
-        {canAttach ? (
-          <DropdownMenuItem onClick={() => onAttach(item)}>
-            <FiLink2 className={styles.rowMenuIcon} />
-            Привязать
-          </DropdownMenuItem>
-        ) : null}
-
-        {canDelete ? (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className={styles.rowMenuItemDanger}
-              onClick={() => onDelete(item)}
-            >
-              <FiTrash2 className={styles.rowMenuIconDel} />
-              Удалить
-            </DropdownMenuItem>
-          </>
-        ) : null}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
 }
 
 export default function DocumentsPage(): JSX.Element {
@@ -946,6 +818,12 @@ export default function DocumentsPage(): JSX.Element {
                               <DocumentsRowActionsMenu
                                 canAttach={canAttachDocuments}
                                 canDelete={canDeleteDocuments}
+                                classNames={{
+                                  menuButton: styles.menuButton,
+                                  rowMenuIcon: styles.rowMenuIcon,
+                                  rowMenuIconDel: styles.rowMenuIconDel,
+                                  rowMenuItemDanger: styles.rowMenuItemDanger,
+                                }}
                                 item={item}
                                 onAttach={openAttachDialog}
                                 onDelete={(nextItem) => {

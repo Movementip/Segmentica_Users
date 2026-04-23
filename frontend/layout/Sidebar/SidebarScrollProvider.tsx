@@ -1,16 +1,14 @@
-import React, { createContext, useContext, useRef, useEffect } from 'react';
+import React, { createContext, useRef, useEffect } from 'react';
 import styles from './Sidebar.module.css';
 import { SidebarContent } from '../../components/ui/sidebar';
 
-interface SidebarScrollContextType {
+export interface SidebarScrollContextType {
     saveScrollPosition: () => void;
 }
 
-const SidebarScrollContext = createContext<SidebarScrollContextType>({
+export const SidebarScrollContext = createContext<SidebarScrollContextType>({
     saveScrollPosition: () => { }
 });
-
-export const useSidebarScroll = () => useContext(SidebarScrollContext);
 
 interface SidebarScrollProviderProps {
     children: React.ReactNode;

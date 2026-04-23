@@ -15,25 +15,15 @@ import {
 } from '../../../ui/dropdown-menu';
 import { Input } from '../../../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../../ui/select';
+import type { FinanceMonthOption, FinanceSettings } from '../../../../types/pages/finance';
 import styles from '../../../../pages/admin/AdminFinance.module.css';
-
-type FinanceSettingsDraft = {
-  paymentsPerMonth: 1 | 2;
-  firstDay: number;
-  secondDay: number | null;
-};
-
-type MonthOption = {
-  value: string;
-  label: string;
-};
 
 type FinanceHeroProps = {
   monthKey: string;
   monthLabel: string;
-  monthOptions: MonthOption[];
+  monthOptions: FinanceMonthOption[];
   isNextMonthDisabled: boolean;
-  settingsDraft: FinanceSettingsDraft;
+  settingsDraft: FinanceSettings;
   search: string;
   saving: boolean;
   selectedEmployeeIdsCount: number;

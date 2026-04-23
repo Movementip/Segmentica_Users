@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { AppContextProvider, TopLevelCategory } from '../context/app.context';
-import { usePageTitle } from '../context/PageTitleContext';
+import { usePageTitle } from '../hooks/use-page-title';
 import styles from './Layout.module.css';
 import Head from 'next/head';
 
@@ -17,7 +17,6 @@ const pageTitles: Record<string, string> = {
     '/warehouse': 'Склад',
     '/suppliers': 'Поставщики',
     '/transport': 'ТК',
-    '/logistics': 'Логистика',
     '/clients': 'Контрагенты',
     '/managers': 'Сотрудники',
     '/products': 'Товары',

@@ -2,20 +2,22 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/router';
 import Head from 'next/head';
 
-import { LoginPageView } from '@/components/pages/LoginPage';
-
-type EmployeeItem = { id: number; fio: string; position: string | null };
+import { useTheme } from '@/hooks/use-theme';
+import { LoginPageView } from '@/components/auth/LoginPage';
+import { emitAuthSyncEvent } from '@/lib/auth-sync';
+import type { EmployeeLookupItem } from '@/types/auth';
 
 const normalizeFio = (v: string) => v.trim().replace(/\s+/g, ' ').toLowerCase();
 
 export default function LoginPage(): JSX.Element {
     const router = useRouter();
+    const { theme, resolvedTheme } = useTheme();
     const employeeInputRef = useRef<HTMLInputElement | null>(null);
     const passwordInputRef = useRef<HTMLInputElement | null>(null);
 
     const [query, setQuery] = useState('');
-    const [selectedEmployee, setSelectedEmployee] = useState<EmployeeItem | null>(null);
-    const [suggestions, setSuggestions] = useState<EmployeeItem[]>([]);
+    const [selectedEmployee, setSelectedEmployee] = useState<EmployeeLookupItem | null>(null);
+    const [suggestions, setSuggestions] = useState<EmployeeLookupItem[]>([]);
     const [loading, setLoading] = useState(false);
     const [isEmployeeFocused, setIsEmployeeFocused] = useState(false);
     const [password, setPassword] = useState('');
@@ -40,8 +42,22 @@ export default function LoginPage(): JSX.Element {
         return nextParam;
     }, [router.query.next]);
 
-    const resolveEmployeeByQuery = useCallback(async () => {
-        const normalizedQuery = normalizeFio(query);
+    const syncAutofilledValues = useCallback(() => {
+        const employeeValue = employeeInputRef.current?.value?.trim() || '';
+        const passwordValue = passwordInputRef.current?.value || '';
+
+        if (employeeValue && employeeValue !== query) {
+            setQuery(employeeValue);
+        }
+
+        if (passwordValue && passwordValue !== password) {
+            setPassword(passwordValue);
+        }
+    }, [password, query]);
+
+    const resolveEmployeeByQuery = useCallback(async (rawQuery?: string) => {
+        const nextQuery = typeof rawQuery === 'string' ? rawQuery : query;
+        const normalizedQuery = normalizeFio(nextQuery);
         if (!normalizedQuery) return null;
 
         if (selectedEmployee && normalizeFio(selectedEmployee.fio) === normalizedQuery) {
@@ -55,9 +71,9 @@ export default function LoginPage(): JSX.Element {
         }
 
         try {
-            const res = await fetch(`/api/employees/search?q=${encodeURIComponent(query.trim())}`);
+            const res = await fetch(`/api/employees/search?q=${encodeURIComponent(nextQuery.trim())}`);
             if (!res.ok) return null;
-            const data = (await res.json()) as EmployeeItem[];
+            const data = (await res.json()) as EmployeeLookupItem[];
             const exactMatch = (Array.isArray(data) ? data : []).find((item) => normalizeFio(item.fio) === normalizedQuery) || null;
             if (exactMatch) {
                 setSelectedEmployee(exactMatch);
@@ -69,19 +85,6 @@ export default function LoginPage(): JSX.Element {
 
         return null;
     }, [query, selectedEmployee, suggestions]);
-
-    const syncAutofilledValues = useCallback(() => {
-        const employeeValue = employeeInputRef.current?.value?.trim() || '';
-        const passwordValue = passwordInputRef.current?.value || '';
-
-        if (employeeValue && employeeValue !== query) {
-            setQuery(employeeValue);
-        }
-
-        if (passwordValue && passwordValue !== password) {
-            setPassword(passwordValue);
-        }
-    }, [password, query]);
 
     useEffect(() => {
         if (!selectedEmployee) return;
@@ -107,26 +110,10 @@ export default function LoginPage(): JSX.Element {
         const timers = [
             window.setTimeout(syncAutofilledValues, 50),
             window.setTimeout(syncAutofilledValues, 250),
-            window.setTimeout(syncAutofilledValues, 1000),
         ];
-
-        const onVisibilityChange = () => {
-            if (document.visibilityState === 'visible') {
-                syncAutofilledValues();
-            }
-        };
-
-        const onWindowFocus = () => {
-            syncAutofilledValues();
-        };
-
-        document.addEventListener('visibilitychange', onVisibilityChange);
-        window.addEventListener('focus', onWindowFocus);
 
         return () => {
             timers.forEach((timer) => window.clearTimeout(timer));
-            document.removeEventListener('visibilitychange', onVisibilityChange);
-            window.removeEventListener('focus', onWindowFocus);
         };
     }, [syncAutofilledValues]);
 
@@ -146,7 +133,7 @@ export default function LoginPage(): JSX.Element {
                 setLoading(true);
                 const res = await fetch(`/api/employees/search?q=${encodeURIComponent(q)}`, { signal: controller.signal });
                 if (!res.ok) return;
-                const data = (await res.json()) as EmployeeItem[];
+                const data = (await res.json()) as EmployeeLookupItem[];
                 setSuggestions(Array.isArray(data) ? data : []);
             } catch (e) {
                 if ((e as { name?: string } | null)?.name === 'AbortError') return;
@@ -167,7 +154,7 @@ export default function LoginPage(): JSX.Element {
             setLoading(true);
             const res = await fetch('/api/employees/search?q=');
             if (!res.ok) return;
-            const data = (await res.json()) as EmployeeItem[];
+            const data = (await res.json()) as EmployeeLookupItem[];
             setSuggestions(Array.isArray(data) ? data : []);
         } catch (e) {
             console.error(e);
@@ -180,11 +167,31 @@ export default function LoginPage(): JSX.Element {
         return query.trim().length > 0 && password.trim().length > 0 && !submitting;
     }, [password, query, submitting]);
 
+    const currentTheme = (theme === 'dark' || resolvedTheme === 'dark') ? 'dark' : 'light';
+
     const submit = async () => {
-        const employee = await resolveEmployeeByQuery();
+        syncAutofilledValues();
+
+        const effectiveQuery = employeeInputRef.current?.value?.trim() || query.trim();
+        const effectivePassword = passwordInputRef.current?.value || password;
+
+        if (effectiveQuery && effectiveQuery !== query) {
+            setQuery(effectiveQuery);
+        }
+        if (effectivePassword && effectivePassword !== password) {
+            setPassword(effectivePassword);
+        }
+
+        const employee = await resolveEmployeeByQuery(effectiveQuery);
 
         if (!employee?.id) {
             setError('Сотрудник не найден. Выбери его из списка или проверь ФИО');
+            return;
+        }
+
+        if (!effectivePassword.trim()) {
+            setError('Введите пароль');
+            setPasswordFieldError(true);
             return;
         }
 
@@ -195,12 +202,17 @@ export default function LoginPage(): JSX.Element {
             const res = await fetch('/api/auth/login', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ employee_id: employee.id, password, rememberMe }),
+                body: JSON.stringify({ employee_id: employee.id, password: effectivePassword, rememberMe, theme: currentTheme }),
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) {
                 setError(data?.error || 'Ошибка входа');
                 setPasswordFieldError(true);
+                return;
+            }
+            emitAuthSyncEvent('login');
+            if (typeof window !== 'undefined') {
+                window.location.replace(redirectTarget);
                 return;
             }
             await router.replace(redirectTarget);

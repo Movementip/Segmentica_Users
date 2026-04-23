@@ -1,20 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { query } from './db';
 import { enterRequestContext, setRequestActor } from './requestContext';
+import type { AuthUser } from '../types/auth';
 
-export type AuthEmployee = {
-    id: number;
-    fio: string;
-    position: string | null;
-};
-
-export type AuthUser = {
-    userId: number;
-    employee: AuthEmployee;
-    roles: string[];
-    permissions: string[];
-    preferences: Record<string, unknown>;
-};
+export type { AuthEmployee, AuthUser } from '../types/auth';
 
 export const hasRole = (user: AuthUser | null | undefined, roleKey: string): boolean => {
     if (!user) return false;

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { FiCheckCircle, FiChevronLeft, FiChevronRight, FiLock, FiX } from 'react-icons/fi';
-import { lockBodyScroll } from '../../utils/bodyScrollLock';
+import { FiCheck, FiChevronLeft, FiChevronRight, FiLock, FiX } from 'react-icons/fi';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import styles from './SystemGuidePopup.module.css';
 
 export type SystemGuideStep = {
@@ -32,14 +32,9 @@ export function SystemGuidePopup({
     onClose,
     onProgressChange,
 }: SystemGuidePopupProps): JSX.Element | null {
-    const [portalReady, setPortalReady] = useState(false);
     const [currentStep, setCurrentStep] = useState(0);
     const [localCompleted, setLocalCompleted] = useState(completed);
     const [localFurthestStep, setLocalFurthestStep] = useState(Math.min(Math.max(furthestStep, 0), Math.max(steps.length - 1, 0)));
-
-    useEffect(() => {
-        setPortalReady(true);
-    }, []);
 
     useEffect(() => {
         if (!open) return;
@@ -48,24 +43,6 @@ export function SystemGuidePopup({
         setLocalFurthestStep(normalizedFurthest);
         setCurrentStep(completed ? 0 : normalizedFurthest);
     }, [open, completed, furthestStep, steps.length]);
-
-    useEffect(() => {
-        if (!open) return;
-        return lockBodyScroll();
-    }, [open]);
-
-    useEffect(() => {
-        if (!open) return;
-
-        const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.key === 'Escape' && localCompleted) {
-                onClose();
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [open, localCompleted, onClose]);
 
     const lastStepIndex = Math.max(steps.length - 1, 0);
     const current = steps[currentStep];
@@ -76,7 +53,7 @@ export function SystemGuidePopup({
         return Math.round((progressStep / steps.length) * 100);
     }, [localCompleted, localFurthestStep, steps.length]);
 
-    if (!open || !current || !portalReady || typeof document === 'undefined') return null;
+    if (!open || !current) return null;
 
     const persistProgress = (nextStepIndex: number) => {
         const nextFurthest = Math.max(localFurthestStep, nextStepIndex);
@@ -115,22 +92,23 @@ export function SystemGuidePopup({
         onClose();
     };
 
-    return createPortal(
-        <div className={styles.overlay} onClick={localCompleted ? onClose : undefined}>
-            <div
-                className={styles.modal}
-                role="dialog"
-                aria-modal="true"
+    return (
+        <Dialog
+            open={open}
+            onOpenChange={(nextOpen) => {
+                if (nextOpen) return;
+                if (!localCompleted) return;
+                onClose();
+            }}
+        >
+            <DialogContent
+                className={`max-w-none p-0 ${styles.modal}`}
                 aria-labelledby="system-guide-title"
-                onClick={(event) => event.stopPropagation()}
             >
                 <aside className={styles.sidebar}>
                     <div className={styles.sidebarHeader}>
-                        <span className={styles.eyebrow}>
-                            Подсказка по системе
-                        </span>
                         <h2 id="system-guide-title" className={styles.sidebarTitle}>
-                            Гайд по системе
+                            Подсказка по системе
                         </h2>
 
                         <p className={styles.sidebarDescription}>
@@ -172,21 +150,22 @@ export function SystemGuidePopup({
                             return (
                                 <React.Fragment key={step.id}>
                                     {showSection && <div className={styles.legendSection}>{step.section}</div>}
-                                    <button
+                                    <Button
                                         type="button"
+                                        variant="ghost"
                                         className={`${styles.legendItem} ${isActive ? styles.legendItemActive : ''}`}
                                         onClick={() => goToStep(index)}
                                         disabled={!isAllowed}
                                     >
                                         <span className={styles.legendBadge}>
-                                            {isVisited ? <FiCheckCircle size={14} /> : index + 1}
+                                            {isVisited ? <FiCheck size={15} /> : index + 1}
                                         </span>
                                         <span className={styles.legendText}>
                                             <span className={styles.legendTitle}>{step.title}</span>
                                             <span className={styles.legendCaption}>{step.caption}</span>
                                         </span>
                                         {!isAllowed && <FiLock className={styles.legendLock} size={14} />}
-                                    </button>
+                                    </Button>
                                 </React.Fragment>
                             );
                         })}
@@ -199,8 +178,10 @@ export function SystemGuidePopup({
                             <div className={styles.contentEyebrow}>{current.section} / {current.caption}</div>
                             <h3 className={styles.contentTitle}>{current.title}</h3>
                         </div>
-                        <button
+                        <Button
                             type="button"
+                            variant="outline"
+                            size="icon-lg"
                             className={`${styles.closeButton} ${!localCompleted ? styles.closeButtonDisabled : ''}`}
                             onClick={handleClose}
                             disabled={!localCompleted}
@@ -208,7 +189,7 @@ export function SystemGuidePopup({
                             title={localCompleted ? 'Закрыть подсказку' : 'Пройдите подсказку до конца, чтобы закрыть её'}
                         >
                             <FiX size={20} />
-                        </button>
+                        </Button>
                     </div>
 
                     <div className={styles.imageFrame}>
@@ -227,15 +208,17 @@ export function SystemGuidePopup({
                     </div>
 
                     <div className={styles.footer}>
-                        <button
+                        <Button
                             type="button"
+                            variant="outline"
+                            size="lg"
                             className={styles.secondaryButton}
                             onClick={handlePrev}
                             disabled={currentStep === 0}
                         >
                             <FiChevronLeft size={18} />
                             Назад
-                        </button>
+                        </Button>
 
                         <div className={styles.footerHint}>
                             {localCompleted
@@ -245,19 +228,19 @@ export function SystemGuidePopup({
                                     : 'Следующий пункт откроется после ручного перехода.'}
                         </div>
 
-                        <button
+                        <Button
                             type="button"
+                            size="lg"
                             className={styles.primaryButton}
                             onClick={currentStep === lastStepIndex ? handleClose : handleNext}
                             disabled={currentStep === lastStepIndex && !localCompleted}
                         >
                             {currentStep === lastStepIndex ? 'Завершить' : 'Дальше'}
                             {currentStep !== lastStepIndex && <FiChevronRight size={18} />}
-                        </button>
+                        </Button>
                     </div>
                 </section>
-            </div>
-        </div>,
-        document.body
+            </DialogContent>
+        </Dialog>
     );
 }

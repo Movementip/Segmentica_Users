@@ -49,18 +49,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { useAuth } from "@/context/AuthContext"
+import { useAuth } from "@/hooks/use-auth"
 import { withLayout } from "@/layout"
 import {
   REPORT_TAB_PERMISSIONS,
   REPORT_VIEW_PERMISSIONS,
 } from "@/lib/reportsRbac"
 import { cn } from "@/lib/utils"
+import type { ReportPeriod, ReportsAnalyticsTab } from "@/types/pages/reports"
 
 import styles from "./Reports.module.css"
-
-type Period = "all" | "6m" | "3m" | "1m"
-type AnalyticsTab = "overview" | "sales" | "products" | "clients" | "logistics" | "custom"
 
 const ACCOUNT_LABELS: Record<string, string> = {
   "10.мат": "10.мат Материалы и сырье",
@@ -185,14 +183,14 @@ type TransportPerformanceRow = {
   avg_cost: number
 }
 
-const PERIOD_OPTIONS: Array<{ value: Period; label: string }> = [
+const PERIOD_OPTIONS: Array<{ value: ReportPeriod; label: string }> = [
   { value: "all", label: "Весь период" },
   { value: "6m", label: "Последние 6 месяцев" },
   { value: "3m", label: "Последние 3 месяца" },
   { value: "1m", label: "Последний месяц" },
 ]
 
-const VIEWS_BY_TAB: Record<Exclude<AnalyticsTab, "custom">, string[]> = {
+const VIEWS_BY_TAB: Record<Exclude<ReportsAnalyticsTab, "custom">, string[]> = {
   overview: ["продажи_по_периодам", "анализ_недостач"],
   sales: ["продажи_по_периодам"],
   products: ["движения_склада_детализированные", "анализ_недостач", "анализ_поставщиков"],
@@ -308,9 +306,9 @@ function ReportsPage(): JSX.Element {
   const router = useRouter()
   const { user, loading: authLoading } = useAuth()
 
-  const [period, setPeriod] = useState<Period>("6m")
-  const [activeTab, setActiveTab] = useState<AnalyticsTab>("overview")
-  const [displayedTab, setDisplayedTab] = useState<AnalyticsTab>("overview")
+  const [period, setPeriod] = useState<ReportPeriod>("6m")
+  const [activeTab, setActiveTab] = useState<ReportsAnalyticsTab>("overview")
+  const [displayedTab, setDisplayedTab] = useState<ReportsAnalyticsTab>("overview")
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -349,7 +347,7 @@ function ReportsPage(): JSX.Element {
   useEffect(() => {
     if (authLoading) return
 
-    const allowedTabs: AnalyticsTab[] = []
+    const allowedTabs: ReportsAnalyticsTab[] = []
     if (canOverviewTab) allowedTabs.push("overview")
     if (canSalesTab) allowedTabs.push("sales")
     if (canProductsTab) allowedTabs.push("products")
@@ -399,7 +397,7 @@ function ReportsPage(): JSX.Element {
     if (!router.isReady) return
 
     const nextTabRaw = Array.isArray(router.query.tab) ? router.query.tab[0] : router.query.tab
-    const nextTab = nextTabRaw as AnalyticsTab | undefined
+    const nextTab = nextTabRaw as ReportsAnalyticsTab | undefined
 
     if (
       nextTab === "overview" ||
@@ -649,8 +647,8 @@ function ReportsPage(): JSX.Element {
   const salesChartData = overviewData?.byMonth || []
   const categoryChartData = overviewData?.byCategory || []
 
-  const reportTabs = useMemo((): Array<SegmentedTabItem<AnalyticsTab>> => {
-    const next: Array<SegmentedTabItem<AnalyticsTab>> = []
+  const reportTabs = useMemo((): Array<SegmentedTabItem<ReportsAnalyticsTab>> => {
+    const next: Array<SegmentedTabItem<ReportsAnalyticsTab>> = []
     if (canOverviewTab) next.push({ value: "overview", label: "Общий обзор" })
     if (canSalesTab) next.push({ value: "sales", label: "Продажи" })
     if (canProductsTab) next.push({ value: "products", label: "Товары" })
@@ -838,7 +836,7 @@ function ReportsPage(): JSX.Element {
           <Select
             value={period}
             items={PERIOD_OPTIONS}
-            onValueChange={(nextValue) => setPeriod(nextValue as Period)}
+            onValueChange={(nextValue) => setPeriod(nextValue as ReportPeriod)}
           >
             <SelectTrigger className={styles.periodSelect} />
             <SelectContent>

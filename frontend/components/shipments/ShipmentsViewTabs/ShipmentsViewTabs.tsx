@@ -1,4 +1,4 @@
-import type { ShipmentsTab } from "@/components/shipments/types"
+import type { ShipmentsTab } from "@/types/pages/shipments"
 
 import styles from "./ShipmentsViewTabs.module.css"
 

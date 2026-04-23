@@ -269,16 +269,13 @@
     position: fixed;
     inset: 0;
     z-index: 100000100;
-    overflow: hidden;
-    overscroll-behavior: contain;
-    touch-action: none;
 }
 
 .previewBackdrop {
     position: fixed;
     inset: 0;
-    background: color-mix(in oklch, black 48%, transparent);
-    backdrop-filter: blur(6px);
+    background: rgb(0 0 0 / 0.56);
+    backdrop-filter: blur(8px);
 }
 
 .previewPanel {
@@ -286,18 +283,15 @@
     top: 0;
     right: 0;
     bottom: 0;
-    width: min(1120px, calc(100vw - 232px));
+    width: min(1120px, calc(100vw - 220px));
     background: var(--background);
     color: var(--foreground);
-    box-shadow: -24px 0 60px color-mix(in oklch, black 18%, transparent);
+    border-left: 1px solid var(--border);
+    box-shadow: -24px 0 60px rgb(0 0 0 / 0.22);
     padding: 24px 28px 28px;
     display: flex;
     flex-direction: column;
     gap: 18px;
-    overflow: hidden;
-    box-sizing: border-box;
-    overscroll-behavior: contain;
-    touch-action: auto;
     animation: previewPanelIn 180ms ease-out;
 }
 
@@ -311,7 +305,7 @@
 .previewPanelTitleBlock {
     display: flex;
     flex-direction: column;
-    gap: 0;
+    gap: 4px;
 }
 
 .previewPanelTitle {
@@ -325,17 +319,20 @@
 .previewCloseButton {
     width: 44px;
     height: 44px;
+    padding: 0;
     border: none;
+    border-radius: 0;
     background: transparent;
     color: var(--muted-foreground);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: color 0.18s ease;
+    transition: color 0.15s ease;
 }
 
 .previewCloseButton:hover {
+    background: transparent;
     color: var(--foreground);
 }
 
@@ -353,9 +350,8 @@
 }
 
 .previewToolbarAction {
-    height: 42px;
-    min-width: auto;
-    padding: 0 16px;
+    min-height: 42px;
+    padding-inline: 16px;
     border-radius: 0;
 }
 
@@ -366,22 +362,17 @@
 .previewCanvas {
     flex: 1;
     min-height: 0;
-    display: block;
     overflow: auto;
-    overscroll-behavior: contain;
 }
 
 .previewStage {
     width: 100%;
     min-height: calc(100vh - 240px);
-    background: #ffffff;
-    overflow: auto;
 }
 
 .previewPages {
     width: fit-content;
     min-width: 100%;
-    min-height: 100%;
     display: flex;
     flex-direction: column;
     gap: 16px;
@@ -390,8 +381,8 @@
 
 .previewPageImage {
     display: block;
-    background: #fff;
-    box-shadow: 0 8px 24px rgba(17, 17, 17, 0.08);
+    background: white;
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.16);
 }
 
 .previewLoading {

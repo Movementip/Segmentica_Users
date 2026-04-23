@@ -19,6 +19,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { formatRuCurrency, formatRuDateTime } from "@/utils/formatters"
 
 import styles from "./ProductPriceHistoryModal.module.css"
 
@@ -133,23 +134,9 @@ export const ProductPriceHistoryModal: React.FC<ProductPriceHistoryModalProps> =
     return filtered
   }, [history, sortBy, sourceFilter])
 
-  const formatDateTime = (dateString: string) =>
-    new Date(dateString).toLocaleString("ru-RU", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
+  const formatDateTime = (dateString: string) => formatRuDateTime(dateString)
 
-  const formatCurrency = (amount?: number) => {
-    if (amount === undefined || amount === null) return "—"
-
-    return new Intl.NumberFormat("ru-RU", {
-      style: "currency",
-      currency: "RUB",
-    }).format(amount)
-  }
+  const formatCurrency = (amount?: number) => formatRuCurrency(amount)
 
   if (!isOpen || !productId) return null
 

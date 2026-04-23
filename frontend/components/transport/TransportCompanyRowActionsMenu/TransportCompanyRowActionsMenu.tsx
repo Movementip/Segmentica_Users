@@ -6,7 +6,7 @@ import {
   FiTrash2,
 } from "react-icons/fi"
 
-import type { TransportCompany } from "@/components/transport/types"
+import type { TransportCompany } from "@/types/pages/transport"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,

@@ -120,11 +120,6 @@ const clearBodyScrollLockStyles = () => {
     document.body.style.top = '';
     document.body.style.width = '';
 
-    document.querySelectorAll<HTMLElement>('.radix-themes').forEach((node) => {
-        if (node.style.overflow === 'hidden') {
-            node.style.overflow = '';
-        }
-    });
 };
 
 export const forceUnlockBodyScroll = (): void => {

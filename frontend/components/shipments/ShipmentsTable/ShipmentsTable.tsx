@@ -4,11 +4,11 @@ import { AnimatePresence, motion } from "framer-motion"
 import { entityTableClassName } from "@/components/EntityDataTable/EntityDataTable"
 import { EntityStatusBadge } from "@/components/EntityStatusBadge/EntityStatusBadge"
 import { ShipmentRowActionsMenu } from "@/components/shipments/ShipmentRowActionsMenu/ShipmentRowActionsMenu"
+import type { Shipment } from "@/types/pages/shipments"
 import {
   getShipmentStatusLabel,
   getShipmentStatusTone,
-  type Shipment,
-} from "@/components/shipments/types"
+} from "@/lib/shipmentsMeta"
 import {
   Table,
   TableBody,

@@ -29,7 +29,7 @@ import {
     TableHeader,
     TableRow,
 } from '../../components/ui/table';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/use-auth';
 import { lockBodyScroll, scheduleForceUnlockBodyScroll } from '../../utils/bodyScrollLock';
 import styles from './Audit.module.css';
 

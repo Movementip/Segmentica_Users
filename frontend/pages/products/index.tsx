@@ -1,118 +1,30 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react"
-import { AnimatePresence, motion } from "framer-motion"
 import { useRouter } from "next/router"
-import {
-  FiEdit2,
-  FiEye,
-  FiMoreHorizontal,
-  FiTrash2,
-  FiTrendingUp,
-} from "react-icons/fi"
 
-import { CreateEntityButton } from "@/components/CreateEntityButton/CreateEntityButton"
-import {
-  EntityTableSkeleton,
-  EntityTableSurface,
-  entityTableClassName,
-} from "@/components/EntityDataTable/EntityDataTable"
 import { EntityIndexPageSkeleton } from "@/components/EntityIndexPageSkeleton/EntityIndexPageSkeleton"
-import { EntityStatsPanel } from "@/components/EntityStatsPanel/EntityStatsPanel"
 import DeleteConfirmation from "@/components/modals/DeleteConfirmation/DeleteConfirmation"
 import deleteConfirmationStyles from "@/components/modals/DeleteConfirmation/DeleteConfirmation.module.css"
 import { CreateProductModal } from "@/components/modals/CreateProductModal/CreateProductModal"
 import { EditProductModal } from "@/components/modals/EditProductModal/EditProductModal"
 import { ProductPriceHistoryModal } from "@/components/modals/ProductPriceHistoryModal/ProductPriceHistoryModal"
-import { ReferenceDataActions } from "@/components/pages/ReferenceDataActions/ReferenceDataActions"
-import { PageHeader } from "@/components/PageHeader/PageHeader"
-import { RefreshButton } from "@/components/RefreshButton/RefreshButton"
+import styles from "@/components/products/Products.module.css"
+import { ProductsFilters } from "@/components/products/ProductsFilters/ProductsFilters"
+import { ProductsPageHeader } from "@/components/products/ProductsPageHeader/ProductsPageHeader"
+import { ProductsStats } from "@/components/products/ProductsStats/ProductsStats"
+import { ProductsTable } from "@/components/products/ProductsTable/ProductsTable"
 import { NoAccessPage } from "@/components/ui/NoAccessPage/NoAccessPage"
 import { PageLoader } from "@/components/ui/PageLoader/PageLoader"
 import { WarehouseAttachmentBadges } from "@/components/warehouse/WarehouseAttachmentBadges/WarehouseAttachmentBadges"
-import { useAuth } from "@/context/AuthContext"
+import { useAuth } from "@/hooks/use-auth"
 import { withLayout } from "@/layout"
-import { Button } from "@/components/ui/button"
-import { DataSearchField } from "@/components/DataSearchField/DataSearchField"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-} from "@/components/ui/select"
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
-
-import styles from "./Products.module.css"
-
-const MotionTableRow = motion(TableRow)
-
-interface Product {
-  id: number
-  название: string
-  артикул: string
-  категория?: string
-  цена_закупки?: number
-  цена_продажи: number
-  единица_измерения: string
-  минимальный_остаток: number
-  created_at: string
-}
-
-type AttachmentSummaryItem = {
-  entity_id: number
-  types: string[]
-}
-
-type ProductFilters = {
-  category: string
-  unit: string
-  sortBy:
-    | "date-desc"
-    | "date-asc"
-    | "name-asc"
-    | "name-desc"
-    | "price-purchase-asc"
-    | "price-purchase-desc"
-    | "price-sale-asc"
-    | "price-sale-desc"
-}
-
-type ProductImportResponse = {
-  created_count?: number
-  updated_count?: number
-  skipped_count?: number
-  error?: string
-  message?: string
-}
-
-const defaultFilters: ProductFilters = {
-  category: "all",
-  unit: "all",
-  sortBy: "date-desc",
-}
-
-const sortOptions: Array<{ value: ProductFilters["sortBy"]; label: string }> = [
-  { value: "date-desc", label: "По дате (новые сначала)" },
-  { value: "date-asc", label: "По дате (старые сначала)" },
-  { value: "name-asc", label: "По названию (А-Я)" },
-  { value: "name-desc", label: "По названию (Я-А)" },
-  { value: "price-purchase-asc", label: "По закупке (по возрастанию)" },
-  { value: "price-purchase-desc", label: "По закупке (по убыванию)" },
-  { value: "price-sale-asc", label: "По продаже (по возрастанию)" },
-  { value: "price-sale-desc", label: "По продаже (по убыванию)" },
-]
+import { defaultProductFilters, productSortOptions } from "@/lib/productsMeta"
+import type {
+  Product,
+  ProductAttachmentSummaryItem,
+  ProductFilters,
+  ProductImportResponse,
+} from "@/types/pages/products"
+import { formatRuCurrency } from "@/utils/formatters"
 
 function ProductsPage(): JSX.Element {
   const router = useRouter()
@@ -135,7 +47,7 @@ function ProductsPage(): JSX.Element {
 
   const [search, setSearch] = useState("")
   const [debouncedSearch, setDebouncedSearch] = useState("")
-  const [filters, setFilters] = useState<ProductFilters>(defaultFilters)
+  const [filters, setFilters] = useState<ProductFilters>(defaultProductFilters)
 
   const [attachmentsTypesByProductId, setAttachmentsTypesByProductId] = useState<Record<number, string[]>>({})
 
@@ -163,7 +75,7 @@ function ProductsPage(): JSX.Element {
     setFilters((previous) => ({
       category: typeof nextCategory === "string" ? nextCategory : previous.category,
       unit: typeof nextUnit === "string" ? nextUnit : previous.unit,
-      sortBy: sortOptions.some((option) => option.value === nextSortBy)
+      sortBy: productSortOptions.some((option) => option.value === nextSortBy)
         ? (nextSortBy as ProductFilters["sortBy"])
         : previous.sortBy,
     }))
@@ -235,7 +147,7 @@ function ProductsPage(): JSX.Element {
           )
 
           if (summaryResponse.ok) {
-            const summaryData = (await summaryResponse.json()) as AttachmentSummaryItem[]
+            const summaryData = (await summaryResponse.json()) as ProductAttachmentSummaryItem[]
             const nextMap: Record<number, string[]> = {}
 
             for (const item of Array.isArray(summaryData) ? summaryData : []) {
@@ -345,8 +257,7 @@ function ProductsPage(): JSX.Element {
     setSelectedProduct(null)
   }
 
-  const formatCurrency = (amount: number) =>
-    new Intl.NumberFormat("ru-RU", { style: "currency", currency: "RUB" }).format(amount)
+  const formatCurrency = (amount: number) => formatRuCurrency(amount)
 
   const categoryOptions = useMemo(
     () =>
@@ -425,35 +336,14 @@ function ProductsPage(): JSX.Element {
 
   return (
     <div className={styles.container}>
-      <PageHeader
-        title="Товары"
-        subtitle="Каталог товаров и управление номенклатурой"
-        actions={(
-          <>
-            <RefreshButton
-              className={styles.surfaceButton}
-              isRefreshing={loading || isFetching || minRefreshSpinActive}
-              refreshKey={refreshClickKey}
-              iconClassName={styles.spinning}
-              onClick={(event) => {
-                event.currentTarget.blur()
-                handleRefresh()
-              }}
-            />
-
-            <ReferenceDataActions
-              catalogKey="products"
-              permissions={user?.permissions}
-              onImported={() => fetchProducts("refresh")}
-            />
-
-            {canCreate ? (
-              <CreateEntityButton className={styles.createButton} onClick={handleCreateProduct}>
-                Добавить товар
-              </CreateEntityButton>
-            ) : null}
-          </>
-        )}
+      <ProductsPageHeader
+        canCreate={canCreate}
+        isRefreshing={loading || isFetching || minRefreshSpinActive}
+        permissions={user?.permissions}
+        refreshClickKey={refreshClickKey}
+        onCreateProduct={handleCreateProduct}
+        onImported={() => fetchProducts("refresh")}
+        onRefresh={handleRefresh}
       />
 
       {loading && products.length === 0 ? (
@@ -466,280 +356,46 @@ function ProductsPage(): JSX.Element {
         />
       ) : (
         <section className={styles.card}>
-          <EntityStatsPanel
-            title="Статистика товаров"
-            items={[
-              {
-                label: "Всего товаров",
-                value: totalProducts.toLocaleString("ru-RU"),
-              },
-              {
-                label: "Активных",
-                value: activeProducts.toLocaleString("ru-RU"),
-              },
-              {
-                label: "Низкий остаток",
-                value: lowStockCount.toLocaleString("ru-RU"),
-              },
-              {
-                label: "Стоимость остатков",
-                value: formatCurrency(totalValue),
-              },
-            ]}
+          <ProductsStats
+            activeProducts={activeProducts}
+            lowStockCount={lowStockCount}
+            totalProducts={totalProducts}
+            totalValue={totalValue}
+            formatCurrency={formatCurrency}
           />
 
-          <section className={styles.controlsSection}>
-            <DataSearchField
-              value={search}
-              onValueChange={setSearch}
-              placeholder="Поиск по названию или артикулу..."
-              wrapperClassName={styles.search}
-            />
-
-            <div className={styles.controlsGroup}>
-              <div className={styles.selectWrap}>
-                <Select
-                  value={filters.category}
-                  items={[
-                    { value: "all", label: "Все категории" },
-                    ...categoryOptions.map((category) => ({ value: category, label: category })),
-                  ]}
-                  onValueChange={(value) =>
-                    setFilters((previous) => ({ ...previous, category: String(value) }))
-                  }
-                >
-                  <SelectTrigger className={styles.selectTrigger} />
-                  <SelectContent align="end">
-                    <SelectItem value="all">Все категории</SelectItem>
-                    {categoryOptions.map((category) => (
-                      <SelectItem key={category} value={category}>
-                        {category}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className={styles.selectWrap}>
-                <Select
-                  value={filters.unit}
-                  items={[
-                    { value: "all", label: "Все единицы" },
-                    ...unitOptions.map((unit) => ({ value: unit, label: unit })),
-                  ]}
-                  onValueChange={(value) =>
-                    setFilters((previous) => ({ ...previous, unit: String(value) }))
-                  }
-                >
-                  <SelectTrigger className={styles.selectTrigger} />
-                  <SelectContent align="end">
-                    <SelectItem value="all">Все единицы</SelectItem>
-                    {unitOptions.map((unit) => (
-                      <SelectItem key={unit} value={unit}>
-                        {unit}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className={styles.sortGroup}>
-                <span className={styles.sortLabel}>Сортировка:</span>
-                <div className={styles.sortWrap}>
-                  <Select
-                    value={filters.sortBy}
-                    items={sortOptions}
-                    onValueChange={(value) =>
-                      setFilters((previous) => ({
-                        ...previous,
-                        sortBy: String(value) as ProductFilters["sortBy"],
-                      }))
-                    }
-                  >
-                    <SelectTrigger className={styles.sortTrigger} />
-                    <SelectContent align="end">
-                      {sortOptions.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
-          </section>
+          <ProductsFilters
+            categoryOptions={categoryOptions}
+            filters={filters}
+            search={search}
+            sortOptions={productSortOptions}
+            unitOptions={unitOptions}
+            onFiltersChange={setFilters}
+            onSearchChange={setSearch}
+          />
 
           {error ? <div className={styles.inlineError}>{error}</div> : null}
 
-          {loading ? (
-            <EntityTableSurface
-              variant="embedded"
-              clip="bottom"
-              className={styles.tableSurface}
-              key={tableKey}
-            >
-              <EntityTableSkeleton columns={7} rows={7} actionColumn />
-            </EntityTableSurface>
-          ) : error && products.length === 0 ? (
-            <div className={styles.errorState}>
-              <p className={styles.errorText}>{error}</p>
-              <Button type="button" className={styles.retryButton} onClick={() => void fetchProducts("initial")}>
-                Повторить попытку
-              </Button>
-            </div>
-          ) : filteredProducts.length === 0 ? (
-            <div className={styles.emptyState}>
-              <p>Товары не найдены</p>
-              {canCreate ? (
-                <CreateEntityButton className={styles.createButton} onClick={handleCreateProduct}>
-                  Создать первый товар
-                </CreateEntityButton>
-              ) : null}
-            </div>
-          ) : (
-            <EntityTableSurface
-              variant="embedded"
-              clip="bottom"
-              className={styles.tableSurface}
-              key={tableKey}
-            >
-              <Table className={`${entityTableClassName} ${styles.table}`}>
-            <colgroup>
-              <col className={styles.colId} />
-              <col className={styles.colName} />
-              <col className={styles.colArticle} />
-              <col className={styles.colCategory} />
-              <col className={styles.colPurchase} />
-              <col className={styles.colSale} />
-              <col className={styles.colUnit} />
-              <col className={styles.colActions} />
-            </colgroup>
-            <TableHeader>
-              <TableRow>
-                <TableHead>ID</TableHead>
-                <TableHead>Название</TableHead>
-                <TableHead>Артикул</TableHead>
-                <TableHead>Категория</TableHead>
-                <TableHead className={styles.textRight}>Цена закупки</TableHead>
-                <TableHead className={styles.textRight}>Цена продажи</TableHead>
-                <TableHead>Ед. изм.</TableHead>
-                <TableHead className={styles.actionsHeader} />
-              </TableRow>
-            </TableHeader>
-
-            <TableBody>
-              <AnimatePresence>
-                {filteredProducts.map((product) => (
-                    <MotionTableRow
-                      key={product.id}
-                      className={`${styles.tableRow} ${canView ? styles.tableRowClickable : ""}`}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      onClick={canView ? () => handleOpenProduct(product.id) : undefined}
-                    >
-                      <TableCell className={styles.tableCell}>
-                        <div>
-                          <div className={styles.itemId}>#{product.id}</div>
-                          {canAttachmentsView ? renderAttachmentBadges(product.id) : null}
-                        </div>
-                      </TableCell>
-
-                      <TableCell className={`${styles.tableCell} ${styles.nameCell}`}>
-                        <div className={styles.itemTitle}>{product.название}</div>
-                      </TableCell>
-
-                      <TableCell className={`${styles.tableCell} ${styles.articleCell}`}>
-                        <div className={styles.itemSub}>{product.артикул || "—"}</div>
-                      </TableCell>
-
-                      <TableCell className={`${styles.tableCell} ${styles.categoryCell}`}>
-                        <span className={styles.categoryPill}>{product.категория || "Не указана"}</span>
-                      </TableCell>
-
-                      <TableCell className={`${styles.tableCell} ${styles.textRight}`}>
-                        <div className={styles.amountCell}>
-                          {product.цена_закупки ? formatCurrency(product.цена_закупки) : "—"}
-                        </div>
-                      </TableCell>
-
-                      <TableCell className={`${styles.tableCell} ${styles.textRight}`}>
-                        <div className={styles.amountCell}>{formatCurrency(product.цена_продажи)}</div>
-                      </TableCell>
-
-                      <TableCell className={styles.tableCell}>
-                        <div className={styles.unitCell}>{product.единица_измерения}</div>
-                      </TableCell>
-
-                      <TableCell className={styles.tableCell}>
-                        <div
-                          className={styles.actionsCell}
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          <DropdownMenu>
-                            <DropdownMenuTrigger
-                              render={(
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon-sm"
-                                  className={styles.menuButton}
-                                  aria-label="Действия"
-                                  title="Действия"
-                                />
-                              )}
-                            >
-                              <FiMoreHorizontal size={18} />
-                            </DropdownMenuTrigger>
-
-                            <DropdownMenuContent align="end" sideOffset={6}>
-                              {canView ? (
-                                <DropdownMenuItem onClick={() => handleOpenProduct(product.id)}>
-                                  <FiEye className={styles.rowMenuIcon} />
-                                  Просмотр
-                                </DropdownMenuItem>
-                              ) : null}
-
-                              {canEdit ? (
-                                <DropdownMenuItem onClick={() => handleEditProduct(product)}>
-                                  <FiEdit2 className={styles.rowMenuIcon} />
-                                  Редактировать
-                                </DropdownMenuItem>
-                              ) : null}
-
-                              {canPriceHistoryView ? (
-                                <DropdownMenuItem onClick={() => handleOpenPriceHistory(product)}>
-                                  <FiTrendingUp className={styles.rowMenuIcon} />
-                                  История цен
-                                </DropdownMenuItem>
-                              ) : null}
-
-                              {canDelete ? (
-                                <>
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem
-                                    variant="destructive"
-                                    className={styles.rowMenuItemDanger}
-                                    onClick={() => handleDeleteProduct(product)}
-                                  >
-                                    <FiTrash2 className={styles.rowMenuIconDel} />
-                                    Удалить
-                                  </DropdownMenuItem>
-                                </>
-                              ) : null}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </TableCell>
-                    </MotionTableRow>
-                ))}
-              </AnimatePresence>
-            </TableBody>
-              </Table>
-            </EntityTableSurface>
-          )}
+          <ProductsTable
+            canAttachmentsView={canAttachmentsView}
+            canCreate={canCreate}
+            canDelete={canDelete}
+            canEdit={canEdit}
+            canPriceHistoryView={canPriceHistoryView}
+            canView={canView}
+            error={error}
+            formatCurrency={formatCurrency}
+            isLoading={loading}
+            products={filteredProducts}
+            renderAttachmentBadges={renderAttachmentBadges}
+            tableKeyValue={tableKey}
+            onCreateProduct={handleCreateProduct}
+            onDeleteProduct={handleDeleteProduct}
+            onEditProduct={handleEditProduct}
+            onOpenPriceHistory={handleOpenPriceHistory}
+            onOpenProduct={handleOpenProduct}
+            onRetry={() => void fetchProducts("initial")}
+          />
         </section>
       )}
 

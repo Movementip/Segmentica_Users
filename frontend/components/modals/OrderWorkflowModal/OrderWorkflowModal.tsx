@@ -1,6 +1,6 @@
 import React from 'react';
 import { EntityModalShell } from '../../EntityModalShell/EntityModalShell';
-import { Badge, Button, Flex, Text } from '../OrderModalPrimitives/OrderModalPrimitives';
+import { Badge, Button, Flex, Text } from '../shared/ModalLayoutPrimitives';
 import { Dialog } from '../../ui/dialog';
 import styles from './OrderWorkflowModal.module.css';
 import { getOrderExecutionModeLabel, getOrderSupplyModeLabel, type OrderExecutionMode } from '../../../lib/orderModes';

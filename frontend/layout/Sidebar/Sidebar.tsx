@@ -2,9 +2,10 @@ import React from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/router';
 import styles from './Sidebar.module.css';
-import { SidebarScrollProvider, useSidebarScroll } from './SidebarScrollProvider';
-import { useSidebarContext } from '../../context/SidebarContext';
-import { useAuth } from '../../context/AuthContext';
+import { SidebarScrollProvider } from './SidebarScrollProvider';
+import { useSidebarContext } from '../../hooks/use-sidebar-context';
+import { useSidebarScroll } from '../../hooks/use-sidebar-scroll';
+import { useAuth } from '../../hooks/use-auth';
 import { getDashboardAccess } from '../../lib/dashboardRbac';
 import { cn } from '../../lib/utils';
 import {

@@ -6,13 +6,13 @@ import {
   EntityTableSkeleton,
   EntityTableSurface,
 } from "@/components/EntityDataTable/EntityDataTable"
-import { CreateTransportModalNew } from "@/components/modals/CreateTransportModalNew/CreateTransportModalNew"
+import { CreateTransportModal } from "@/components/modals/CreateTransportModal/CreateTransportModal"
 import deleteConfirmationStyles from "@/components/modals/DeleteConfirmation/DeleteConfirmation.module.css"
 import DeleteConfirmation from "@/components/modals/DeleteConfirmation/DeleteConfirmation"
 import {
-  EditTransportModalNew,
+  EditTransportModal,
   type EditTransportModalTransportCompany,
-} from "@/components/modals/EditTransportModalNew/EditTransportModalNew"
+} from "@/components/modals/EditTransportModal/EditTransportModal"
 import { OrderAttachmentBadges } from "@/components/orders/OrderAttachmentBadges/OrderAttachmentBadges"
 import { TransportCompaniesTable } from "@/components/transport/TransportCompaniesTable/TransportCompaniesTable"
 import { TransportFilters } from "@/components/transport/TransportFilters/TransportFilters"
@@ -25,7 +25,6 @@ import {
   TransportViewTabs,
 } from "@/components/transport/TransportViewTabs/TransportViewTabs"
 import {
-  defaultTransportFilters,
   type TransportCompany,
   type TransportData,
   type TransportFiltersState,
@@ -33,12 +32,14 @@ import {
   type TransportPerformanceRow,
   type TransportStatsResponse,
   type TransportViewTab,
-} from "@/components/transport/types"
+} from "@/types/pages/transport"
+import { defaultTransportFilters } from "@/lib/transportMeta"
 import { Button } from "@/components/ui/button"
 import { NoAccessPage } from "@/components/ui/NoAccessPage/NoAccessPage"
 import { PageLoader } from "@/components/ui/PageLoader/PageLoader"
-import { useAuth } from "@/context/AuthContext"
+import { useAuth } from "@/hooks/use-auth"
 import { withLayout } from "@/layout"
+import { formatRuCurrency, formatRuDate, formatRuDateTime } from "@/utils/formatters"
 
 import styles from "./Transport.module.css"
 
@@ -651,11 +652,9 @@ function TransportPage(): JSX.Element {
     }
   }
 
-  const formatDate = (value: string) =>
-    new Date(value).toLocaleDateString("ru-RU")
+  const formatDate = (value: string) => formatRuDate(value)
 
-  const formatDateTime = (value: string) =>
-    new Date(value).toLocaleString("ru-RU")
+  const formatDateTime = (value: string) => formatRuDateTime(value)
 
   const formatMonth = (value: string) => {
     const date = new Date(value)
@@ -667,13 +666,8 @@ function TransportPage(): JSX.Element {
     })
   }
 
-  const formatCurrency = (amount: number | null) => {
-    if (amount == null || Number.isNaN(Number(amount))) return "Не указано"
-    return new Intl.NumberFormat("ru-RU", {
-      style: "currency",
-      currency: "RUB",
-    }).format(Number(amount))
-  }
+  const formatCurrency = (amount: number | null) =>
+    formatRuCurrency(amount, { fallback: "Не указано" })
 
   const currentTableColumns = activeTab === "companies" ? 9 : 5
   const isTableLoading = loading || isFetching
@@ -856,7 +850,7 @@ function TransportPage(): JSX.Element {
         </div>
       )}
 
-      <CreateTransportModalNew
+      <CreateTransportModal
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onCreated={() => {
@@ -865,7 +859,7 @@ function TransportPage(): JSX.Element {
         }}
       />
 
-      <EditTransportModalNew
+      <EditTransportModal
         isOpen={isEditModalOpen}
         onClose={() => {
           setIsEditModalOpen(false)

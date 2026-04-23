@@ -1,7 +1,7 @@
 import React from 'react';
 import { withLayout } from '../../layout';
 import { RolePermissionsAdmin } from '../../components/admin/rbac/RolePermissionsAdmin/RolePermissionsAdmin';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/use-auth';
 import { NoAccessPage } from '../../components/ui/NoAccessPage/NoAccessPage';
 import { PageLoader } from '../../components/ui/PageLoader/PageLoader';
 

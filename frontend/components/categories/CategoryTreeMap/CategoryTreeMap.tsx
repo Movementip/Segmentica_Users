@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react"
 import { FiMove } from "react-icons/fi"
 
-import type { Category, CategoryTreeNode, TreeColumn } from "@/components/categories/types"
+import type { Category, CategoryTreeNode, TreeColumn } from "@/types/pages/categories"
 import { DataSearchField } from "@/components/DataSearchField/DataSearchField"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"

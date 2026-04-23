@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 import { FiEdit3, FiExternalLink, FiSlash, FiTrash2 } from "react-icons/fi"
 
-import type { Category } from "@/components/categories/types"
+import type { Category } from "@/types/pages/categories"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"

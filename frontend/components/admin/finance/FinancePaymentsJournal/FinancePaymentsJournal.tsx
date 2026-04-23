@@ -2,25 +2,12 @@ import React from 'react';
 
 import { Card } from '../../../ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../../ui/table';
+import type { FinancePayment } from '../../../../types/pages/finance';
 import styles from '../../../../pages/admin/AdminFinance.module.css';
-
-type FinancePaymentRow = {
-  id: string;
-  employeeName: string | null;
-  date: string;
-  paymentKind: string | null;
-  type: string | null;
-  periodFrom: string | null;
-  periodTo: string | null;
-  accruedAmount: number;
-  paidAmount: number;
-  amount: number;
-  withheldAmount: number;
-};
 
 type FinancePaymentsJournalProps = {
   monthLabel: string;
-  payments: FinancePaymentRow[];
+  payments: FinancePayment[];
   formatDate: (value: string | null | undefined) => string;
   formatNumber: (value: number | null | undefined) => string;
 };

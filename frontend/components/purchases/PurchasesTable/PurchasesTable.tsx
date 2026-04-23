@@ -5,7 +5,7 @@ import { entityTableClassName } from "@/components/EntityDataTable/EntityDataTab
 import { EntityStatusBadge } from "@/components/EntityStatusBadge/EntityStatusBadge"
 import { OrderAttachmentBadges } from "@/components/orders/OrderAttachmentBadges/OrderAttachmentBadges"
 import { PurchaseRowActionsMenu } from "@/components/purchases/PurchaseRowActionsMenu/PurchaseRowActionsMenu"
-import type { Purchase } from "@/components/purchases/types"
+import type { Purchase } from "@/types/pages/purchases"
 import {
   Table,
   TableBody,

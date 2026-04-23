@@ -1,4 +1,4 @@
-import type { TransportViewTab } from "@/components/transport/types"
+import type { TransportViewTab } from "@/types/pages/transport"
 
 import styles from "./TransportViewTabs.module.css"
 

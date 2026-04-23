@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "framer-motion"
 import { entityTableClassName } from "@/components/EntityDataTable/EntityDataTable"
 import { EntityStatusBadge } from "@/components/EntityStatusBadge/EntityStatusBadge"
 import { OrderRowActionsMenu } from "@/components/orders/OrderRowActionsMenu/OrderRowActionsMenu"
-import type { Order } from "@/components/orders/types"
+import type { Order } from "@/types/pages/orders"
 import { Badge } from "@/components/ui/badge"
 import {
   Table,

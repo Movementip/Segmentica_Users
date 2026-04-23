@@ -27,9 +27,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { useAuth } from "@/context/AuthContext"
+import { useAuth } from "@/hooks/use-auth"
 import { Layout } from "@/layout/Layout"
 import { cn } from "@/lib/utils"
+import { formatRuCurrency, formatRuDate, formatRuDateTime } from "@/utils/formatters"
 
 import styles from "./Archive.module.css"
 
@@ -297,28 +298,12 @@ export default function Archive(): JSX.Element {
     }
   }
 
-  const formatDate = (dateString: string) =>
-    new Date(dateString).toLocaleDateString("ru-RU", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    })
+  const formatDate = (dateString: string) => formatRuDate(dateString)
 
-  const formatDateTime = (dateString: string) =>
-    new Date(dateString).toLocaleString("ru-RU", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
+  const formatDateTime = (dateString: string) => formatRuDateTime(dateString)
 
   const formatCurrency = useCallback((amount: number | null | undefined) => {
-    if (amount === null || amount === undefined) return "-"
-    return new Intl.NumberFormat("ru-RU", {
-      style: "currency",
-      currency: "RUB",
-    }).format(amount)
+    return formatRuCurrency(amount, { fallback: "-" })
   }, [])
 
   const isWithinPeriod = useCallback(

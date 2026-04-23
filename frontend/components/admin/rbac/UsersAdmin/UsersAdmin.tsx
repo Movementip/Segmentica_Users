@@ -40,7 +40,7 @@ import pageStyles from './UsersAdmin.module.css';
 import { UsersPageSkeleton } from './UsersPageSkeleton/UsersPageSkeleton';
 import { UsersStats } from './UsersStats/UsersStats';
 import { UsersTable } from './UsersTable/UsersTable';
-import type { UserRow } from './types';
+import type { UserRow } from '@/types/pages/admin-rbac';
 
 type RoleItem = {
     id: number;

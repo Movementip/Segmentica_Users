@@ -8,7 +8,7 @@ import { Button } from '../../ui/button';
 import { Dialog } from '../../ui/dialog';
 import { Input } from '../../ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
-import { Box, Flex, Text } from '../OrderModalPrimitives/OrderModalPrimitives';
+import { Box, Flex, Text } from '../shared/ModalLayoutPrimitives';
 
 interface Product {
     id: number;

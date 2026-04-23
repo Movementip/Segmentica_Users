@@ -258,7 +258,7 @@
 }
 
 .textRight {
-  text-align: right !important;
+  text-align: right;
 }
 
 .fileCell {

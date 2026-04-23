@@ -1,11 +1,11 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { withLayout } from '../../layout';
 import { SystemSettingsCard } from '../../components/admin/settings/SystemSettingsCard/SystemSettingsCard';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/use-auth';
 import { NoAccessPage } from '../../components/ui/NoAccessPage/NoAccessPage';
 import { PageLoader } from '../../components/ui/PageLoader/PageLoader';
 import { VAT_RATE_OPTIONS } from '../../lib/vat';
-import type { SettingsPayload } from '../../components/admin/settings/SystemSettingsCard/types';
+import type { SettingsPayload } from '../../types/pages/settings';
 import styles from './AdminSettings.module.css';
 
 const INITIAL_VAT_RATE_ID = VAT_RATE_OPTIONS.find((item) => item.isDefault)?.id || 5;

@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/table"
 import { cn } from "@/lib/utils"
 
-import type { Manager } from "../types"
+import type { Manager } from "@/types/pages/managers"
 import styles from "./ManagersTable.module.css"
 
 const MotionTableRow = motion(TableRow)

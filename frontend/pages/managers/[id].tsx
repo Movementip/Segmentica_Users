@@ -5,11 +5,11 @@ import { withLayout } from '../../layout/Layout';
 import styles from './ManagerDetail.module.css';
 import { FiArrowLeft, FiDownload, FiRefreshCw, FiSave, FiShield, FiUser } from 'react-icons/fi';
 import { Eye, EyeOff, Lock } from 'lucide-react';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../hooks/use-auth';
 import { NoAccessPage } from '../../components/ui/NoAccessPage/NoAccessPage';
 import { PageLoader } from '../../components/ui/PageLoader/PageLoader';
 import DeleteConfirmation from '../../components/modals/DeleteConfirmation/DeleteConfirmation';
-import { ManagerHrWorkspace } from '../../components/pages/ManagerHrWorkspace/ManagerHrWorkspace';
+import { ManagerHrWorkspace } from '../../components/managers/ManagerHrWorkspace/ManagerHrWorkspace';
 import { ManagerWorkScheduleSection } from '../../components/managers/ManagerWorkScheduleSection/ManagerWorkScheduleSection';
 import { RecordDocumentCenter, RecordPrintSheet, type RecordPrintDocument } from '../../components/print/RecordDocumentCenter';
 import { Badge } from '../../components/ui/badge';
@@ -25,6 +25,7 @@ import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../../components/ui/table';
+import type { AttachmentItem } from '../../types/attachments';
 
 interface ManagerDetail {
     id: number;
@@ -35,14 +36,6 @@ interface ManagerDetail {
     ставка?: number;
     дата_приема?: string;
     активен: boolean;
-    created_at: string;
-}
-
-interface AttachmentItem {
-    id: string;
-    filename: string;
-    mime_type: string;
-    size_bytes: number;
     created_at: string;
 }
 

@@ -22,7 +22,7 @@ import {
 } from "@/components/EntityDataTable/EntityDataTable"
 import { EntityStatsPanel } from "@/components/EntityStatsPanel/EntityStatsPanel"
 import { EntityStatusBadge } from "@/components/EntityStatusBadge/EntityStatusBadge"
-import { AddProductToSupplierModalV2 } from "@/components/modals/AddProductToSupplierModalV2/AddProductToSupplierModalV2"
+import { AddProductToSupplierModal } from "@/components/modals/AddProductToSupplierModal/AddProductToSupplierModal"
 import { CreatePurchaseModal } from "@/components/modals/CreatePurchaseModal/CreatePurchaseModal"
 import DeleteConfirmation from "@/components/modals/DeleteConfirmation/DeleteConfirmation"
 import deleteConfirmationStyles from "@/components/modals/DeleteConfirmation/DeleteConfirmation.module.css"
@@ -52,8 +52,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { useAuth } from "@/context/AuthContext"
-import { usePageTitle } from "@/context/PageTitleContext"
+import { useAuth } from "@/hooks/use-auth"
+import { usePageTitle } from "@/hooks/use-page-title"
 import { withLayout } from "@/layout"
 import {
   getSupplierContragentTypeLabel,
@@ -63,6 +63,7 @@ import {
   type SupplierContragent,
 } from "@/lib/supplierContragents"
 import { cn } from "@/lib/utils"
+import type { AttachmentItem } from "@/types/attachments"
 
 import styles from "./SupplierDetail.module.css"
 
@@ -91,14 +92,6 @@ interface SupplierDetail extends SupplierContragent {
   bankAccounts?: SupplierBankAccount[]
   ассортимент: SupplierProduct[]
   закупки: SupplierPurchase[]
-}
-
-interface AttachmentItem {
-  id: string
-  filename: string
-  mime_type: string
-  size_bytes: number
-  created_at: string
 }
 
 function InfoItem({
@@ -1446,7 +1439,7 @@ function SupplierDetailPage(): JSX.Element {
       ) : null}
 
       {canAddProduct || canManageAssortment ? (
-        <AddProductToSupplierModalV2
+        <AddProductToSupplierModal
           isOpen={isAddProductModalOpen}
           onClose={() => {
             setIsAddProductModalOpen(false)

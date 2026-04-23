@@ -14,7 +14,7 @@ import { DataSearchField } from "@/components/DataSearchField/DataSearchField"
 import type {
   PurchasesFiltersState,
   SupplierOption,
-} from "@/components/purchases/types"
+} from "@/types/pages/purchases"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger } from "@/components/ui/select"
 

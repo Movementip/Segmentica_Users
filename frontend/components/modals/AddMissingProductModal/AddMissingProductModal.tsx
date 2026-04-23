@@ -7,7 +7,7 @@ import type {
   MissingProductFormData,
   MissingProductsOrderOption,
   MissingProductsProductOption,
-} from "@/components/missing-products/types"
+} from "@/types/pages/missing-products"
 import { Button } from "@/components/ui/button"
 import { Dialog } from "@/components/ui/dialog"
 

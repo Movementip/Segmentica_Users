@@ -6,7 +6,7 @@ import {
   FiTruck,
 } from "react-icons/fi"
 
-import type { Supplier } from "@/components/suppliers/types"
+import type { Supplier } from "@/types/pages/suppliers"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
