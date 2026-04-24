@@ -16,6 +16,15 @@ export DOCUMENT_RENDERER_URL
 export DOCUMENT_RENDERER_FALLBACK_URLS
 export NEXTAUTH_URL
 
+if [ -x "backend/node_modules/.bin/next" ]; then
+    if [ "$1" = "--inspect" ]; then
+        NODE_OPTIONS='--inspect' npm --prefix backend run dev
+    else
+        npm --prefix backend run dev
+    fi
+    exit $?
+fi
+
 cd backend || exit 1
 
 if [ "$1" = "--inspect" ]; then

@@ -17,27 +17,104 @@ services:
       retries: 20
     restart: unless-stopped
 
-  vpn:
-    image: qmcgaw/gluetun:latest
-    container_name: segmentica-vpn
-    entrypoint:
-      - /bin/sh
-      - /gluetun-route-fix.sh
+  tailscale:
+    image: tailscale/tailscale:latest
+    container_name: segmentica-tailscale
+    hostname: segmentica-mac
     cap_add:
       - NET_ADMIN
+      - NET_RAW
     devices:
       - /dev/net/tun:/dev/net/tun
     env_file:
       - .env.local
     environment:
-      TZ: Asia/Yekaterinburg
+      TS_HOSTNAME: segmentica-mac
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "false"
+      TS_AUTH_ONCE: "true"
+      TS_ACCEPT_DNS: "false"
     ports:
+      - "3001:3001"
       - "31415:31415"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - gluetun:/gluetun
-      - ./infra/vpn/gluetun-route-fix.sh:/gluetun-route-fix.sh:ro
+      - tailscale-state:/var/lib/tailscale
+    healthcheck:
+      test: ["CMD-SHELL", "tailscale status --peers=false >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  db-tailscale-proxy:
+    image: node:20-bookworm-slim
+    container_name: segmentica-db-tailscale-proxy
+    network_mode: "service:tailscale"
+    depends_on:
+      db:
+        condition: service_healthy
+      tailscale:
+        condition: service_started
+    environment:
+      LISTEN_HOST: 0.0.0.0
+      LISTEN_PORT: 5432
+      TARGET_HOST: db
+      TARGET_PORT: 5432
+    volumes:
+      - ./infra/tailscale-db-proxy.js:/app/tailscale-db-proxy.js:ro
+    command: ["node", "/app/tailscale-db-proxy.js"]
+    restart: unless-stopped
+
+  backend:
+    image: segmentica-backend:local
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: segmentica-backend
+    network_mode: "service:tailscale"
+    depends_on:
+      db:
+        condition: service_healthy
+      tailscale:
+        condition: service_started
+      libreoffice:
+        condition: service_started
+    env_file:
+      - .env.local
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/Segmentica
+      LOCAL_DATABASE_URL: postgresql://postgres:postgres@db:5432/Segmentica
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: Segmentica
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      NODE_ENV: production
+      PORT: 3001
+      NEXTAUTH_URL: http://localhost:3000
+      DOCUMENT_RENDERER_URL: http://libreoffice:3000
+      DOCUMENT_RENDERER_FALLBACK_URLS: http://libreoffice:3000
+    restart: unless-stopped
+
+  frontend:
+    image: segmentica-frontend:local
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+      target: prebuilt
+    container_name: segmentica-frontend
+    depends_on:
+      backend:
+        condition: service_started
+    environment:
+      PORT: 3000
+      NEXTAUTH_URL: http://localhost:3000
+      FRONTEND_API_INTERNAL_URL: http://tailscale:3001
+    ports:
+      - "3000:3000"
     restart: unless-stopped
 
   libreoffice:
@@ -63,11 +140,11 @@ services:
       context: ./services/symmetricds
       dockerfile: Dockerfile
     container_name: segmentica-symmetricds
-    network_mode: "service:vpn"
+    network_mode: "service:tailscale"
     depends_on:
       db:
         condition: service_healthy
-      vpn:
+      tailscale:
         condition: service_started
     env_file:
       - .env.local
@@ -88,6 +165,6 @@ services:
 volumes:
   segmentica-postgres-data:
     name: segmentica-postgres-data
-  gluetun:
+  tailscale-state:
   symmetricds-logs:
   symmetricds-tmp:

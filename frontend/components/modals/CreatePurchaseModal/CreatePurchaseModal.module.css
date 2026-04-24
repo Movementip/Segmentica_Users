@@ -1,8 +1,9 @@
 .modalContent {
-  width: min(1480px, calc(100vw - 32px));
-  max-width: 1480px;
+  width: min(1480px, 100%);
+  max-width: min(1480px, 100%);
   max-height: 90vh;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .form {
@@ -20,6 +21,10 @@
   flex-direction: column;
   gap: 8px;
   margin-bottom: 4px;
+}
+
+.fieldLabel {
+  color: var(--foreground);
 }
 
 .selectTrigger,
@@ -250,8 +255,8 @@
 
 @media (max-width: 768px) {
   .modalContent {
-    width: 95vw;
-    max-width: none;
+    width: 100%;
+    max-width: 100%;
   }
 
   .formGrid {

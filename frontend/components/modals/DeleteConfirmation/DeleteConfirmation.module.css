@@ -1,8 +1,9 @@
 .modalContent {
-  width: min(520px, calc(100vw - 32px));
-  max-width: 520px;
+  width: min(520px, 100%);
+  max-width: min(520px, 100%);
   max-height: calc(100vh - 32px);
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   border-radius: var(--radius-3xl);
   background: var(--popover);
   color: var(--popover-foreground);

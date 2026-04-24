@@ -1,0 +1,29 @@
+{
+  "name": "segmentica-backend",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p ${PORT:-3001}",
+    "build": "next build",
+    "start": "next start -p ${PORT:-3001}",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "formidable": "^3.5.4",
+    "next": "^13.4.19",
+    "pg": "^8.16.3",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.6.0",
+    "@types/pg": "^8.15.5",
+    "@types/react": "18.2.79",
+    "@types/react-dom": "18.2.25",
+    "eslint": "8.49.0",
+    "eslint-config-next": "13.4.19",
+    "typescript": "^5.2.2"
+  }
+}

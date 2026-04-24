@@ -35,25 +35,6 @@
   line-height: 1.45;
 }
 
-.typeBadge {
-  border-color: transparent;
-}
-
-.typeBadge[data-theme="organization"] {
-  background: color-mix(in oklab, var(--card) 72%, #3b82f6 28%);
-  color: #1d4ed8;
-}
-
-.typeBadge[data-theme="entrepreneur"] {
-  background: color-mix(in oklab, var(--card) 72%, #22c55e 28%);
-  color: #15803d;
-}
-
-.typeBadge[data-theme="person"] {
-  background: color-mix(in oklab, var(--card) 72%, #a855f7 28%);
-  color: #7e22ce;
-}
-
 .contactsCell {
   display: grid;
   gap: 6px;

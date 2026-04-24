@@ -275,12 +275,18 @@
 
 .dialogContent {
   max-width: 640px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: min(760px, calc(100vh - 32px));
+  overflow: hidden;
 }
 
 .dialogForm {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 16px;
+  min-height: 0;
 }
 
 .fieldGroup {
@@ -309,15 +315,18 @@
 
 .resultsSection {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 12px;
+  min-height: 0;
 }
 
 .targetsBox {
   display: flex;
-  max-height: 320px;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 10px;
+  min-height: 0;
   overflow: auto;
   padding-right: 4px;
 }
@@ -457,6 +466,10 @@
 }
 
 @media (max-width: 768px) {
+  .dialogContent {
+    height: min(760px, calc(100vh - 16px));
+  }
+
   .container {
     padding-right: 16px;
     padding-left: 16px;

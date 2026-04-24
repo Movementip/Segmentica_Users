@@ -648,8 +648,10 @@ export default async function handler(
                     return res.status(404).json({ error: 'Заявка не найдена' });
                 }
 
+                const deletedOrder = mapOrderRow(result.rows[0]);
+
                 await client.query('COMMIT');
-                return res.status(200).json({ message: 'Заявка успешно удалена', deletedOrder: result.rows[0] });
+                return res.status(200).json({ message: 'Заявка успешно удалена', deletedOrder });
             } catch (txError) {
                 await client.query('ROLLBACK');
                 throw txError;

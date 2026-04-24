@@ -1,4 +1,4 @@
-import type { DocumentTemplateKey } from './documentTemplates';
+import type { DocumentTemplateKey } from '../types/documentTemplates';
 
 export type PurchaseDocumentKey = Extract<
     DocumentTemplateKey,

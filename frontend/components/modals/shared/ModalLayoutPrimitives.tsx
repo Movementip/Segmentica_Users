@@ -93,7 +93,7 @@ function Text({
   const Component = (as || "span") as React.ElementType
   const textClassName = cn(
     "font-sans text-sm",
-    as === "label" && "mb-2 block text-foreground",
+    as === "label" && "block text-foreground",
     weight === "medium" && "font-medium",
     weight === "bold" && "font-bold",
     color === "gray" && "text-muted-foreground",

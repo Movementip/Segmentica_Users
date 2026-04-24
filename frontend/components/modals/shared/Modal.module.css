@@ -11,9 +11,11 @@
 }
 
 .modalContent {
-  width: min(600px, calc(100vw - 40px));
+  width: min(600px, 100%);
+  max-width: min(600px, 100%);
   max-height: calc(100vh - 40px);
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   border: 1px solid var(--border);
   border-radius: 24px;
   background: var(--card);
@@ -170,7 +172,8 @@
   }
 
   .modalContent {
-    width: calc(100vw - 24px);
+    width: 100%;
+    max-width: 100%;
     max-height: calc(100vh - 24px);
   }
 

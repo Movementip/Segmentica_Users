@@ -1,39 +1,19 @@
 import * as React from "react"
 
+import {
+  getEntityStatusAppearance,
+  getOrderStatusTone,
+  type EntityStatusTone,
+} from "@/lib/entityStatuses"
 import { cn } from "@/lib/utils"
 
 import styles from "./EntityStatusBadge.module.css"
-
-type EntityStatusTone = "neutral" | "success" | "warning" | "danger" | "muted"
 
 type EntityStatusBadgeProps = React.HTMLAttributes<HTMLSpanElement> & {
   value: string
   label?: string
   tone?: EntityStatusTone
   compact?: boolean
-}
-
-export function getOrderStatusTone(status: string): EntityStatusTone {
-  switch ((status || "").trim().toLowerCase()) {
-    case "выполнена":
-    case "отгружена":
-    case "получено":
-      return "success"
-    case "в обработке":
-    case "досборка":
-    case "заказано":
-    case "доотгрузка":
-      return "warning"
-    case "отменена":
-      return "danger"
-    case "новая":
-    case "подтверждена":
-    case "в работе":
-    case "собрана":
-      return "neutral"
-    default:
-      return "muted"
-  }
 }
 
 export function EntityStatusBadge({
@@ -44,11 +24,20 @@ export function EntityStatusBadge({
   className,
   ...props
 }: EntityStatusBadgeProps) {
+  const appearance = getEntityStatusAppearance(value)
   const resolvedTone = tone ?? getOrderStatusTone(value)
   const content = label ?? value
 
   return (
     <span
+      style={
+        appearance
+          ? ({
+              "--status-accent-light": appearance.light,
+              "--status-accent-dark": appearance.dark,
+            } as React.CSSProperties)
+          : undefined
+      }
       className={cn(styles.root, styles[resolvedTone], compact && styles.compact, className)}
       {...props}
     >
@@ -56,3 +45,5 @@ export function EntityStatusBadge({
     </span>
   )
 }
+
+export { getOrderStatusTone }

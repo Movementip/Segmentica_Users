@@ -10,6 +10,11 @@
     "node_modules"
   ],
   "compilerOptions": {
-    "jsx": "preserve"
+    "jsx": "preserve",
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ]
   }
 }

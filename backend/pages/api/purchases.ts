@@ -496,7 +496,7 @@ export default async function handler(
                     normalizedDeliveryCost,
                 ]);
 
-                const purchaseId = purchaseResult.rows[0].id;
+                const purchaseId = Number(purchaseResult.rows[0].id);
 
                 // Create purchase positions
                 for (const position of позиции) {

@@ -178,7 +178,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                         'SELECT "название" FROM "Категории_товаров" WHERE id = $1',
                         [resolvedCategoryId]
                     );
-                    resolvedCategoryName = categoryResult.rows[0]?.название || resolvedCategoryName;
+                    resolvedCategoryName = normalizeNullableText(categoryResult.rows[0]?.название) || resolvedCategoryName;
                 }
 
                 // Create product
@@ -356,13 +356,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                         [categoryName]
                     );
                     if (existingCategory.rows.length > 0) {
-                        resolvedCategoryId = existingCategory.rows[0].id;
+                        resolvedCategoryId = Number(existingCategory.rows[0].id);
                     } else {
                         const insertedCategory = await txQuery(
                             'INSERT INTO "Категории_товаров" ("название") VALUES ($1) RETURNING id',
                             [categoryName]
                         );
-                        resolvedCategoryId = insertedCategory.rows[0].id;
+                        resolvedCategoryId = Number(insertedCategory.rows[0].id);
                     }
                 }
 

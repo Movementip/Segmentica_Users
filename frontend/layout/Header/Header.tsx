@@ -6,7 +6,9 @@ import {
     FiShoppingBag,
     FiFolder,
     FiTruck,
-    FiDatabase
+    FiDatabase,
+    FiWifi,
+    FiWifiOff
 } from 'react-icons/fi';
 import { useAuth } from '../../hooks/use-auth';
 import { canUseAdminDataExchangePage } from '../../lib/dataExchangeConfig';
@@ -45,6 +47,28 @@ interface SearchResults {
     products: SearchResult[];
     categories: SearchResult[];
     suppliers: SearchResult[];
+}
+
+type HeaderDbStatus = {
+    activeMode: 'local' | 'remote';
+    preferredMode: 'local' | 'remote';
+    isRemote: boolean;
+    remoteAvailable: boolean;
+    remoteConfigured: boolean;
+    activeLabel: string;
+    activeHint: string;
+    remoteHost: string | null;
+    checkedAt: string;
+    sync: {
+        available: boolean;
+        incomingPendingBatches: number;
+        outgoingPendingBatches: number;
+        totalPendingBatches: number;
+        incomingErrorBatches: number;
+        outgoingErrorBatches: number;
+        totalErrorBatches: number;
+        isSynchronized: boolean;
+    };
 }
 
 function Box({ className, ...props }: React.ComponentProps<'div'>): JSX.Element {
@@ -493,9 +517,12 @@ export function Header(): JSX.Element {
         suppliers: []
     });
 
-    const [dbStatus, setDbStatus] = useState<{ isRemote: boolean; mode: 'local' | 'remote'; remoteAvailable: boolean } | null>(null);
+    const [dbStatus, setDbStatus] = useState<HeaderDbStatus | null>(null);
     const [isDbLoading, setIsDbLoading] = useState(true);
     const [isDbSwitching, setIsDbSwitching] = useState(false);
+    const [isBrowserOnline, setIsBrowserOnline] = useState(() =>
+        typeof navigator === 'undefined' ? true : navigator.onLine
+    );
     const can = (key: string) => Boolean(user?.permissions?.includes(key));
     const canViewAdminFinance = can('admin.finance');
     const canViewScheduleBoard = can('admin.schedule_board') || (can('managers.list') && can('schedule.manage'));
@@ -516,28 +543,71 @@ export function Header(): JSX.Element {
         await saveThemePreference(nextTheme);
     }, [saveThemePreference]);
 
-    const fetchDbStatus = async () => {
+    const fetchDbStatus = useCallback(async () => {
         try {
             const response = await fetch('/api/db-status');
             if (!response.ok) return;
             const data = await response.json();
             setDbStatus({
+                activeMode: data.activeMode === 'remote' ? 'remote' : 'local',
+                preferredMode: data.preferredMode === 'remote' ? 'remote' : 'local',
                 isRemote: Boolean(data.isRemote),
-                mode: data.mode === 'remote' ? 'remote' : 'local',
-                remoteAvailable: Boolean(data.remoteAvailable)
+                remoteAvailable: Boolean(data.remoteAvailable),
+                remoteConfigured: Boolean(data.remoteConfigured),
+                activeLabel: typeof data.activeLabel === 'string' ? data.activeLabel : 'Локальная база Docker',
+                activeHint: typeof data.activeHint === 'string' ? data.activeHint : 'Локальный контейнер PostgreSQL',
+                remoteHost: typeof data.remoteHost === 'string' ? data.remoteHost : null,
+                checkedAt: typeof data.checkedAt === 'string' ? data.checkedAt : new Date().toISOString(),
+                sync: {
+                    available: Boolean(data.sync?.available),
+                    incomingPendingBatches: Number(data.sync?.incomingPendingBatches) || 0,
+                    outgoingPendingBatches: Number(data.sync?.outgoingPendingBatches) || 0,
+                    totalPendingBatches: Number(data.sync?.totalPendingBatches) || 0,
+                    incomingErrorBatches: Number(data.sync?.incomingErrorBatches) || 0,
+                    outgoingErrorBatches: Number(data.sync?.outgoingErrorBatches) || 0,
+                    totalErrorBatches: Number(data.sync?.totalErrorBatches) || 0,
+                    isSynchronized: Boolean(data.sync?.isSynchronized),
+                },
             });
         } catch (error) {
             console.error('Failed to fetch DB status:', error);
         } finally {
             setIsDbLoading(false);
         }
-    };
+    }, []);
 
     useEffect(() => {
-        fetchDbStatus();
-        const t = window.setInterval(fetchDbStatus, 10000);
-        return () => window.clearInterval(t);
-    }, []);
+        void fetchDbStatus();
+
+        const handleOnlineChange = () => {
+            setIsBrowserOnline(navigator.onLine);
+        };
+
+        const handleVisibilityRefresh = () => {
+            if (!document.hidden) {
+                void fetchDbStatus();
+            }
+        };
+
+        window.addEventListener('online', handleOnlineChange);
+        window.addEventListener('offline', handleOnlineChange);
+        window.addEventListener('focus', handleVisibilityRefresh);
+        document.addEventListener('visibilitychange', handleVisibilityRefresh);
+
+        const t = window.setInterval(() => {
+            if (!document.hidden) {
+                void fetchDbStatus();
+            }
+        }, 15000);
+
+        return () => {
+            window.removeEventListener('online', handleOnlineChange);
+            window.removeEventListener('offline', handleOnlineChange);
+            window.removeEventListener('focus', handleVisibilityRefresh);
+            document.removeEventListener('visibilitychange', handleVisibilityRefresh);
+            window.clearInterval(t);
+        };
+    }, [fetchDbStatus]);
 
     useEffect(() => {
         if (!user?.userId) return;
@@ -574,7 +644,7 @@ export function Header(): JSX.Element {
         }
     }, []);
 
-    const switchDbMode = async (mode: 'local' | 'remote') => {
+    const switchDbMode = useCallback(async (mode: 'local' | 'remote') => {
         setIsDbSwitching(true);
         try {
             const response = await fetch('/api/db-mode', {
@@ -589,7 +659,7 @@ export function Header(): JSX.Element {
         } finally {
             setIsDbSwitching(false);
         }
-    };
+    }, [fetchDbStatus]);
 
     // Handle search input changes with debounce
     useEffect(() => {
@@ -750,6 +820,36 @@ export function Header(): JSX.Element {
         searchResults.products.length > 0 ||
         searchResults.categories.length > 0 ||
         searchResults.suppliers.length > 0;
+
+    const dbConnectionLabel = dbStatus?.activeMode === 'remote' ? 'Удалённая БД' : 'Локальная БД';
+    const hasPendingBatches = (dbStatus?.sync.totalPendingBatches || 0) > 0;
+    const hasSyncErrors = (dbStatus?.sync.totalErrorBatches || 0) > 0;
+    const isRemoteUnavailable = Boolean(dbStatus?.remoteConfigured) && !dbStatus?.remoteAvailable;
+    const dbSyncLabel = !isBrowserOnline
+        ? 'Нет сети'
+        : hasSyncErrors
+            ? `${dbStatus?.sync.totalErrorBatches || 0} ошиб.`
+        : isRemoteUnavailable
+            ? 'Узел недоступен'
+            : dbStatus?.sync.available
+                ? dbStatus.sync.isSynchronized
+                    ? 'Синхронизировано'
+                    : `${dbStatus.sync.totalPendingBatches} батч. в очереди`
+                : 'Статус sync';
+    const dbActionMode: 'local' | 'remote' = dbStatus?.activeMode === 'remote'
+        ? 'local'
+        : 'remote';
+    const dbActionLabel = dbActionMode === 'remote'
+        ? 'Подключиться к удалённой БД'
+        : 'Отключиться от удалённой БД';
+    const dbActionDisabled = isDbSwitching || isDbLoading || (dbActionMode === 'remote' && !dbStatus?.remoteConfigured);
+    const dbStatusToneClass = !isBrowserOnline
+        ? styles.offline
+        : isRemoteUnavailable || hasSyncErrors
+            ? styles.offline
+            : hasPendingBatches
+                ? styles.warning
+            : styles.online;
 
     const getStatusColor = (status: string) => {
         switch ((status || '').toLowerCase()) {
@@ -1061,33 +1161,95 @@ export function Header(): JSX.Element {
                                     <FiDatabase />
                                 </div>
 
+                                <div className={styles.dbStatusBlock}>
+                                    <div className={styles.dbButtonTitle}>Подключение</div>
+                                    <div className={styles.dbButtonValue}>{dbConnectionLabel}</div>
+                                </div>
+
                                 <div className={styles.dbStatus}>
                                     <div
-                                        className={`${styles.statusIndicator} ${dbStatus?.isRemote ? styles.online : styles.offline}`}
+                                        className={`${styles.statusIndicator} ${dbStatusToneClass}`}
                                     >
                                         <div className={styles.statusDot}></div>
-                                        <span>{dbStatus?.isRemote ? 'Онлайн' : 'Оффлайн'}</span>
+                                        <span>{dbSyncLabel}</span>
                                     </div>
                                 </div>
                             </>
                         </DropdownMenuTrigger>
 
-                        <DropdownMenuContent align="end">
-                            {dbStatus?.isRemote ? (
-                                <DropdownMenuItem
-                                    onClick={() => switchDbMode('local')}
-                                    disabled={isDbSwitching}
+                        <DropdownMenuContent align="end" className={styles.dbMenuContent}>
+                            <div className={styles.dbMenuCard}>
+                                <div className={styles.dbMenuHeader}>
+                                    <div className={styles.dbMenuTitle}>Статус подключения</div>
+                                    <div className={styles.dbMenuSubtitle}>
+                                        {dbStatus?.activeHint || 'Проверяем текущее состояние'}
+                                    </div>
+                                </div>
+
+                                <div className={styles.dbMenuRows}>
+                                    <div className={styles.dbMenuRow}>
+                                        <span className={styles.dbMenuLabel}>База</span>
+                                        <span className={styles.dbMenuValue}>
+                                            {dbStatus?.activeLabel || 'Проверка...'}
+                                        </span>
+                                    </div>
+
+                                    <div className={styles.dbMenuRow}>
+                                        <span className={styles.dbMenuLabel}>Интернет</span>
+                                        <span className={styles.dbMenuValueStatus}>
+                                            {isBrowserOnline ? <FiWifi /> : <FiWifiOff />}
+                                            {isBrowserOnline ? 'Есть связь' : 'Нет связи'}
+                                        </span>
+                                    </div>
+
+                                    <div className={styles.dbMenuRow}>
+                                        <span className={styles.dbMenuLabel}>Удалённая БД</span>
+                                        <span className={styles.dbMenuValue}>
+                                            {!dbStatus?.remoteConfigured
+                                                ? 'Не настроена'
+                                                : dbStatus.remoteAvailable
+                                                    ? 'Доступна'
+                                                    : 'Недоступна'}
+                                        </span>
+                                    </div>
+
+                                    <div className={styles.dbMenuRow}>
+                                        <span className={styles.dbMenuLabel}>SymmetricDS</span>
+                                        <span className={styles.dbMenuValue}>
+                                            {isRemoteUnavailable
+                                                ? 'Ожидание связи с удалённой БД'
+                                                : !dbStatus?.sync.available
+                                                ? 'Статус недоступен'
+                                                : hasSyncErrors
+                                                    ? `${dbStatus.sync.totalErrorBatches} батч. с ошибкой`
+                                                : dbStatus.sync.isSynchronized
+                                                    ? 'Все данные синхронизированы'
+                                                    : `${dbStatus.sync.totalPendingBatches} батч. ожидают передачу`}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className={styles.dbMenuMeta}>
+                                    {dbStatus?.activeMode === 'remote'
+                                        ? 'Сейчас используется удалённая Windows-БД.'
+                                        : dbStatus?.preferredMode === 'remote'
+                                            ? 'Удалённая БД выбрана как целевая, но сейчас недоступна. Используется локальная Docker-база, можно повторить подключение вручную.'
+                                        : 'Сейчас система закреплена за локальной Docker-базой.'}
+                                </div>
+
+                                <Button
+                                    type="button"
+                                    variant={dbActionMode === 'remote' ? 'outline' : 'secondary'}
+                                    size="lg"
+                                    className={styles.dbMenuAction}
+                                    onClick={() => {
+                                        void switchDbMode(dbActionMode);
+                                    }}
+                                    disabled={dbActionDisabled}
                                 >
-                                    Перейти в оффлайн базу
-                                </DropdownMenuItem>
-                            ) : (
-                                <DropdownMenuItem
-                                    onClick={() => switchDbMode('remote')}
-                                    disabled={isDbSwitching || !dbStatus?.remoteAvailable}
-                                >
-                                    Попробовать подключиться к удаленной базе
-                                </DropdownMenuItem>
-                            )}
+                                    {isDbSwitching ? 'Переключаем...' : dbActionLabel}
+                                </Button>
+                            </div>
                         </DropdownMenuContent>
                     </DropdownMenu>
                 </div>

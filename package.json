@@ -8,13 +8,12 @@
         "dev:frontend": "sh scripts/dev-frontend.sh",
         "debug": "sh scripts/dev-backend.sh --inspect",
         "build": "npm run build:backend && npm run build:frontend && npm run clean:next-cache",
-        "build:backend": "cd backend && ../node_modules/.bin/next build",
+        "build:backend": "npm --prefix backend run build",
         "build:frontend": "npm --prefix frontend run build",
-        "start": "npm run start:backend",
-        "start:backend": "cd backend && ../node_modules/.bin/next start -p ${BACKEND_PORT:-3001}",
+        "start": "npm run start:frontend",
+        "start:backend": "npm --prefix backend run start",
         "start:frontend": "npm --prefix frontend run start",
-        "lint": "cd backend && ../node_modules/.bin/next lint && npm --prefix frontend run lint",
-        "stylelint": "stylelint \"frontend/**/*.css\" --fix",
+        "lint": "npm --prefix backend run lint && npm --prefix frontend run lint",
         "clean:next-cache": "rm -rf backend/.next/cache backend/.next/trace frontend/.next/cache frontend/.next/trace",
         "clean:next": "rm -rf backend/.next frontend/.next",
         "clean:npm": "npm cache clean --force",
@@ -24,52 +23,5 @@
         "docker:infra": "docker compose up -d --build --remove-orphans && npm run docker:prune",
         "docker:app": "npm run docker:infra",
         "docker:renderer": "docker compose -f docker-compose.libreoffice.yml up -d --build --remove-orphans && npm run docker:prune"
-    },
-    "dependencies": {
-        "class-variance-authority": "^0.7.1",
-        "clsx": "^2.1.1",
-        "formidable": "^3.5.4",
-        "framer-motion": "^10.18.0",
-        "html2canvas": "^1.4.1",
-        "jspdf": "^4.2.1",
-        "lucide-react": "^0.577.0",
-        "next": "^13.4.19",
-        "pg": "^8.16.3",
-        "react": "^18.2.0",
-        "react-dom": "^18.2.0",
-        "react-icons": "^5.5.0",
-        "recharts": "^3.8.0",
-        "tailwind-merge": "^3.5.0",
-        "xlsx": "^0.18.5"
-    },
-    "overrides": {
-        "@types/react": "18.2.79",
-        "@types/react-dom": "18.2.25",
-        "recharts": {
-            "@types/react": "18.2.79"
-        },
-        "react-redux": {
-            "@types/react": "18.2.79"
-        }
-    },
-    "devDependencies": {
-        "@types/node": "^20.6.0",
-        "@types/pg": "^8.15.5",
-        "@types/react": "18.2.79",
-        "@types/react-dom": "18.2.25",
-        "@typescript-eslint/eslint-plugin": "^6.7.0",
-        "@typescript-eslint/parser": "^6.7.0",
-        "autoprefixer": "^10.5.0",
-        "eslint": "8.49.0",
-        "eslint-config-next": "13.4.19",
-        "eslint-plugin-react-hooks": "^4.6.0",
-        "postcss": "^8.5.9",
-        "stylelint": "^15.10.3",
-        "stylelint-config-clean-order": "^5.2.0",
-        "stylelint-config-standard": "^34.0.0",
-        "stylelint-order": "^6.0.3",
-        "tailwindcss": "^3.4.19",
-        "tailwindcss-animate": "^1.0.7",
-        "typescript": "^5.2.2"
     }
 }

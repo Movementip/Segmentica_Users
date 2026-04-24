@@ -1,0 +1,62 @@
+.root {
+  --type-accent-light: color-mix(in oklch, var(--foreground) 62%, var(--background));
+  --type-accent-dark: var(--type-accent-light);
+  --type-accent: var(--type-accent-light);
+
+  display: inline-flex;
+  min-width: auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in oklch, var(--type-accent) 34%, transparent);
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--type-accent) 12%, transparent);
+  color: var(--type-accent);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.03em;
+  line-height: 1;
+  padding: 4px 10px;
+  text-align: center;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.root[data-theme="organization"] {
+  --type-accent-light: oklch(0.55 0.13 145);
+  --type-accent-dark: oklch(0.72 0.14 145);
+}
+
+.root[data-theme="entrepreneur"] {
+  --type-accent-light: oklch(0.58 0.15 255);
+  --type-accent-dark: oklch(0.76 0.12 255);
+}
+
+.root[data-theme="person"] {
+  --type-accent-light: oklch(0.7 0.02 260);
+  --type-accent-dark: oklch(0.82 0.02 260);
+}
+
+.root[data-theme="advocate"] {
+  --type-accent-light: oklch(0.66 0.15 70);
+  --type-accent-dark: oklch(0.79 0.13 74);
+}
+
+.root[data-theme="notary"] {
+  --type-accent-light: oklch(0.6 0.18 320);
+  --type-accent-dark: oklch(0.74 0.15 320);
+}
+
+.root[data-theme="farm"] {
+  --type-accent-light: oklch(0.67 0.17 125);
+  --type-accent-dark: oklch(0.8 0.14 125);
+}
+
+.root[data-theme="foreign"] {
+  --type-accent-light: oklch(0.62 0.11 215);
+  --type-accent-dark: oklch(0.78 0.09 215);
+}
+
+:global(html.dark) .root {
+  --type-accent: var(--type-accent-dark);
+}

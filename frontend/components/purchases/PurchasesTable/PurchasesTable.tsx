@@ -5,6 +5,7 @@ import { entityTableClassName } from "@/components/EntityDataTable/EntityDataTab
 import { EntityStatusBadge } from "@/components/EntityStatusBadge/EntityStatusBadge"
 import { OrderAttachmentBadges } from "@/components/orders/OrderAttachmentBadges/OrderAttachmentBadges"
 import { PurchaseRowActionsMenu } from "@/components/purchases/PurchaseRowActionsMenu/PurchaseRowActionsMenu"
+import { getPurchaseStatusTone } from "@/lib/entityStatuses"
 import type { Purchase } from "@/types/pages/purchases"
 import {
   Table,
@@ -20,8 +21,6 @@ import styles from "./PurchasesTable.module.css"
 
 const MotionTableRow = motion(TableRow)
 
-type PurchaseStatusTone = "neutral" | "success" | "warning" | "danger" | "muted"
-
 type PurchasesTableProps = {
   purchases: Purchase[]
   canView: boolean
@@ -36,20 +35,6 @@ type PurchasesTableProps = {
   onEditPurchase: (purchase: Purchase) => void | Promise<void>
   onOpenOrder: (purchase: Purchase) => void
   onDeletePurchase: (purchase: Purchase) => void
-}
-
-function getPurchaseStatusTone(status: string): PurchaseStatusTone {
-  switch ((status || "").trim().toLowerCase()) {
-    case "получено":
-      return "success"
-    case "заказано":
-    case "в пути":
-      return "warning"
-    case "отменено":
-      return "danger"
-    default:
-      return "muted"
-  }
 }
 
 export function PurchasesTable({

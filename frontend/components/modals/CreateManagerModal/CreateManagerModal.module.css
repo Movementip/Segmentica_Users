@@ -1,6 +1,6 @@
 .modalContent {
-  width: min(760px, calc(100vw - 32px));
-  max-width: min(760px, calc(100vw - 32px));
+  width: min(760px, 100%);
+  max-width: min(760px, 100%);
 }
 
 .form {

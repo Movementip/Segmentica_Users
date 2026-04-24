@@ -1,10 +1,10 @@
-import { Badge } from "@/components/ui/badge"
 import type { ReactNode } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { FiMail, FiPhone } from "react-icons/fi"
 
 import { entityTableClassName } from "@/components/EntityDataTable/EntityDataTable"
 import { SupplierRowActionsMenu } from "@/components/suppliers/SupplierRowActionsMenu/SupplierRowActionsMenu"
+import { SupplierTypeBadge } from "@/components/suppliers/SupplierTypeBadge/SupplierTypeBadge"
 import type { Supplier } from "@/types/pages/suppliers"
 import {
   Table,
@@ -14,10 +14,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import {
-  getSupplierContragentTypeLabel,
-  getSupplierContragentTypeTheme,
-} from "@/lib/supplierContragents"
 import { cn } from "@/lib/utils"
 
 import styles from "./SuppliersTable.module.css"
@@ -97,13 +93,7 @@ export function SuppliersTable({
               </TableCell>
 
               <TableCell className={styles.tableCell}>
-                <Badge
-                  variant="secondary"
-                  className={styles.typeBadge}
-                  data-theme={getSupplierContragentTypeTheme(supplier.тип)}
-                >
-                  {getSupplierContragentTypeLabel(supplier.тип)}
-                </Badge>
+                <SupplierTypeBadge value={supplier.тип} />
               </TableCell>
 
               <TableCell className={`${styles.tableCell} ${styles.textRight}`}>

@@ -6,17 +6,95 @@ const globalForDb = globalThis as typeof globalThis & {
     __segmenticaDbPoolPromise?: Promise<Pool> | null;
     __segmenticaDbCheckInterval?: NodeJS.Timeout | null;
     __segmenticaDbExitHandlerRegistered?: boolean;
+    __segmenticaDbResetPromise?: Promise<void> | null;
+    __segmenticaPgCryptoEnsurePromise?: Promise<void> | null;
 };
 export let isRemote = false;
 export type DbMode = 'local' | 'remote';
 export let dbMode: DbMode = 'local';
 export let remoteAvailable = false;
 let checkInterval: NodeJS.Timeout | null = globalForDb.__segmenticaDbCheckInterval ?? null;
-const testDatabaseConnection = async (connectionString: string): Promise<boolean> => {
+let resetPoolPromise: Promise<void> | null = globalForDb.__segmenticaDbResetPromise ?? null;
+let pgCryptoEnsurePromise: Promise<void> | null = globalForDb.__segmenticaPgCryptoEnsurePromise ?? null;
+
+type DatabaseSslConfig = false | { rejectUnauthorized: boolean };
+
+const isEnabledEnvFlag = (value?: string | null): boolean => {
+    return ['1', 'true', 'yes', 'require', 'required', 'on'].includes(String(value || '').trim().toLowerCase());
+};
+
+const isDisabledEnvFlag = (value?: string | null): boolean => {
+    return ['0', 'false', 'no', 'disable', 'disabled', 'off'].includes(String(value || '').trim().toLowerCase());
+};
+
+const parseConnectionHost = (connectionString: string): string | null => {
+    try {
+        return new URL(connectionString).hostname || null;
+    } catch {
+        return null;
+    }
+};
+
+const isTailscaleHost = (host?: string | null): boolean => {
+    if (!host) return false;
+    const normalized = host.toLowerCase();
+    if (normalized.endsWith('.ts.net')) return true;
+
+    const parts = normalized.split('.').map((part) => Number(part));
+    if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
+        return false;
+    }
+
+    // Tailscale IPv4 addresses live in 100.64.0.0/10 and are already encrypted by WireGuard.
+    return parts[0] === 100 && parts[1] >= 64 && parts[1] <= 127;
+};
+
+const connectionStringSslMode = (connectionString: string): string => {
+    try {
+        return (new URL(connectionString).searchParams.get('sslmode') || '').toLowerCase();
+    } catch {
+        return '';
+    }
+};
+
+const getDatabaseSslConfig = (connectionString: string, isRemoteDb: boolean): DatabaseSslConfig => {
+    const explicitSsl =
+        process.env.DB_SSL
+        || process.env.DATABASE_SSL
+        || (isRemoteDb ? process.env.REMOTE_DB_SSL || process.env.REMOTE_DATABASE_SSL : '');
+    const sslMode = connectionStringSslMode(connectionString);
+
+    if (isDisabledEnvFlag(explicitSsl) || sslMode === 'disable') {
+        return false;
+    }
+
+    if (isEnabledEnvFlag(explicitSsl) || ['require', 'verify-ca', 'verify-full'].includes(sslMode)) {
+        return {
+            rejectUnauthorized: sslMode === 'verify-ca' || sslMode === 'verify-full',
+        };
+    }
+
+    if (!isRemoteDb) {
+        return false;
+    }
+
+    if (isTailscaleHost(parseConnectionHost(connectionString))) {
+        return false;
+    }
+
+    // For non-Tailscale remote databases, prefer encrypted PostgreSQL transport by default.
+    return { rejectUnauthorized: false };
+};
+
+const testDatabaseConnection = async (connectionString: string, isRemoteDb: boolean = true): Promise<boolean> => {
     let testPool: Pool | null = null;
     let client: PoolClient | null = null;
     try {
-        testPool = new Pool({ connectionString, connectionTimeoutMillis: 5000 });
+        testPool = new Pool({
+            connectionString,
+            connectionTimeoutMillis: 5000,
+            ssl: getDatabaseSslConfig(connectionString, isRemoteDb),
+        });
         client = await testPool.connect();
         await client.query('SELECT 1');
         return true;
@@ -32,6 +110,123 @@ const testDatabaseConnection = async (connectionString: string): Promise<boolean
             await testPool.end().catch(() => undefined);
         }
     }
+};
+
+const parseAddressHost = (value?: string | null): string | null => {
+    if (!value) return null;
+
+    try {
+        return new URL(value).hostname || null;
+    } catch {
+        const normalized = String(value).trim();
+        if (!normalized) return null;
+
+        const withoutPath = normalized.split('/')[0];
+        const host = withoutPath.split(':')[0];
+        return host || null;
+    }
+};
+
+const buildPostgresConnectionString = ({
+    host,
+    port,
+    database,
+    user,
+    password,
+}: {
+    host: string;
+    port: string;
+    database: string;
+    user: string;
+    password: string;
+}): string => {
+    return `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${encodeURIComponent(database)}`;
+};
+
+export const getLocalDatabaseConnectionString = (): string => {
+    return process.env.LOCAL_DATABASE_URL || process.env.DATABASE_URL || '';
+};
+
+export const getRemoteDatabaseConnectionString = (): string => {
+    const explicitRemoteUrl =
+        process.env.REMOTE_DATABASE_URL
+        || process.env.DATABASE_URL_REMOTE
+        || process.env.WINDOWS_DATABASE_URL
+        || '';
+
+    if (explicitRemoteUrl) {
+        return explicitRemoteUrl;
+    }
+
+    const localUrl = getLocalDatabaseConnectionString();
+    const legacyDatabaseUrl = process.env.DATABASE_URL || '';
+    if (legacyDatabaseUrl && legacyDatabaseUrl !== localUrl) {
+        return legacyDatabaseUrl;
+    }
+
+    const remoteHost =
+        process.env.REMOTE_DB_HOST
+        || process.env.REMOTE_DATABASE_HOST
+        || process.env.WINDOWS_DB_HOST
+        || process.env.TAILSCALE_WINDOWS_IP
+        || parseAddressHost(process.env.SYMMETRIC_REGISTRATION_URL)
+        || parseAddressHost(process.env.HEALTH_TARGET_ADDRESS)
+        || '';
+
+    if (!remoteHost) {
+        return '';
+    }
+
+    const remotePort =
+        process.env.REMOTE_DB_PORT
+        || process.env.REMOTE_DATABASE_PORT
+        || process.env.WINDOWS_DB_PORT
+        || '5432';
+
+    const remoteDatabase =
+        process.env.REMOTE_DB_NAME
+        || process.env.REMOTE_DATABASE_NAME
+        || process.env.WINDOWS_DB_NAME
+        || process.env.DB_NAME
+        || 'Segmentica';
+
+    const remoteUser =
+        process.env.REMOTE_DB_USER
+        || process.env.REMOTE_DATABASE_USER
+        || process.env.WINDOWS_DB_USER
+        || process.env.DB_USER
+        || 'postgres';
+
+    const remotePassword =
+        process.env.REMOTE_DB_PASSWORD
+        || process.env.REMOTE_DATABASE_PASSWORD
+        || process.env.WINDOWS_DB_PASSWORD
+        || process.env.DB_PASSWORD
+        || 'postgres';
+
+    return buildPostgresConnectionString({
+        host: remoteHost,
+        port: remotePort,
+        database: remoteDatabase,
+        user: remoteUser,
+        password: remotePassword,
+    });
+};
+
+export const hasRemoteDatabaseConfig = (): boolean => {
+    return Boolean(getRemoteDatabaseConnectionString());
+};
+
+export const getRemoteDatabaseHost = (): string | null => {
+    return parseAddressHost(getRemoteDatabaseConnectionString())
+        || parseAddressHost(process.env.SYMMETRIC_REGISTRATION_URL)
+        || parseAddressHost(process.env.HEALTH_TARGET_ADDRESS);
+};
+
+export const getEffectiveDbMode = (): DbMode => {
+    return dbMode === 'remote' && remoteAvailable && hasRemoteDatabaseConfig()
+        ? 'remote'
+        : 'local';
 };
 
 type MutatingOpInfo = {
@@ -121,19 +316,31 @@ const stopConnectionCheck = () => {
     globalForDb.__segmenticaDbCheckInterval = null;
 };
 
-const startConnectionCheck = (remoteUrl: string, checkIntervalMs: number = 10000) => {
+export const refreshRemoteAvailability = async (): Promise<boolean> => {
+    const remoteUrl = getRemoteDatabaseConnectionString();
+    const nextRemoteAvailable = remoteUrl ? await testDatabaseConnection(remoteUrl) : false;
+    remoteAvailable = nextRemoteAvailable;
+
+    const shouldUseRemote = getEffectiveDbMode() === 'remote';
+    if (shouldUseRemote !== isRemote && (pool || poolPromise)) {
+        await resetPool();
+    }
+
+    return nextRemoteAvailable;
+};
+
+const startConnectionCheck = (checkIntervalMs: number = 15000) => {
     stopConnectionCheck();
 
     const checkConnection = async () => {
-        const isConnected = await testDatabaseConnection(remoteUrl);
-        remoteAvailable = isConnected;
-        if (!remoteAvailable && isRemote) {
-            isRemote = false;
+        try {
+            await refreshRemoteAvailability();
+        } catch (error) {
+            console.error('Error auto-checking remote database:', error);
         }
-        void isConnected;
     };
 
-    checkConnection();
+    void checkConnection();
 
     checkInterval = setInterval(checkConnection, checkIntervalMs);
     globalForDb.__segmenticaDbCheckInterval = checkInterval;
@@ -144,16 +351,13 @@ const startConnectionCheck = (remoteUrl: string, checkIntervalMs: number = 10000
     }
 };
 
-if (process.env.DATABASE_URL) {
-    startConnectionCheck(process.env.DATABASE_URL);
-}
-
 const getConnectionString = async (): Promise<{ connectionString: string; isRemote: boolean }> => {
     try {
-        if (dbMode === 'remote' && process.env.DATABASE_URL) {
-            if (remoteAvailable) {
-                return { connectionString: process.env.DATABASE_URL, isRemote: true };
-            }
+        if (getEffectiveDbMode() === 'remote') {
+            return {
+                connectionString: getRemoteDatabaseConnectionString(),
+                isRemote: true,
+            };
         }
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -162,7 +366,7 @@ const getConnectionString = async (): Promise<{ connectionString: string; isRemo
 
     isRemote = false;
     return {
-        connectionString: process.env.LOCAL_DATABASE_URL || process.env.DATABASE_URL || '',
+        connectionString: getLocalDatabaseConnectionString(),
         isRemote: false
     };
 };
@@ -178,7 +382,7 @@ const createPool = async () => {
 
         return new Pool({
             connectionString,
-            ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+            ssl: getDatabaseSslConfig(connectionString, isRemoteDb),
         });
     } catch (error) {
         console.error('Error creating database pool:', error);
@@ -426,23 +630,45 @@ const writeSqlAudit = async (
 
 export const setDbMode = async (mode: DbMode) => {
     dbMode = mode;
+
+    if (mode === 'remote') {
+        await refreshRemoteAvailability();
+        return;
+    }
+
     await resetPool();
 };
 
 export const resetPool = async () => {
-    if (pool) {
-        try {
-            await pool.end();
-        } catch (error) {
-            console.error('Error closing existing DB pool:', error);
-        }
+    if (resetPoolPromise) {
+        return resetPoolPromise;
     }
-    pool = null;
-    poolPromise = null;
-    globalForDb.__segmenticaDbPool = null;
-    globalForDb.__segmenticaDbPoolPromise = null;
-    await ensurePool();
+
+    resetPoolPromise = (async () => {
+        if (pool) {
+            try {
+                await pool.end();
+            } catch (error) {
+                console.error('Error closing existing DB pool:', error);
+            }
+        }
+        pool = null;
+        poolPromise = null;
+        pgCryptoEnsurePromise = null;
+        globalForDb.__segmenticaDbPool = null;
+        globalForDb.__segmenticaDbPoolPromise = null;
+        globalForDb.__segmenticaPgCryptoEnsurePromise = null;
+        await ensurePool();
+    })().finally(() => {
+        resetPoolPromise = null;
+        globalForDb.__segmenticaDbResetPromise = null;
+    });
+
+    globalForDb.__segmenticaDbResetPromise = resetPoolPromise;
+    return resetPoolPromise;
 };
+
+startConnectionCheck();
 
 const queryNoAudit = async (text: string, params?: any[]) => {
     const txClient = transactionClientStorage.getStore();
@@ -452,6 +678,21 @@ const queryNoAudit = async (text: string, params?: any[]) => {
 
     const p = await ensurePool();
     return p.query(text, params);
+};
+
+export const ensurePgCrypto = async (): Promise<void> => {
+    if (!pgCryptoEnsurePromise) {
+        pgCryptoEnsurePromise = queryNoAudit('CREATE EXTENSION IF NOT EXISTS pgcrypto')
+            .then(() => undefined)
+            .catch((error) => {
+                pgCryptoEnsurePromise = null;
+                globalForDb.__segmenticaPgCryptoEnsurePromise = null;
+                throw error;
+            });
+        globalForDb.__segmenticaPgCryptoEnsurePromise = pgCryptoEnsurePromise;
+    }
+
+    return pgCryptoEnsurePromise;
 };
 
 export const getDbClient = async (): Promise<PoolClient> => {

@@ -1,4 +1,4 @@
-import type { ShipmentStatusTone } from "@/types/pages/shipments";
+import { getShipmentStatusTone } from "@/lib/entityStatuses";
 
 export const shipmentStatusOptions = [
     { value: "all", label: "Все статусы" },
@@ -25,16 +25,4 @@ export function getShipmentStatusLabel(status: string) {
     }
 }
 
-export function getShipmentStatusTone(status: string): ShipmentStatusTone {
-    switch ((status || "").trim().toLowerCase()) {
-        case "получено":
-        case "доставлено":
-            return "success";
-        case "в пути":
-            return "warning";
-        case "отменено":
-            return "danger";
-        default:
-            return "muted";
-    }
-}
+export { getShipmentStatusTone }

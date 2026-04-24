@@ -3,7 +3,7 @@ import { useRouter } from 'next/router';
 import Link from 'next/link';
 import Image from 'next/image';
 import { withLayout } from '../../layout/Layout';
-import { Htag } from '../../components';
+import { Htag } from '../../components/ui/Htag/Htag';
 import EditOrderModal from '../../components/modals/EditOrderModal/EditOrderModal';
 import { CreatePurchaseModal, OrderPositionSnapshot } from '../../components/modals/CreatePurchaseModal/CreatePurchaseModal';
 import { CreateShipmentModal } from '../../components/modals/CreateShipmentModal/CreateShipmentModal';

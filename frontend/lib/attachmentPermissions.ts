@@ -1,5 +1,10 @@
-import type { AuthUser } from './auth';
-import { hasPermission } from './auth';
+import type { AuthUser } from '../types/auth';
+
+const hasPermission = (user: AuthUser | null | undefined, permissionKey: string): boolean => {
+    if (!user) return false;
+    if (!Array.isArray(user.permissions)) return false;
+    return user.permissions.some((permission) => String(permission) === permissionKey);
+};
 
 export type AttachmentEntityType =
     | 'order'

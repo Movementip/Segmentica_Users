@@ -1,11 +1,11 @@
 .modalContent {
-  width: min(560px, calc(100vw - 32px));
-  max-width: 560px;
+  width: min(560px, 100%);
+  max-width: min(560px, 100%);
 }
 
 .productModalContent {
-  width: min(980px, calc(100vw - 32px));
-  max-width: 980px;
+  width: min(980px, 100%);
+  max-width: min(980px, 100%);
 }
 
 .form,

@@ -7,6 +7,7 @@ import { Checkbox } from '../../ui/checkbox';
 import { Button } from '../../ui/button';
 import { Dialog } from '../../ui/dialog';
 import { Input } from '../../ui/input';
+import { Label } from '../../ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select';
 import { Box, Flex, Text } from '../shared/ModalLayoutPrimitives';
 
@@ -719,7 +720,7 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
                             </Box>
 
                             <Box className={styles.formGroup}>
-                                <Text as="label" size="2" weight="medium">Статус закупки</Text>
+                                <Label className={styles.fieldLabel}>Статус закупки</Label>
                                 <Select value={формаДанные.статус} onValueChange={(value) => setФормаДанные((p) => ({ ...p, статус: String(value) }))}>
                                     <SelectTrigger className={styles.selectTrigger}>
                                         <SelectValue />
@@ -734,7 +735,7 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
                             </Box>
 
                             <Box className={styles.formGroup}>
-                                <Text as="label" size="2" weight="medium">Заявка</Text>
+                                <Label className={styles.fieldLabel}>Заявка</Label>
                                 {lockOrderId ? (
                                     <Input
                                         value={
@@ -761,7 +762,7 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
                             </Box>
 
                             <Box className={styles.formGroup}>
-                                <Text as="label" size="2" weight="medium">Дата поступления (опционально)</Text>
+                                <Label className={styles.fieldLabel}>Дата поступления (опционально)</Label>
                                 <Flex gap="2" wrap="wrap">
                                     <Input
                                         type="date"
@@ -814,7 +815,7 @@ export const CreatePurchaseModal: React.FC<CreatePurchaseModalProps> = ({
                                     </Box>
 
                                     <Box className={styles.formGroup}>
-                                        <Text as="label" size="2" weight="medium">Стоимость доставки (опционально)</Text>
+                                        <Label className={styles.fieldLabel}>Стоимость доставки (опционально)</Label>
                                         <Input
                                             value={формаДанные.стоимость_доставки}
                                             onChange={(e) => setФормаДанные((p) => ({ ...p, стоимость_доставки: e.target.value }))}

@@ -4,7 +4,7 @@ import { Badge, Button, Flex, Text } from '../shared/ModalLayoutPrimitives';
 import { Dialog } from '../../ui/dialog';
 import styles from './OrderWorkflowModal.module.css';
 import { getOrderExecutionModeLabel, getOrderSupplyModeLabel, type OrderExecutionMode } from '../../../lib/orderModes';
-import type { OrderWorkflowPositionSummary } from '../../../lib/orderWorkflow';
+import type { OrderWorkflowPositionSummary } from '../../../types/orderWorkflow';
 
 export interface OrderWorkflowModalSummary {
     orderId: number;

@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { query } from '../../../lib/db';
+import { ensurePgCrypto, query } from '../../../lib/db';
 import { setSessionCookie } from '../../../lib/auth';
 import { enterRequestContext } from '../../../lib/requestContext';
 
@@ -45,6 +45,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (userRow.is_active === false) {
             return res.status(403).json({ error: 'Пользователь отключен' });
         }
+
+        await ensurePgCrypto();
 
         const verifyRes = await query(
             `SELECT (password_hash = crypt($1, password_hash)) AS ok

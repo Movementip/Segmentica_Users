@@ -22,6 +22,7 @@ import {
 } from "@/components/EntityDataTable/EntityDataTable"
 import { EntityStatsPanel } from "@/components/EntityStatsPanel/EntityStatsPanel"
 import { EntityStatusBadge } from "@/components/EntityStatusBadge/EntityStatusBadge"
+import { SupplierTypeBadge } from "@/components/suppliers/SupplierTypeBadge/SupplierTypeBadge"
 import { AddProductToSupplierModal } from "@/components/modals/AddProductToSupplierModal/AddProductToSupplierModal"
 import { CreatePurchaseModal } from "@/components/modals/CreatePurchaseModal/CreatePurchaseModal"
 import DeleteConfirmation from "@/components/modals/DeleteConfirmation/DeleteConfirmation"
@@ -54,10 +55,10 @@ import {
 } from "@/components/ui/table"
 import { useAuth } from "@/hooks/use-auth"
 import { usePageTitle } from "@/hooks/use-page-title"
+import { getPurchaseStatusTone } from "@/lib/entityStatuses"
 import { withLayout } from "@/layout"
 import {
   getSupplierContragentTypeLabel,
-  getSupplierContragentTypeTheme,
   normalizeSupplierContragentType,
   type SupplierBankAccount,
   type SupplierContragent,
@@ -112,20 +113,6 @@ function InfoItem({
 function formatTextValue(value?: string | null) {
   const normalized = typeof value === "string" ? value.trim() : ""
   return normalized || "Не указан"
-}
-
-function getSupplierPurchaseStatusTone(status: string) {
-  switch ((status || "").trim().toLowerCase()) {
-    case "получено":
-      return "success" as const
-    case "заказано":
-    case "в пути":
-      return "warning" as const
-    case "отменено":
-      return "danger" as const
-    default:
-      return "muted" as const
-  }
 }
 
 function SupplierDetailPage(): JSX.Element {
@@ -555,7 +542,6 @@ function SupplierDetailPage(): JSX.Element {
 
   const normalizedSupplierType = normalizeSupplierContragentType(supplier.тип)
   const supplierTypeLabel = getSupplierContragentTypeLabel(supplier.тип)
-  const supplierTypeTheme = getSupplierContragentTypeTheme(supplier.тип)
   const supplierIdentity = (() => {
     if (normalizedSupplierType === "Организация") {
       return formatTextValue(
@@ -748,13 +734,7 @@ function SupplierDetailPage(): JSX.Element {
           <div className={styles.headerLeft}>
             <div className={styles.titleRow}>
               <h1 className={styles.title}>{supplier.название}</h1>
-              <Badge
-                variant="secondary"
-                className={styles.typeBadge}
-                data-theme={supplierTypeTheme}
-              >
-                {supplierTypeLabel}
-              </Badge>
+              <SupplierTypeBadge value={supplier.тип} />
             </div>
             <p className={styles.subtitle}>Карточка поставщика, ассортимент и история закупок</p>
           </div>
@@ -1301,7 +1281,7 @@ function SupplierDetailPage(): JSX.Element {
                         <TableCell className={styles.tableCell}>
                           <EntityStatusBadge
                             value={purchase.статус}
-                            tone={getSupplierPurchaseStatusTone(purchase.статус)}
+                            tone={getPurchaseStatusTone(purchase.статус)}
                             compact
                           />
                         </TableCell>

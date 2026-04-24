@@ -29,22 +29,33 @@ export const getInitialTheme = (storageKey: string, fallbackTheme: Theme): Theme
     return readStoredTheme(storageKey) ?? fallbackTheme;
 };
 
+const disableDocumentTransitions = (): (() => void) => {
+    const styleNode = document.createElement('style');
+    styleNode.appendChild(
+        document.createTextNode(
+            '*,*::before,*::after{-webkit-transition:none!important;transition:none!important;-webkit-animation:none!important;animation:none!important}'
+        )
+    );
+    document.head.appendChild(styleNode);
+
+    void window.getComputedStyle(document.body).opacity;
+
+    return () => {
+        void window.getComputedStyle(document.body).opacity;
+        window.requestAnimationFrame(() => {
+            window.requestAnimationFrame(() => {
+                styleNode.remove();
+            });
+        });
+    };
+};
+
 export const applyThemeToDocument = (theme: Theme, disableTransitionOnChange: boolean): void => {
     if (typeof document === 'undefined') return;
 
     const root = document.documentElement;
     const body = document.body;
-    let styleNode: HTMLStyleElement | null = null;
-
-    if (disableTransitionOnChange) {
-        styleNode = document.createElement('style');
-        styleNode.appendChild(
-            document.createTextNode(
-                '*,*::before,*::after{transition-duration:0s;transition-delay:0s;animation-duration:0s;animation-delay:0s}'
-            )
-        );
-        document.head.appendChild(styleNode);
-    }
+    const restoreTransitions = disableTransitionOnChange ? disableDocumentTransitions() : null;
 
     const apply = (target: HTMLElement | null) => {
         if (!target) return;
@@ -57,11 +68,7 @@ export const applyThemeToDocument = (theme: Theme, disableTransitionOnChange: bo
     apply(root);
     apply(body);
 
-    if (styleNode) {
-        window.setTimeout(() => {
-            styleNode?.remove();
-        }, 0);
-    }
+    restoreTransitions?.();
 };
 
 export const createThemeInitScript = (

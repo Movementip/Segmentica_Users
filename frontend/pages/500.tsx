@@ -1,5 +1,5 @@
 import React from 'react';
-import { Htag } from '../components';
+import { Htag } from '../components/ui/Htag/Htag';
 import { withLayout } from '../layout/Layout';
 
 export function Error500(): JSX.Element {

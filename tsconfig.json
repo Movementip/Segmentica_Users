@@ -1,11 +1,6 @@
 {
   "compilerOptions": {
     "target": "es2018",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ],
     "allowJs": false,
     "noImplicitAny": false,
     "skipLibCheck": true,
@@ -16,25 +11,9 @@
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "node",
-    "baseUrl": ".",
-    "paths": {
-      "@/*": [
-        "frontend/*"
-      ]
-    },
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "react-jsx",
     "incremental": true
   },
-  "include": [
-    "next-env-custom.d.ts",
-    "images.d.ts",
-    "**/*.d.ts",
-    "**/*.ts",
-    "**/*.tsx"
-  ],
-  "exclude": [
-    "node_modules"
-  ]
+  "files": []
 }

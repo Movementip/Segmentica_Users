@@ -13,6 +13,7 @@ import { PageTitleProvider } from '../context/PageTitleContext';
 import { AuthProvider } from '../context/AuthContext';
 import { useAuth } from '../hooks/use-auth';
 import { usePageTitle } from '../hooks/use-page-title';
+import { ViewportGuard } from '../components/ViewportGuard/ViewportGuard';
 
 const themeInitScript = createThemeInitScript(THEME_STORAGE_KEY);
 
@@ -35,26 +36,28 @@ function MyApp({ Component, pageProps }: AppProps) {
             <Head>
                 <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
             </Head>
-            <ThemeProvider
-                attribute="class"
-                defaultTheme="light"
-                enableSystem={false}
-                disableTransitionOnChange
-                storageKey={THEME_STORAGE_KEY}
-            >
-                <AuthProvider skipInitialRefresh={isLoginPage}>
-                    <ThemedAppShell>
-                        <SidebarProvider>
-                            <PageTitleProvider>
-                                <DocumentTitle />
-                                <ProtectedLayoutGate isLoginPage={isLoginPage}>
-                                    <Component {...pageProps} />
-                                </ProtectedLayoutGate>
-                            </PageTitleProvider>
-                        </SidebarProvider>
-                    </ThemedAppShell>
-                </AuthProvider>
-            </ThemeProvider>
+            <ViewportGuard>
+                <ThemeProvider
+                    attribute="class"
+                    defaultTheme="light"
+                    enableSystem={false}
+                    disableTransitionOnChange
+                    storageKey={THEME_STORAGE_KEY}
+                >
+                    <AuthProvider skipInitialRefresh={isLoginPage}>
+                        <ThemedAppShell>
+                            <SidebarProvider>
+                                <PageTitleProvider>
+                                    <DocumentTitle />
+                                    <ProtectedLayoutGate isLoginPage={isLoginPage}>
+                                        <Component {...pageProps} />
+                                    </ProtectedLayoutGate>
+                                </PageTitleProvider>
+                            </SidebarProvider>
+                        </ThemedAppShell>
+                    </AuthProvider>
+                </ThemeProvider>
+            </ViewportGuard>
         </>
     );
 }

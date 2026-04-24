@@ -157,48 +157,89 @@
   gap: 8px;
 }
 
+.dbStatusBlock {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dbButtonTitle {
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.dbButtonValue {
+  color: var(--chrome-foreground);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
 .dbStatus {
   display: flex;
   align-items: center;
-  margin-left: 8px;
+  margin-left: 6px;
 }
 
 .statusIndicator {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
   padding: 4px 8px;
-  border-radius: 16px;
-  font-size: 13px;
-  font-weight: 500;
-  transition: all 0.2s ease;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  white-space: nowrap;
 }
 
 .statusDot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 
 .statusIndicator.online {
-  background-color: rgba(46, 204, 113, 0.1);
-  color: #2ecc71;
+  border-color: color-mix(in oklch, oklch(0.55 0.13 145) 34%, transparent);
+  background: color-mix(in oklch, oklch(0.55 0.13 145) 12%, transparent);
+  color: color-mix(in oklch, oklch(0.55 0.13 145) 88%, var(--foreground));
 }
 
 .statusIndicator.offline {
-  background-color: rgba(241, 196, 15, 0.1);
-  color: #f1c40f;
+  border-color: color-mix(in oklch, oklch(0.58 0.2 28) 34%, transparent);
+  background: color-mix(in oklch, oklch(0.58 0.2 28) 12%, transparent);
+  color: color-mix(in oklch, oklch(0.62 0.2 28) 88%, var(--foreground));
+}
+
+.statusIndicator.warning {
+  border-color: color-mix(in oklch, oklch(0.64 0.15 70) 34%, transparent);
+  background: color-mix(in oklch, oklch(0.64 0.15 70) 12%, transparent);
+  color: color-mix(in oklch, oklch(0.7 0.12 70) 88%, var(--foreground));
 }
 
 .statusIndicator.online .statusDot {
-  background-color: #2ecc71;
-  box-shadow: 0 0 0 2px rgba(46, 204, 113, 0.2);
+  background: oklch(0.55 0.13 145);
+  box-shadow: 0 0 0 2px color-mix(in oklch, oklch(0.55 0.13 145) 22%, transparent);
 }
 
 .statusIndicator.offline .statusDot {
-  background-color: #f1c40f;
-  box-shadow: 0 0 0 2px rgba(241, 196, 15, 0.2);
+  background: oklch(0.58 0.2 28);
+  box-shadow: 0 0 0 2px color-mix(in oklch, oklch(0.58 0.2 28) 22%, transparent);
+}
+
+.statusIndicator.warning .statusDot {
+  background: oklch(0.64 0.15 70);
+  box-shadow: 0 0 0 2px color-mix(in oklch, oklch(0.64 0.15 70) 22%, transparent);
 }
 
 .status {
@@ -261,11 +302,11 @@
   margin: 0;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   cursor: pointer;
   color: inherit;
   height: 100%;
-  padding: 0 10px;
+  padding: 0 12px 0 10px;
 }
 
 .dbButton:disabled {
@@ -274,11 +315,93 @@
 }
 
 .dbIcon {
-  color: var(--foreground);
-  font-size: 16px;
   display: flex;
   align-items: center;
-  min-width: 24px;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--input);
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--background) 70%, transparent);
+  color: var(--chrome-foreground);
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.dbMenuContent {
+  width: 340px;
+  padding: 0;
+}
+
+.dbMenuCard {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px;
+}
+
+.dbMenuHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.dbMenuTitle {
+  color: var(--popover-foreground);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.dbMenuSubtitle {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.dbMenuRows {
+  display: grid;
+  gap: 10px;
+}
+
+.dbMenuRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.dbMenuLabel {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.dbMenuValue,
+.dbMenuValueStatus {
+  color: var(--popover-foreground);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: right;
+}
+
+.dbMenuValueStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dbMenuMeta {
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.dbMenuAction {
+  width: 100%;
 }
 
 .profile {
@@ -308,9 +431,9 @@
 }
 
 .profileMenuItem {
-  min-height: 44px;
+  min-height: 38px;
   border-radius: var(--radius-xl);
-  padding: 0 14px;
+  padding: 0 12px;
   color: var(--popover-foreground);
   font-size: 14px;
   font-weight: 500;

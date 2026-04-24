@@ -6,6 +6,17 @@ ENGINE_NAME="${SYMMETRIC_ENGINE_NAME:-node-mac}"
 ENGINE_FILE="${SYM_HOME}/engines/${ENGINE_NAME}.properties"
 SERVER_FILE="${SYM_HOME}/conf/symmetric-server.properties"
 
+discover_tailscale_ip() {
+  if ! command -v ip >/dev/null 2>&1; then
+    return 1
+  fi
+
+  ip -4 -o addr show dev tailscale0 2>/dev/null \
+    | awk '{print $4}' \
+    | cut -d/ -f1 \
+    | head -n 1
+}
+
 set_prop() {
   file="$1"
   key="$2"
@@ -52,17 +63,33 @@ if [ -n "$db_password" ]; then
   set_prop "$ENGINE_FILE" "db.password" "$db_password"
 fi
 
+public_base_url="${SYMMETRIC_PUBLIC_URL:-}"
+if [ -z "$public_base_url" ]; then
+  public_host="${TAILSCALE_PUBLIC_HOST:-${TAILSCALE_MAC_IP:-}}"
+  if [ -z "$public_host" ]; then
+    public_host="$(discover_tailscale_ip || true)"
+  fi
+  if [ -n "$public_host" ]; then
+    public_base_url="http://${public_host}:${http_port}"
+  fi
+fi
+
 sync_url="${SYMMETRIC_SYNC_URL:-}"
-if [ -z "$sync_url" ] && [ -n "${SYMMETRIC_PUBLIC_URL:-}" ]; then
-  sync_url="${SYMMETRIC_PUBLIC_URL%/}/sync/${ENGINE_NAME}"
+if [ -z "$sync_url" ] && [ -n "$public_base_url" ]; then
+  sync_url="${public_base_url%/}/sync/${ENGINE_NAME}"
 fi
 
 if [ -n "$sync_url" ]; then
   set_prop "$ENGINE_FILE" "sync.url" "$sync_url"
 fi
 
-if [ -n "${SYMMETRIC_REGISTRATION_URL:-}" ]; then
-  set_prop "$ENGINE_FILE" "registration.url" "$SYMMETRIC_REGISTRATION_URL"
+registration_url="${SYMMETRIC_REGISTRATION_URL:-}"
+if [ -z "$registration_url" ] && [ -n "${TAILSCALE_WINDOWS_IP:-}" ]; then
+  registration_url="http://${TAILSCALE_WINDOWS_IP}:31415/sync/node-win"
+fi
+
+if [ -n "$registration_url" ]; then
+  set_prop "$ENGINE_FILE" "registration.url" "$registration_url"
 fi
 
 echo "Starting SymmetricDS engine '${ENGINE_NAME}' on HTTP port ${http_port}"

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { getEntityStatusAppearance } from '@/lib/entityStatuses';
 
 interface ChangeStatusModalProps {
   isOpen: boolean;
@@ -21,10 +22,10 @@ export const ChangeStatusModal: React.FC<ChangeStatusModalProps> = ({
   const [дата_поступления, setДата_поступления] = useState('');
 
   const statusOptions = [
-    { value: 'заказано', label: 'Заказано', color: '#2196f3', icon: '📋' },
-    { value: 'в пути', label: 'В пути', color: '#ff9800', icon: '🚚' },
-    { value: 'получено', label: 'Получено', color: '#4caf50', icon: '✅' },
-    { value: 'отменено', label: 'Отменено', color: '#f44336', icon: '❌' }
+    { value: 'заказано', label: 'Заказано', icon: '📋' },
+    { value: 'в пути', label: 'В пути', icon: '🚚' },
+    { value: 'получено', label: 'Получено', icon: '✅' },
+    { value: 'отменено', label: 'Отменено', icon: '❌' }
   ];
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -62,7 +63,12 @@ export const ChangeStatusModal: React.FC<ChangeStatusModalProps> = ({
   };
 
   const getStatusInfo = (status: string) => {
-    return statusOptions.find(opt => opt.value === status) || statusOptions[0];
+    const option = statusOptions.find(opt => opt.value === status) || statusOptions[0];
+    const appearance = getEntityStatusAppearance(option.value);
+    return {
+      ...option,
+      color: appearance?.light || '#9e9e9e',
+    };
   };
 
   if (!isOpen) return null;
@@ -135,29 +141,33 @@ export const ChangeStatusModal: React.FC<ChangeStatusModalProps> = ({
             </label>
             
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', marginBottom: '12px' }}>
-              {statusOptions.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setНовый_статус(option.value)}
-                  style={{
-                    padding: '12px',
-                    backgroundColor: новый_статус === option.value ? option.color : '#f0f0f0',
-                    color: новый_статус === option.value ? 'white' : '#333',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    fontWeight: '600',
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  <span>{option.icon}</span>
-                  {option.label}
-                </button>
-              ))}
+              {statusOptions.map((option) => {
+                const optionInfo = getStatusInfo(option.value);
+
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setНовый_статус(option.value)}
+                    style={{
+                      padding: '12px',
+                      backgroundColor: новый_статус === option.value ? optionInfo.color : '#f0f0f0',
+                      color: новый_статус === option.value ? 'white' : '#333',
+                      border: 'none',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      fontWeight: '600',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    <span>{option.icon}</span>
+                    {option.label}
+                  </button>
+                );
+              })}
             </div>
 
             <div style={{

@@ -2,7 +2,10 @@ FROM eclipse-temurin:21-jre-jammy
 
 WORKDIR /opt/symmetricds
 
-RUN groupadd --system symmetricds \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends iproute2 \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd --system symmetricds \
     && useradd --system --gid symmetricds --home-dir /opt/symmetricds symmetricds
 
 COPY server/ /opt/symmetricds/

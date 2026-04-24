@@ -1,0 +1,64 @@
+.root {
+  position: relative;
+  min-height: 100vh;
+}
+
+.content {
+  min-height: 100vh;
+  transition: filter 0.2s ease, opacity 0.2s ease;
+}
+
+.contentBlocked {
+  filter: blur(10px);
+  opacity: 0.45;
+  pointer-events: none;
+  user-select: none;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.08), transparent 36%),
+    rgba(7, 7, 8, 0.58);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.panel {
+  width: min(100%, 420px);
+  border-radius: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(24, 24, 27, 0.88);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.38);
+  padding: 28px 24px;
+  color: #fff;
+  text-align: center;
+}
+
+.title {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.05;
+}
+
+.description {
+  margin: 14px 0 0;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.limits {
+  margin: 18px 0 0;
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+}

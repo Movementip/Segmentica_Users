@@ -57,7 +57,7 @@ function DialogContent({
       data-slot="dialog-content"
       data-scroll-lock-allow="true"
       className={cn(
-        "w-full max-w-lg rounded-2xl border border-border bg-popover p-6 text-popover-foreground shadow-[var(--app-menu-shadow)]",
+        "box-border w-full max-w-lg rounded-2xl border border-border bg-popover p-6 text-popover-foreground shadow-[var(--app-menu-shadow)]",
         className
       )}
       onMouseDown={(event) => {

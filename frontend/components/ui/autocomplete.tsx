@@ -32,7 +32,7 @@ function AutocompletePositioner({
     return (
         <AutocompletePrimitive.Positioner
             sideOffset={sideOffset}
-            className={cn("z-50 w-[var(--anchor-width)]", className)}
+            className={cn("z-[1100] w-[var(--anchor-width)]", className)}
             {...props}
         />
     );

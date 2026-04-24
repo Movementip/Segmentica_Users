@@ -34,11 +34,11 @@ function DropdownMenuContent({
 }) {
     return (
         <DropdownMenuPortal>
-            <MenuPrimitive.Positioner align={align} sideOffset={sideOffset} className="z-50">
+            <MenuPrimitive.Positioner align={align} sideOffset={sideOffset} className="z-[1100]">
                 <MenuPrimitive.Popup
                     data-slot="dropdown-menu-content"
                     className={cn(
-                        "segmentica-overlay z-50 min-w-40 overflow-hidden rounded-xl border p-1 shadow-xl outline-none",
+                        "segmentica-overlay z-[1100] min-w-40 overflow-hidden rounded-xl border p-1 shadow-xl outline-none",
                         matchTriggerWidth && "min-w-(--anchor-width) w-(--anchor-width)",
                         className,
                     )}
@@ -190,11 +190,11 @@ function DropdownMenuSubContent({
 }: React.ComponentProps<typeof MenuPrimitive.Popup> & Pick<React.ComponentProps<typeof MenuPrimitive.Positioner>, "align" | "side" | "sideOffset">) {
     return (
         <MenuPrimitive.Portal>
-            <MenuPrimitive.Positioner sideOffset={sideOffset} className="z-50">
+            <MenuPrimitive.Positioner sideOffset={sideOffset} className="z-[1100]">
                 <MenuPrimitive.Popup
                     data-slot="dropdown-menu-sub-content"
                     className={cn(
-                        "segmentica-overlay z-50 min-w-40 overflow-hidden rounded-xl border p-1 shadow-xl outline-none",
+                        "segmentica-overlay z-[1100] min-w-40 overflow-hidden rounded-xl border p-1 shadow-xl outline-none",
                         className,
                     )}
                     {...props}
