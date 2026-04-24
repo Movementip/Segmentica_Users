@@ -1,70 +1,61 @@
-# Настройка базы данных для Segmentica CRM
+# База данных Segmentica CRM
 
-## 1. Установка зависимостей для PostgreSQL
+Проект рассчитан на локальный PostgreSQL в Docker. Backend по умолчанию работает с локальной базой `db:5432`, а удалённая Windows-БД подключается отдельно через Tailscale.
+
+## Fresh start
+
+При первом запуске нового volume контейнер `segmentica-postgres` автоматически применяет init-файлы:
+
+- `infra/db/init/001-prepare-business-schema.sql` — готовит роль `symuser` и чистую `public`-схему;
+- `infra/db/init/010-load-business-schema.sh` — загружает бизнес-схему из `infra/db/schema/Segmentica-public-business-schema.sql`;
+- `infra/db/init/020-core-extensions.sql` — включает `pgcrypto` для авторизации.
+- `infra/db/init/030-imported-requests.sql` — добавляет таблицу `imported_requests` для заявок, импортированных из Bitrix.
+
+Важно: Docker применяет `/docker-entrypoint-initdb.d` только на пустом volume. Если volume `segmentica-postgres-data` уже создан, эти файлы повторно не выполнятся.
+
+## Основной запуск
 
 ```bash
-npm install pg @types/pg
+npm run docker:up
 ```
 
-## 2. Настройка переменных окружения
+Скрипт сначала собирает frontend локально, затем поднимает compose-стек. Это нужно, потому что production-образ frontend использует `frontend/.next/standalone`.
 
-Создайте файл `.env.local` в корне проекта:
+Если нужен только инфраструктурный слой без пересборки frontend/backend:
 
 ```bash
-cp .env.example .env.local
+npm run docker:infra
 ```
 
-Заполните переменные окружения в `.env.local`:
+## Адреса
 
-```env
-DATABASE_URL="postgresql://username:password@localhost:5432/segmentica_crm"
-NEXTAUTH_SECRET=your-secret-key-here
-NEXTAUTH_URL=http://localhost:3000
+- `postgresql://postgres:postgres@localhost:5439/Segmentica` — доступ с хоста;
+- `postgresql://postgres:postgres@db:5432/Segmentica` — доступ внутри compose;
+- `postgresql://postgres:postgres@<tailscale-ip>:5432/Segmentica` — доступ к базе другой машины через Tailscale-прокси.
+
+## Проверки
+
+Проверить, что база поднялась:
+
+```bash
+docker compose ps db
+docker logs segmentica-postgres
 ```
 
-## 3. Создание базы данных
+Проверить `pgcrypto`:
 
-1. Запустите PostgreSQL
-2. Создайте базу данных:
-
-```sql
-CREATE DATABASE segmentica_crm;
+```bash
+docker exec segmentica-postgres psql -U postgres -d Segmentica -c "select extname from pg_extension where extname = 'pgcrypto';"
 ```
 
-3. Выполните SQL скрипт для создания всех таблиц (используйте предоставленный SQL скрипт)
+Проверить наличие бизнес-таблиц:
 
-## 4. Структура API
+```bash
+docker exec segmentica-postgres psql -U postgres -d Segmentica -c "\dt"
+```
 
-API эндпоинты созданы в папке `pages/api/`:
+## Существующий volume
 
-- `/api/orders` - управление заявками
-- `/api/warehouse` - управление складом
-- `/api/suppliers` - управление поставщиками
+Если база уже создана, init-скрипты не перезаписывают данные. Для обновления существующей базы нужно применять миграции/SQL вручную или делать восстановление из backup осознанно.
 
-## 5. Подключение к базе данных
-
-Файл `lib/db.ts` содержит конфигурацию подключения к PostgreSQL.
-
-После установки пакета `pg` ошибки TypeScript исчезнут.
-
-## 6. Основные таблицы в базе данных
-
-- **Заявки** - заказы клиентов
-- **Склад** - остатки товаров
-- **Поставщики** - информация о поставщиках
-- **Товары** - каталог товаров
-- **Клиенты** - база клиентов
-- **Сотрудники** - персонал компании
-- **Финансы_компании** - финансовая отчетность
-- **Транспортные_компании** - логистика
-- И другие связанные таблицы
-
-## 7. Структура страниц
-
-- `/` - Дашборд с общей статистикой
-- `/orders` - Управление заявками
-- `/warehouse` - Управление складом
-- `/suppliers` - Управление поставщиками
-- `/logistics` - Транспортные компании
-- `/archive` - Архив и отчеты
-- `/settings` - Настройки системы
+Не удаляй volume `segmentica-postgres-data`, если нужно сохранить локальные данные.

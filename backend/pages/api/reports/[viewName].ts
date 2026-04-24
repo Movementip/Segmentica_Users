@@ -10,6 +10,15 @@ type ErrorResponse = {
 
 type ReportData = Record<string, any>;
 
+const isMissingViewError = (error: unknown): boolean => {
+    return Boolean(
+        error
+        && typeof error === 'object'
+        && 'code' in error
+        && (error as { code?: string }).code === '42P01'
+    );
+};
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse<{ data?: any[]; } | ErrorResponse>) {
     const { viewName } = req.query;
 
@@ -33,6 +42,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         const result = await query(`SELECT * FROM "${viewName}"`);
         res.status(200).json({ data: result.rows });
     } catch (error) {
+        if (isMissingViewError(error)) {
+            console.warn(`Report view "${viewName}" is not available in the active database`);
+            return res.status(200).json({ data: [] });
+        }
+
         console.error('Ошибка при получении данных:', error);
         const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка';
         res.status(500).json({ 

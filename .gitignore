@@ -5,6 +5,8 @@ node_modules/
 .next/
 out/
 build/
+tsconfig.tsbuildinfo
+**/tsconfig.tsbuildinfo
 
 # Local env files
 .env*

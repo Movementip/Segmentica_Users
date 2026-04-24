@@ -10,6 +10,7 @@
         "build": "npm run build:backend && npm run build:frontend && npm run clean:next-cache",
         "build:backend": "npm --prefix backend run build",
         "build:frontend": "npm --prefix frontend run build",
+        "build:frontend:docker": "npm --prefix frontend run build -- --webpack",
         "start": "npm run start:frontend",
         "start:backend": "npm --prefix backend run start",
         "start:frontend": "npm --prefix frontend run start",
@@ -20,8 +21,9 @@
         "clean:project": "npm run clean:next && npm run docker:prune",
         "docker:df": "docker system df -v",
         "docker:prune": "docker image prune -f && docker builder prune -f --filter until=24h --keep-storage 1GB",
-        "docker:infra": "docker compose up -d --build --remove-orphans && npm run docker:prune",
-        "docker:app": "npm run docker:infra",
+        "docker:infra": "docker compose up -d --build --remove-orphans db tailscale db-tailscale-proxy libreoffice symmetricds",
+        "docker:up": "npm run build:frontend:docker && docker compose up -d --build --remove-orphans",
+        "docker:app": "npm run docker:up",
         "docker:renderer": "docker compose -f docker-compose.libreoffice.yml up -d --build --remove-orphans && npm run docker:prune"
     }
 }

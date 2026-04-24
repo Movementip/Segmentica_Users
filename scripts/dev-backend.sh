@@ -25,10 +25,5 @@ if [ -x "backend/node_modules/.bin/next" ]; then
     exit $?
 fi
 
-cd backend || exit 1
-
-if [ "$1" = "--inspect" ]; then
-    NODE_OPTIONS='--inspect' ../node_modules/.bin/next dev -p "$BACKEND_PORT"
-else
-    ../node_modules/.bin/next dev -p "$BACKEND_PORT"
-fi
+printf 'backend/node_modules not found. Run: npm --prefix backend install\n' >&2
+exit 1

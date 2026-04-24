@@ -91,8 +91,24 @@ docker exec segmentica-backend node -e "const net=require('net'); const s=net.cr
 ## Команда запуска
 
 ```bash
-docker compose up -d --build
+npm run docker:up
 ```
+
+Сейчас frontend-образ использует локально собранный `frontend/.next/standalone`, поэтому команда сначала выполняет production build frontend на хосте, а затем поднимает Docker Compose. Это экономит память Docker Desktop и всё равно даёт production runtime внутри контейнера.
+
+Если нужно поднять только инфраструктуру без пересборки frontend/backend:
+
+```bash
+npm run docker:infra
+```
+
+## Чистая локальная база
+
+Для нового volume PostgreSQL автоматически загрузит бизнес-схему из `infra/db/schema/Segmentica-public-business-schema.sql` через init-скрипты в `infra/db/init`.
+
+Отдельный init-скрипт `infra/db/init/030-imported-requests.sql` добавляет таблицу `imported_requests`, которую Windows-парсер наполняет заявками из Bitrix. Её репликация закреплена в `infra/symmetricds/configure-imported-requests-replication.sql`.
+
+Важно: init-скрипты Docker PostgreSQL выполняются только один раз, когда volume ещё пустой. Уже существующий `segmentica-postgres-data` не будет перезаписан.
 
 ## Полезная проверка после запуска
 

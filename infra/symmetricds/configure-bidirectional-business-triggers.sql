@@ -11,7 +11,10 @@ with business_tables as (
       and table_name not like 'sym\_%' escape '\'
 ), generated_triggers as (
     select
-        'rep_' || left(md5('public.' || table_name), 24) as trigger_id,
+        case
+            when table_name = 'imported_requests' then 'rep_imported_requests'
+            else 'rep_' || left(md5('public.' || table_name), 24)
+        end as trigger_id,
         table_name
     from business_tables
 )
@@ -27,7 +30,10 @@ with business_tables as (
       and table_name not like 'sym\_%' escape '\'
 ), generated_triggers as (
     select
-        'rep_' || left(md5('public.' || table_name), 24) as trigger_id,
+        case
+            when table_name = 'imported_requests' then 'rep_imported_requests'
+            else 'rep_' || left(md5('public.' || table_name), 24)
+        end as trigger_id,
         table_name
     from business_tables
 )
@@ -43,7 +49,10 @@ with business_tables as (
       and table_name not like 'sym\_%' escape '\'
 ), generated_triggers as (
     select
-        'rep_' || left(md5('public.' || table_name), 24) as trigger_id,
+        case
+            when table_name = 'imported_requests' then 'rep_imported_requests'
+            else 'rep_' || left(md5('public.' || table_name), 24)
+        end as trigger_id,
         table_name
     from business_tables
 )

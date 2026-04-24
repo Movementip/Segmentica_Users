@@ -16,14 +16,24 @@ docker exec segmentica-symmetricds \
   /opt/symmetricds/bin/symadmin sync-triggers --engine node-mac --force
 ```
 
+For the Bitrix import table, there is also an explicit id-stable config:
+
+```sh
+PGPASSWORD=postgres psql -h localhost -p 5439 -U postgres -d Segmentica \
+  -f infra/symmetricds/configure-imported-requests-replication.sql
+
+docker exec segmentica-symmetricds \
+  /opt/symmetricds/bin/symadmin sync-triggers --engine node-mac --force
+```
+
 Expected Mac-side counts:
 
 ```sql
-select count(*) from sym_trigger where source_table_name not like 'sym_%';
+select count(*) from sym_trigger where source_table_name not like 'sym\_%' escape '\';
 select count(*) from sym_trigger_router;
 ```
 
-The expected result is 50 business triggers and 100 trigger-router links.
+Every business table should have one trigger and two trigger-router links.
 
 ## Seed Windows from Mac
 
@@ -34,7 +44,7 @@ Windows SymmetricDS host:
 
 ```sh
 docker compose exec -T symmetricds \
-  /opt/symmetric/bin/symadmin reload-node --engine node-win --reverse mac-node
+  /opt/symmetricds/bin/symadmin reload-node --engine node-win --reverse mac-node
 ```
 
 Then watch both sides:
@@ -46,7 +56,9 @@ docker compose logs -f symmetricds
 On Mac:
 
 ```sh
-docker compose -f docker-compose.libreoffice.yml logs -f symmetricds
+docker compose logs -f symmetricds
+docker compose exec -T symmetricds \
+  /opt/symmetricds/bin/symadmin run-job pull --engine node-mac
 ```
 
 ## Backup files
