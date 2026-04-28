@@ -14,6 +14,7 @@ import { AuthProvider } from '../context/AuthContext';
 import { useAuth } from '../hooks/use-auth';
 import { usePageTitle } from '../hooks/use-page-title';
 import { ViewportGuard } from '../components/ViewportGuard/ViewportGuard';
+import { resolvePageTitle } from '../lib/pageTitles';
 
 const themeInitScript = createThemeInitScript(THEME_STORAGE_KEY);
 
@@ -29,7 +30,9 @@ function DocumentTitle(): JSX.Element {
 }
 
 function MyApp({ Component, pageProps }: AppProps) {
-    const isLoginPage = useRouter().pathname === '/login';
+    const router = useRouter();
+    const isLoginPage = router.pathname === '/login';
+    const initialPageTitle = resolvePageTitle(router.pathname, router.query.id, router.asPath);
 
     return (
         <>
@@ -47,7 +50,7 @@ function MyApp({ Component, pageProps }: AppProps) {
                     <AuthProvider skipInitialRefresh={isLoginPage}>
                         <ThemedAppShell>
                             <SidebarProvider>
-                                <PageTitleProvider>
+                                <PageTitleProvider initialTitle={initialPageTitle}>
                                     <DocumentTitle />
                                     <ProtectedLayoutGate isLoginPage={isLoginPage}>
                                         <Component {...pageProps} />

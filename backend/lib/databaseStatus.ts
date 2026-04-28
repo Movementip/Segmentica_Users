@@ -145,14 +145,24 @@ const readSymmetricSyncStatus = async (): Promise<SymmetricSyncStatus> => {
                 : Promise.resolve({ rows: [{ pending_count: 0, error_count: 0 }] }),
             hasOutgoingError
                 ? pool.query(`
-                    SELECT COUNT(DISTINCT batch_id::text || ':' || node_id)::integer AS error_count
-                    FROM public.sym_outgoing_error
+                    SELECT COUNT(DISTINCT e.batch_id::text || ':' || e.node_id)::integer AS error_count
+                    FROM public.sym_outgoing_error e
+                    JOIN public.sym_outgoing_batch b
+                      ON b.batch_id = e.batch_id
+                     AND b.node_id = e.node_id
+                    WHERE COALESCE(TRIM(b.status), '') = 'ER'
+                       OR COALESCE(b.error_flag, 0) <> 0
                 `)
                 : Promise.resolve({ rows: [{ error_count: 0 }] }),
             hasIncomingError
                 ? pool.query(`
-                    SELECT COUNT(DISTINCT batch_id::text || ':' || node_id)::integer AS error_count
-                    FROM public.sym_incoming_error
+                    SELECT COUNT(DISTINCT e.batch_id::text || ':' || e.node_id)::integer AS error_count
+                    FROM public.sym_incoming_error e
+                    JOIN public.sym_incoming_batch b
+                      ON b.batch_id = e.batch_id
+                     AND b.node_id = e.node_id
+                    WHERE COALESCE(TRIM(b.status), '') = 'ER'
+                       OR COALESCE(b.error_flag, 0) <> 0
                 `)
                 : Promise.resolve({ rows: [{ error_count: 0 }] }),
         ]);

@@ -4,6 +4,8 @@ import { getRequestContext } from './requestContext';
 const globalForDb = globalThis as typeof globalThis & {
     __segmenticaDbPool?: Pool | null;
     __segmenticaDbPoolPromise?: Promise<Pool> | null;
+    __segmenticaLocalDbPool?: Pool | null;
+    __segmenticaLocalDbPoolPromise?: Promise<Pool> | null;
     __segmenticaDbCheckInterval?: NodeJS.Timeout | null;
     __segmenticaDbExitHandlerRegistered?: boolean;
     __segmenticaDbResetPromise?: Promise<void> | null;
@@ -238,24 +240,27 @@ const parseMutatingOpInfo = (sqlText: string): MutatingOpInfo => {
     const sql = String(sqlText || '').replace(/\s+/g, ' ').trim();
     const lower = sql.toLowerCase();
 
-    const pickQuotedOrBare = (reQuoted: RegExp, reBare: RegExp): string | null => {
-        let m = sql.match(reQuoted);
-        if (m?.[1]) return m[1];
-        m = sql.match(reBare);
-        if (m?.[1]) return m[1];
-        return null;
+    const identifier = String.raw`(?:"([^"]+)"|([a-zA-Z_][\w$]*))`;
+    const qualifiedIdentifier = String.raw`(?:${identifier}\s*\.\s*)?${identifier}`;
+
+    const pickTableName = (prefix: string): string | null => {
+        const m = sql.match(new RegExp(`${prefix}\\s+${qualifiedIdentifier}`, 'i'));
+        if (!m) return null;
+
+        // Capture groups are: optional schema quoted/bare, then table quoted/bare.
+        return m[3] || m[4] || null;
     };
 
     if (lower.startsWith('update')) {
-        const tableName = pickQuotedOrBare(/update\s+"([^"]+)"/i, /update\s+([a-zA-Z_][\w$]*)/i);
+        const tableName = pickTableName('update');
         return { op: 'update', tableName };
     }
     if (lower.startsWith('delete')) {
-        const tableName = pickQuotedOrBare(/delete\s+from\s+"([^"]+)"/i, /delete\s+from\s+([a-zA-Z_][\w$]*)/i);
+        const tableName = pickTableName('delete\\s+from');
         return { op: 'delete', tableName };
     }
     if (lower.startsWith('insert')) {
-        const tableName = pickQuotedOrBare(/insert\s+into\s+"([^"]+)"/i, /insert\s+into\s+([a-zA-Z_][\w$]*)/i);
+        const tableName = pickTableName('insert\\s+into');
         return { op: 'insert', tableName };
     }
     return { op: 'other', tableName: null };
@@ -373,6 +378,8 @@ const getConnectionString = async (): Promise<{ connectionString: string; isRemo
 
 let poolPromise: Promise<Pool> | null = globalForDb.__segmenticaDbPoolPromise ?? null;
 let pool: Pool | null = globalForDb.__segmenticaDbPool ?? null;
+let localPoolPromise: Promise<Pool> | null = globalForDb.__segmenticaLocalDbPoolPromise ?? null;
+let localPool: Pool | null = globalForDb.__segmenticaLocalDbPool ?? null;
 const transactionClientStorage = new AsyncLocalStorage<PoolClient>();
 
 const createPool = async () => {
@@ -401,6 +408,27 @@ const ensurePool = async () => {
         globalForDb.__segmenticaDbPoolPromise = poolPromise;
     }
     return poolPromise;
+};
+
+const createLocalPool = async () => {
+    const connectionString = getLocalDatabaseConnectionString();
+    return new Pool({
+        connectionString,
+        ssl: getDatabaseSslConfig(connectionString, false),
+    });
+};
+
+const ensureLocalPool = async () => {
+    if (localPool) return localPool;
+    if (!localPoolPromise) {
+        localPoolPromise = createLocalPool().then((p) => {
+            localPool = p;
+            globalForDb.__segmenticaLocalDbPool = p;
+            return p;
+        });
+        globalForDb.__segmenticaLocalDbPoolPromise = localPoolPromise;
+    }
+    return localPoolPromise;
 };
 
 type AuditColumns = {
@@ -695,6 +723,11 @@ export const ensurePgCrypto = async (): Promise<void> => {
     return pgCryptoEnsurePromise;
 };
 
+export const ensureLocalPgCrypto = async (): Promise<void> => {
+    const p = await ensureLocalPool();
+    await p.query('CREATE EXTENSION IF NOT EXISTS pgcrypto');
+};
+
 export const getDbClient = async (): Promise<PoolClient> => {
     const p = await ensurePool();
     return p.connect();
@@ -779,6 +812,11 @@ const query = async (text: string, params?: any[]) => {
     return result;
 };
 
+const queryLocalNoAudit = async (text: string, params?: any[]) => {
+    const p = await ensureLocalPool();
+    return p.query(text, params);
+};
+
 const getPool = async () => {
     return await ensurePool();
 };
@@ -809,5 +847,5 @@ const withTransaction = async <T>(
     }
 };
 
-export { query, queryNoAudit, getPool, withTransaction };
+export { query, queryNoAudit, queryLocalNoAudit, getPool, withTransaction };
 export default ensurePool;

@@ -10,6 +10,8 @@ tsconfig.tsbuildinfo
 
 # Local env files
 .env*
+!.env.example
+!**/.env.example
 
 # Logs
 npm-debug.log*
@@ -19,6 +21,7 @@ services/symmetricds/server/logs/
 services/symmetricds/server/tmp/
 backups/postgres/*.dump
 backups/postgres/*.sql
+release/dist/
 
 # OS
 .DS_Store

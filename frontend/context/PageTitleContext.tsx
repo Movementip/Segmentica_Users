@@ -12,10 +12,11 @@ export const PageTitleContext = createContext<PageTitleContextType>({
 
 interface PageTitleProviderProps {
     children: React.ReactNode;
+    initialTitle?: string;
 }
 
-export function PageTitleProvider({ children }: PageTitleProviderProps): JSX.Element {
-    const [pageTitle, setPageTitle] = useState('Дашборд');
+export function PageTitleProvider({ children, initialTitle = 'Дашборд' }: PageTitleProviderProps): JSX.Element {
+    const [pageTitle, setPageTitle] = useState(initialTitle);
 
     return (
         <PageTitleContext.Provider value={{ pageTitle, setPageTitle }}>

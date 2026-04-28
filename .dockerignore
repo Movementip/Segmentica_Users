@@ -18,6 +18,7 @@ backend/tsconfig.tsbuildinfo
 frontend/tsconfig.tsbuildinfo
 coverage
 dist
+release/dist
 tmp
 .cache
 .turbo

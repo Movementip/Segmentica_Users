@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { query } from '../../../lib/db';
+import { queryLocalNoAudit } from '../../../lib/db';
 import { clearSessionCookie, getSessionIdFromRequest } from '../../../lib/auth';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -8,7 +8,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const sid = getSessionIdFromRequest(req);
     if (sid) {
         try {
-            await query(`UPDATE public.sessions SET revoked_at = CURRENT_TIMESTAMP WHERE id = $1`, [sid]);
+            await queryLocalNoAudit(`UPDATE public.sessions SET revoked_at = CURRENT_TIMESTAMP WHERE id = $1`, [sid]);
         } catch (e) {
             console.error(e);
         }

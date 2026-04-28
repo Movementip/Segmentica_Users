@@ -1,10 +1,12 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/router';
 import { withLayout } from '../../layout';
 import CreateOrderModal from '../../components/modals/CreateOrderModal/CreateOrderModal';
 import EditOrderModal from '../../components/modals/EditOrderModal/EditOrderModal';
 import { CreatePurchaseModal, type OrderPositionSnapshot } from '../../components/modals/CreatePurchaseModal/CreatePurchaseModal';
 import { CreateShipmentModal } from '../../components/modals/CreateShipmentModal/CreateShipmentModal';
+import { CreateClientModal } from '../../components/modals/CreateClientModal/CreateClientModal';
+import { CreateProductModal } from '../../components/modals/CreateProductModal/CreateProductModal';
 import { OrderWorkflowModal, type OrderWorkflowModalSummary } from '../../components/modals/OrderWorkflowModal/OrderWorkflowModal';
 import DeleteConfirmation from '../../components/modals/DeleteConfirmation/DeleteConfirmation';
 import styles from './Orders.module.css';
@@ -21,8 +23,11 @@ import { OrdersPageHeader } from '../../components/orders/OrdersPageHeader/Order
 import { OrdersPageSkeleton } from '../../components/orders/OrdersPageSkeleton/OrdersPageSkeleton';
 import { OrdersStats } from '../../components/orders/OrdersStats/OrdersStats';
 import { OrdersTable } from '../../components/orders/OrdersTable/OrdersTable';
+import { BitrixRequestsModal, type BitrixImportedRequest } from '../../components/orders/BitrixRequestsModal/BitrixRequestsModal';
 import type { AttachmentSummaryItem, ClientOption, LinkedPurchase, Order } from '../../types/pages/orders';
 import { formatRuCurrency, formatRuDateTime } from '../../utils/formatters';
+import type { ClientContragent } from '../../lib/clientContragents';
+import type { ProductFormState } from '../../components/modals/ProductFormFields/ProductFormFields';
 
 function OrdersPage(): JSX.Element {
     const router = useRouter();
@@ -48,7 +53,16 @@ function OrdersPage(): JSX.Element {
     const [isCreateShipmentOpen, setIsCreateShipmentOpen] = useState(false);
     const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
     const [isWorkflowModalOpen, setIsWorkflowModalOpen] = useState(false);
+    const [isBitrixRequestsOpen, setIsBitrixRequestsOpen] = useState(false);
+    const [isCreateClientOpen, setIsCreateClientOpen] = useState(false);
+    const [isCreateProductOpen, setIsCreateProductOpen] = useState(false);
     const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+    const [selectedImportedRequest, setSelectedImportedRequest] = useState<BitrixImportedRequest | null>(null);
+    const [initialClientFromImport, setInitialClientFromImport] = useState<Partial<ClientContragent> | null>(null);
+    const [initialProductFromImport, setInitialProductFromImport] = useState<Partial<ProductFormState> | null>(null);
+    const [bitrixRequests, setBitrixRequests] = useState<BitrixImportedRequest[]>([]);
+    const [bitrixLoading, setBitrixLoading] = useState(false);
+    const [bitrixError, setBitrixError] = useState<string | null>(null);
     const [operationLoading, setOperationLoading] = useState(false);
     const [workflowLoading, setWorkflowLoading] = useState(false);
     const [workflowError, setWorkflowError] = useState<string | null>(null);
@@ -334,6 +348,10 @@ function OrdersPage(): JSX.Element {
     const canCreatePurchase = Boolean(user?.permissions?.includes('purchases.create'));
     const canCreatePurchaseFromOrders = canCreatePurchaseFromOrdersMenu && canCreatePurchase;
     const canCreateShipment = Boolean(user?.permissions?.includes('shipments.create'));
+    const canCreateClient = Boolean(user?.permissions?.includes('clients.create'));
+    const canCreateProduct = Boolean(user?.permissions?.includes('products.create') && user?.permissions?.includes('warehouse.create'));
+    const canListBitrixRequests = Boolean(user?.permissions?.includes('orders.bitrix_requests.list'));
+    const canProcessBitrixRequests = Boolean(user?.permissions?.includes('orders.bitrix_requests.process'));
 
     const hasRowActions = canView || canEdit || canDelete || canCreatePurchaseFromOrders || canCreateShipment;
 
@@ -356,6 +374,129 @@ function OrdersPage(): JSX.Element {
     };
     const getAssembleLabel = (order: Order) => order.next_assembly_label || 'Собрать заявку';
     const getShipmentLabel = (order: Order) => order.next_shipment_label || 'Создать отгрузку';
+
+    const fetchBitrixRequests = useCallback(async () => {
+        if (!canListBitrixRequests) return;
+        try {
+            setBitrixLoading(true);
+            setBitrixError(null);
+            const response = await fetch('/api/imported-requests?status=open');
+            const data = await response.json().catch(() => []);
+
+            if (!response.ok) {
+                throw new Error((data as any)?.error || 'Ошибка загрузки заявок Битрикс24');
+            }
+
+            setBitrixRequests(Array.isArray(data) ? data : []);
+        } catch (err) {
+            setBitrixError(err instanceof Error ? err.message : 'Ошибка загрузки заявок Битрикс24');
+            setBitrixRequests([]);
+        } finally {
+            setBitrixLoading(false);
+        }
+    }, [canListBitrixRequests]);
+
+    const markBitrixRequestViewed = useCallback(async (request: BitrixImportedRequest) => {
+        if (!canListBitrixRequests || request.viewed_at) return;
+
+        const response = await fetch('/api/imported-requests', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                id: request.id,
+                viewed: true,
+            }),
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error((data as any)?.error || 'Не удалось отметить заявку Битрикс24 просмотренной');
+        }
+
+        setBitrixRequests((current) => current.map((item) => (
+            item.id === request.id ? data as BitrixImportedRequest : item
+        )));
+    }, [canListBitrixRequests]);
+
+    useEffect(() => {
+        if (authLoading || !canListBitrixRequests) return;
+        void fetchBitrixRequests();
+    }, [authLoading, canListBitrixRequests, fetchBitrixRequests]);
+
+    const bitrixNewCount = bitrixRequests.filter((request) => !request.viewed_at && !request.processed_at).length;
+
+    const markBitrixRequestProcessed = async (request: BitrixImportedRequest, notes?: string) => {
+        if (!canProcessBitrixRequests) return;
+
+        const response = await fetch('/api/imported-requests', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                id: request.id,
+                processed: true,
+                notes: notes || 'Обработано из страницы заявок',
+            }),
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+            throw new Error((data as any)?.error || 'Не удалось обновить заявку Битрикс24');
+        }
+
+        setBitrixRequests((current) => current.filter((item) => item.id !== request.id));
+    };
+
+    const buildImportComment = (request: BitrixImportedRequest) => (
+        [
+            `Битрикс24 #${request.id}`,
+            request.source_form_name ? `Форма: ${request.source_form_name}` : null,
+            request.product_name ? `Товар: ${request.product_name}` : null,
+            request.message || null,
+        ].filter(Boolean).join('\n')
+    );
+
+    const openCreateClientFromImport = (request: BitrixImportedRequest) => {
+        const name = request.person_name || request.source_entry_name || '';
+        setSelectedImportedRequest(request);
+        setIsBitrixRequestsOpen(false);
+        setInitialClientFromImport({
+            тип: 'Организация',
+            название: name,
+            краткоеНазвание: name,
+            полноеНазвание: name,
+            телефон: request.phone || '',
+            email: request.email || '',
+            комментарий: buildImportComment(request),
+        });
+        setIsCreateClientOpen(true);
+    };
+
+    const openCreateProductFromImport = (request: BitrixImportedRequest) => {
+        setSelectedImportedRequest(request);
+        setIsBitrixRequestsOpen(false);
+        setInitialProductFromImport({
+            название: request.product_name || '',
+            артикул: `BX-${request.id}`,
+            комментарий: buildImportComment(request),
+        });
+        setIsCreateProductOpen(true);
+    };
+
+    const openCreateOrderFromImport = (request: BitrixImportedRequest) => {
+        setSelectedImportedRequest(request);
+        setIsBitrixRequestsOpen(false);
+        setIsCreateModalOpen(true);
+    };
+
+    const returnToBitrixRequestsModal = () => {
+        setIsCreateModalOpen(false);
+        setIsCreateClientOpen(false);
+        setIsCreateProductOpen(false);
+        setSelectedImportedRequest(null);
+        setInitialClientFromImport(null);
+        setInitialProductFromImport(null);
+        setIsBitrixRequestsOpen(true);
+    };
 
     const openCreatePurchaseForOrder = async (order: Order) => {
         try {
@@ -686,6 +827,18 @@ function OrdersPage(): JSX.Element {
             const result = await response.json();
             console.log('Order created successfully:', result); // Debug log
 
+            if (selectedImportedRequest && canProcessBitrixRequests) {
+                try {
+                    await markBitrixRequestProcessed(
+                        selectedImportedRequest,
+                        `Создана заявка #${Number((result as any)?.id) || ''}`.trim()
+                    );
+                    setSelectedImportedRequest(null);
+                } catch (markError) {
+                    setBitrixError(markError instanceof Error ? markError.message : 'Заявка создана, но импорт не обновлен');
+                }
+            }
+
             await fetchOrders(); // Refresh the list
             setIsCreateModalOpen(false);
         } catch (error) {
@@ -749,6 +902,8 @@ function OrdersPage(): JSX.Element {
         <div className={styles.container}>
             <OrdersPageHeader
                 canCreate={canCreate}
+                canOpenBitrixRequests={canListBitrixRequests}
+                bitrixNewCount={bitrixNewCount}
                 isRefreshing={loading || isFetching || minRefreshSpinActive}
                 refreshKey={refreshClickKey}
                 onRefresh={() => {
@@ -757,6 +912,10 @@ function OrdersPage(): JSX.Element {
                     setRefreshClickKey((k) => k + 1);
                     setMinRefreshSpinActive(true);
                     void fetchOrders();
+                }}
+                onOpenBitrixRequests={() => {
+                    setIsBitrixRequestsOpen(true);
+                    void fetchBitrixRequests();
                 }}
                 onCreate={() => setIsCreateModalOpen(true)}
             />
@@ -849,9 +1008,68 @@ function OrdersPage(): JSX.Element {
             {/* Modal Components */}
             <CreateOrderModal
                 isOpen={isCreateModalOpen}
-                onClose={() => setIsCreateModalOpen(false)}
+                onClose={() => {
+                    setIsCreateModalOpen(false);
+                    setSelectedImportedRequest(null);
+                }}
                 onSubmit={handleCreateOrder}
+                onBack={selectedImportedRequest ? returnToBitrixRequestsModal : undefined}
                 canCreate={canCreate}
+                initialImportedRequest={selectedImportedRequest}
+            />
+
+            <BitrixRequestsModal
+                isOpen={isBitrixRequestsOpen}
+                onClose={() => setIsBitrixRequestsOpen(false)}
+                requests={bitrixRequests}
+                loading={bitrixLoading}
+                error={bitrixError}
+                canCreateClient={canCreateClient}
+                canCreateOrder={canCreate}
+                canCreateProduct={canCreateProduct}
+                canProcess={canProcessBitrixRequests}
+                onRefresh={fetchBitrixRequests}
+                onCreateClient={openCreateClientFromImport}
+                onCreateProduct={openCreateProductFromImport}
+                onCreateOrder={openCreateOrderFromImport}
+                onMarkProcessed={(request) => {
+                    void markBitrixRequestProcessed(request).catch((err) => {
+                        setBitrixError(err instanceof Error ? err.message : 'Не удалось обновить заявку Битрикс24');
+                    });
+                }}
+                onViewRequest={(request) => {
+                    void markBitrixRequestViewed(request).catch((err) => {
+                        setBitrixError(err instanceof Error ? err.message : 'Не удалось отметить заявку Битрикс24 просмотренной');
+                    });
+                }}
+            />
+
+            <CreateClientModal
+                isOpen={isCreateClientOpen}
+                onClose={() => {
+                    setIsCreateClientOpen(false);
+                    setInitialClientFromImport(null);
+                }}
+                onClientCreated={() => {
+                    setIsCreateClientOpen(false);
+                    setInitialClientFromImport(null);
+                }}
+                onBack={selectedImportedRequest ? returnToBitrixRequestsModal : undefined}
+                initialClient={initialClientFromImport}
+            />
+
+            <CreateProductModal
+                isOpen={isCreateProductOpen}
+                onClose={() => {
+                    setIsCreateProductOpen(false);
+                    setInitialProductFromImport(null);
+                }}
+                onProductCreated={() => {
+                    setIsCreateProductOpen(false);
+                    setInitialProductFromImport(null);
+                }}
+                onBack={selectedImportedRequest ? returnToBitrixRequestsModal : undefined}
+                initialProduct={initialProductFromImport}
             />
 
             <EditOrderModal

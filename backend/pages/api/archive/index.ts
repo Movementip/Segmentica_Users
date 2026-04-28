@@ -14,8 +14,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const canShipments = perms.includes('archive.shipments.list');
       const canPayments = perms.includes('archive.payments.list');
       const canFinance = perms.includes('archive.finance.list');
+      const canBitrixRequests = perms.includes('archive.bitrix_requests.list');
 
-      const canAnyArchive = canOrders || canPurchases || canShipments || canPayments || canFinance;
+      const canAnyArchive = canOrders || canPurchases || canShipments || canPayments || canFinance || canBitrixRequests;
       if (!canAnyArchive) {
         return res.status(403).json({ error: 'Forbidden' });
       }
@@ -148,6 +149,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         LIMIT 100
       `);
 
+      const bitrixRequestsResult = canBitrixRequests
+        ? await query(`
+          SELECT *
+          FROM public.imported_requests
+          WHERE processed_at IS NOT NULL
+          ORDER BY processed_at DESC, imported_at DESC
+          LIMIT 100
+        `)
+        : { rows: [] as any[] };
+
       // Get archive statistics
       const statsResult = await query(`
         SELECT 
@@ -156,6 +167,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           (SELECT COUNT(*) FROM "Отгрузки" WHERE "статус" IN ('доставлено', 'получено', 'отменено')) as завершенные_отгрузки,
           (SELECT COUNT(*) FROM "Выплаты") as всего_выплат,
           (SELECT COUNT(*) FROM "Финансы_компании") as финансовых_записей,
+          (SELECT COUNT(*) FROM public.imported_requests WHERE processed_at IS NOT NULL) as заявок_битрикс,
           (
             SELECT SUM(
               COALESCE(order_totals.items_total, 0)
@@ -228,6 +240,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (!canFinance) {
         stats.финансовых_записей = 0;
       }
+      if (!canBitrixRequests) {
+        stats.заявок_битрикс = 0;
+      }
 
       res.status(200).json({
         completedOrders: canOrders ? completedOrdersResult.rows : [],
@@ -235,6 +250,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         completedShipments: canShipments ? completedShipmentsResult.rows : [],
         employeePayments: canPayments ? employeePaymentsResult.rows : [],
         financialRecords: canFinance ? financialRecordsResult.rows : [],
+        bitrixRequests: canBitrixRequests ? bitrixRequestsResult.rows : [],
         statistics: stats
       });
     } catch (error) {

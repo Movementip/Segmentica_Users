@@ -42,6 +42,7 @@ const menuSections = [
         items: [
             { id: 1, name: 'Дашборд', icon: <TbHome size={16} />, route: '/dashboard' },
             { id: 14, name: 'Отчеты', icon: <TbReportAnalytics size={16} />, route: '/reports' },
+            { id: 16, name: 'Формы Битрикс24', icon: <TbClipboardList size={16} />, route: '/bitrix-forms' },
         ],
     },
     {
@@ -100,6 +101,7 @@ const SidebarContent = React.memo(function SidebarContent(): JSX.Element {
         items.filter((item) => {
             if (item.route === '/dashboard') return dashboardAccess.canDashboard;
             if (item.route === '/orders') return can('orders.list');
+            if (item.route === '/bitrix-forms') return can('orders.bitrix_requests.list');
             if (item.route === '/clients') return can('clients.list');
             if (item.route === '/purchases') return can('purchases.list');
             if (item.route === '/shipments') return can('shipments.list');
@@ -126,7 +128,8 @@ const SidebarContent = React.memo(function SidebarContent(): JSX.Element {
                     can('archive.purchases.list') ||
                     can('archive.shipments.list') ||
                     can('archive.payments.list') ||
-                    can('archive.finance.list')
+                    can('archive.finance.list') ||
+                    can('archive.bitrix_requests.list')
                 );
             }
 

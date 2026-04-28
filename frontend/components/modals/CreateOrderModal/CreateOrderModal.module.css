@@ -10,6 +10,16 @@
   margin-top: 16px;
 }
 
+.importNotice {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--muted);
+}
+
 .stack {
   display: flex;
   flex-direction: column;

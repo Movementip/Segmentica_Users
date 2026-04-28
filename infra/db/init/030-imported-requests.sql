@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS public.imported_requests (
     source_updated_at timestamp(6) without time zone,
     imported_at timestamp(6) without time zone DEFAULT now() NOT NULL,
     last_seen_at timestamp(6) without time zone DEFAULT now() NOT NULL,
+    viewed_at timestamp(6) without time zone,
     processed_at timestamp(6) without time zone,
     notes text
 );
@@ -43,6 +44,9 @@ CREATE INDEX IF NOT EXISTS imported_requests_imported_at_idx
 
 CREATE INDEX IF NOT EXISTS imported_requests_processed_at_idx
     ON public.imported_requests USING btree (processed_at);
+
+CREATE INDEX IF NOT EXISTS imported_requests_viewed_at_idx
+    ON public.imported_requests USING btree (viewed_at);
 
 CREATE UNIQUE INDEX IF NOT EXISTS imported_requests_source_entry_uniq
     ON public.imported_requests USING btree (source_system, source_form_id, source_entry_id);

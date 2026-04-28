@@ -25,6 +25,7 @@ type ClientContragentModalProps = {
     error?: string | null;
     isOpen: boolean;
     loading?: boolean;
+    onBack?: () => void;
     onClose: () => void;
     onSubmit: (payload: ClientContragentPayload) => Promise<void> | void;
     submitLabel: string;
@@ -106,6 +107,7 @@ export function ClientContragentModal({
     error,
     isOpen,
     loading = false,
+    onBack,
     onClose,
     onSubmit,
     submitLabel,
@@ -405,8 +407,8 @@ export function ClientContragentModal({
                         <Button type="submit" variant="default" className={styles.primaryButton} disabled={!canSubmit || loading}>
                             {loading ? 'Сохранение...' : submitLabel}
                         </Button>
-                        <Button type="button" variant="outline" className={styles.secondaryButton} onClick={onClose} disabled={loading}>
-                            Отменить
+                        <Button type="button" variant="outline" className={styles.secondaryButton} onClick={onBack || onClose} disabled={loading}>
+                            {onBack ? 'Назад' : 'Отменить'}
                         </Button>
                     </div>
                 </form>

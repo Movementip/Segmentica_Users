@@ -1,0 +1,357 @@
+.container {
+  min-height: 100vh;
+  padding: 81px 24px 32px;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+.contentCard {
+  overflow: visible;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2xl);
+  background: var(--card);
+  color: var(--card-foreground);
+}
+
+.statsPanel {
+  margin: 0;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 20px;
+  border-top: 1px solid var(--border);
+}
+
+.searchField {
+  flex: 1 1 360px;
+  max-width: 680px;
+}
+
+.toolbarActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.formsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 12px;
+  padding: 0 20px 20px;
+}
+
+.formButton {
+  display: flex;
+  min-height: 116px;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--chrome);
+  color: var(--foreground);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background-color 0.16s ease,
+    border-color 0.16s ease;
+}
+
+.formButton:hover,
+.formButton[data-active="true"] {
+  border-color: color-mix(in oklab, var(--foreground) 28%, var(--border));
+  background: var(--chrome-hover);
+}
+
+.formName {
+  font-size: 15px;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.formMeta {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.formCounts {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.countPill {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--muted);
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.countPill[data-tone="open"] {
+  background: color-mix(in oklab, #f59e0b 16%, transparent);
+  color: #d97706;
+}
+
+.countPill[data-tone="processed"] {
+  background: color-mix(in oklab, #16a34a 14%, transparent);
+  color: #16a34a;
+}
+
+.tableHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px;
+  border-top: 1px solid var(--border);
+}
+
+.tableTitle {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.tableSubtitle {
+  margin-top: 3px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.tableSurface {
+  position: relative;
+  z-index: 1;
+}
+
+.table {
+  min-width: 1240px;
+  width: 100%;
+  table-layout: fixed;
+}
+
+.idCol {
+  width: 72px;
+}
+
+.formCol {
+  width: 150px;
+}
+
+.dateCol {
+  width: 142px;
+}
+
+.clientCol {
+  width: 160px;
+}
+
+.contactCol {
+  width: 180px;
+}
+
+.productCol {
+  width: 180px;
+}
+
+.messageCol {
+  width: 300px;
+}
+
+.statusCol {
+  width: 120px;
+}
+
+.actionsCol {
+  width: 310px;
+}
+
+.tableRow {
+  transition: background-color 0.16s ease;
+}
+
+.formCell {
+  width: 150px;
+}
+
+.clientCell {
+  width: 160px;
+}
+
+.contactCell {
+  width: 180px;
+}
+
+.productCell {
+  width: 180px;
+  white-space: normal;
+}
+
+.messageCell {
+  width: 300px;
+  max-width: 300px;
+  white-space: normal;
+}
+
+.singleLineText {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.clampedText {
+  display: -webkit-box;
+  max-width: 100%;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.messagePreview {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.viewTextButton {
+  height: 28px;
+  gap: 6px;
+  padding: 0 8px;
+  color: var(--muted-foreground);
+}
+
+.muted {
+  color: var(--muted-foreground);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.iconButton,
+.actionButton,
+.refreshButton {
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.iconOnlyButton {
+  width: 34px;
+  min-width: 34px;
+  padding: 0;
+}
+
+.textModal {
+  width: min(760px, calc(100vw - 32px));
+  max-width: min(760px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+}
+
+.fullTextMeta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+.fullTextMeta span {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: var(--muted);
+}
+
+.fullTextBox {
+  max-height: min(58vh, 520px);
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--chrome);
+  color: var(--foreground);
+  font-size: 15px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.emptyCell {
+  height: 120px;
+  color: var(--muted-foreground);
+  text-align: center;
+}
+
+.feedbackSurface {
+  display: flex;
+  min-height: 280px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-2xl);
+  background: var(--card);
+  padding: 32px;
+}
+
+.feedbackTitle {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.feedbackText {
+  margin: 0;
+  color: var(--muted-foreground);
+  text-align: center;
+}
+
+@media (max-width: 760px) {
+  .container {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .toolbar,
+  .tableHeader {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .searchField {
+    max-width: none;
+  }
+}

@@ -1,6 +1,6 @@
 import styles from "./ArchiveViewTabs.module.css"
 
-export type ArchiveViewTab = "orders" | "purchases" | "shipments" | "payments" | "finance"
+export type ArchiveViewTab = "orders" | "purchases" | "shipments" | "payments" | "finance" | "bitrix"
 
 type ArchiveViewTabsProps = {
   activeTab: ArchiveViewTab

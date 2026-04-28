@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { query } from './db';
+import { queryLocalNoAudit } from './db';
 import { enterRequestContext, setRequestActor } from './requestContext';
 
 export type AuthEmployee = {
@@ -29,6 +29,31 @@ export const hasPermission = (user: AuthUser | null | undefined, permissionKey: 
 };
 
 export const SESSION_COOKIE_NAME = 'session_id';
+
+const isEnabledEnvFlag = (value?: string | null): boolean => {
+    return ['1', 'true', 'yes', 'on'].includes(String(value || '').trim().toLowerCase());
+};
+
+const isDisabledEnvFlag = (value?: string | null): boolean => {
+    return ['0', 'false', 'no', 'off'].includes(String(value || '').trim().toLowerCase());
+};
+
+const shouldUseSecureSessionCookie = (): boolean => {
+    const explicit = process.env.AUTH_COOKIE_SECURE || process.env.SESSION_COOKIE_SECURE;
+    if (isEnabledEnvFlag(explicit)) return true;
+    if (isDisabledEnvFlag(explicit)) return false;
+
+    const publicUrl = process.env.NEXTAUTH_URL || process.env.PUBLIC_APP_URL || '';
+    if (publicUrl) {
+        try {
+            return new URL(publicUrl).protocol === 'https:';
+        } catch {
+            return false;
+        }
+    }
+
+    return process.env.NODE_ENV === 'production';
+};
 
 export const parseCookies = (cookieHeader?: string): Record<string, string> => {
     const out: Record<string, string> = {};
@@ -62,7 +87,7 @@ export const setSessionCookie = (
         'HttpOnly',
         'SameSite=Lax',
     ];
-    if (process.env.NODE_ENV === 'production') parts.push('Secure');
+    if (shouldUseSecureSessionCookie()) parts.push('Secure');
     if (typeof maxAge === 'number') parts.push(`Max-Age=${maxAge}`);
     if (expiresAt) parts.push(`Expires=${expiresAt.toUTCString()}`);
     res.setHeader('Set-Cookie', parts.join('; '));
@@ -76,7 +101,7 @@ export const clearSessionCookie = (res: NextApiResponse) => {
         'SameSite=Lax',
         'Max-Age=0',
     ];
-    if (process.env.NODE_ENV === 'production') parts.push('Secure');
+    if (shouldUseSecureSessionCookie()) parts.push('Secure');
     res.setHeader('Set-Cookie', parts.join('; '));
 };
 
@@ -87,7 +112,7 @@ export const getSessionIdFromRequest = (req: NextApiRequest): string | null => {
 };
 
 export const getAuthUserBySessionId = async (sessionId: string): Promise<AuthUser | null> => {
-    const res = await query(
+    const res = await queryLocalNoAudit(
         `SELECT
             s.id as session_id,
             s.expires_at,
@@ -105,7 +130,7 @@ export const getAuthUserBySessionId = async (sessionId: string): Promise<AuthUse
         [sessionId]
     );
 
-    const row = res.rows?.[0];
+    const row = res.rows?.[0] as any;
     if (!row) return null;
     if (row.revoked_at) return null;
 
@@ -114,7 +139,7 @@ export const getAuthUserBySessionId = async (sessionId: string): Promise<AuthUse
 
     const userId = Number(row.user_id);
 
-    const rolesRes = await query(
+    const rolesRes = await queryLocalNoAudit(
         `SELECT r.key
          FROM public.user_roles ur
          JOIN public.roles r ON r.id = ur.role_id
@@ -128,7 +153,7 @@ export const getAuthUserBySessionId = async (sessionId: string): Promise<AuthUse
     const permissions = isDirector
         ? (
             (
-                await query(
+                await queryLocalNoAudit(
                     `SELECT p.key
                      FROM public.permissions p
                      ORDER BY p.key ASC`,
@@ -138,7 +163,7 @@ export const getAuthUserBySessionId = async (sessionId: string): Promise<AuthUse
         ).map((p: any) => String(p.key))
         : (
             (
-                await query(
+                await queryLocalNoAudit(
                     `WITH role_perms AS (
                         SELECT p.key
                         FROM public.user_roles ur

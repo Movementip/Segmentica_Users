@@ -1,7 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 
 import { EntityModalShell } from '../../EntityModalShell/EntityModalShell';
-import { ProductFormFields, buildCategoryOptions, Category, createInitialProductFormState, parseDecimal, parseInteger } from '../ProductFormFields/ProductFormFields';
+import { ProductFormFields, buildCategoryOptions, Category, createInitialProductFormState, parseDecimal, parseInteger, type ProductFormState } from '../ProductFormFields/ProductFormFields';
 import { Button } from '../../ui/button';
 import { Dialog } from '../../ui/dialog';
 
@@ -10,10 +10,17 @@ import styles from '../WarehouseMovementModal/WarehouseMovementModal.module.css'
 interface CreateProductModalProps {
     isOpen: boolean;
     onClose: () => void;
+    onBack?: () => void;
     onProductCreated: () => void;
+    initialProduct?: Partial<ProductFormState> | null;
 }
 
-export function CreateProductModal({ isOpen, onClose, onProductCreated }: CreateProductModalProps): JSX.Element | null {
+const buildInitialFormState = (initialProduct?: Partial<ProductFormState> | null): ProductFormState => ({
+    ...createInitialProductFormState(),
+    ...(initialProduct || {}),
+});
+
+export function CreateProductModal({ isOpen, onClose, onBack, onProductCreated, initialProduct }: CreateProductModalProps): JSX.Element | null {
     const [formData, setFormData] = useState(createInitialProductFormState());
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -29,10 +36,10 @@ export function CreateProductModal({ isOpen, onClose, onProductCreated }: Create
 
     useLayoutEffect(() => {
         if (!isOpen) return;
-        setFormData(createInitialProductFormState());
+        setFormData(buildInitialFormState(initialProduct));
         setError(null);
         setLoading(false);
-    }, [isOpen]);
+    }, [initialProduct, isOpen]);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -62,13 +69,23 @@ export function CreateProductModal({ isOpen, onClose, onProductCreated }: Create
     const showsExpenseAccount = formData.тип_номенклатуры === 'входящая_услуга';
 
     const resetForm = () => {
-        setFormData(createInitialProductFormState());
+        setFormData(buildInitialFormState(initialProduct));
         setError(null);
     };
 
     const handleClose = () => {
         resetForm();
         setLoading(false);
+        onClose();
+    };
+
+    const handleBack = () => {
+        resetForm();
+        setLoading(false);
+        if (onBack) {
+            onBack();
+            return;
+        }
         onClose();
     };
 
@@ -153,10 +170,10 @@ export function CreateProductModal({ isOpen, onClose, onProductCreated }: Create
                             type="button"
                             variant="outline"
                             className={styles.secondaryButton}
-                            onClick={handleClose}
+                            onClick={onBack ? handleBack : handleClose}
                             disabled={loading}
                         >
-                            Отменить
+                            {onBack ? 'Назад' : 'Отменить'}
                         </Button>
                     </>
                 )}

@@ -1,0 +1,262 @@
+.modalContent {
+  width: min(1420px, calc(100vw - 32px));
+  max-width: min(1420px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.summary {
+  color: var(--muted-foreground);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.iconButton,
+.actionButton,
+.iconOnlyButton {
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.error {
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in oklab, var(--destructive) 28%, var(--border));
+  border-radius: var(--radius-xl);
+  background: color-mix(in oklab, var(--card) 84%, var(--destructive) 16%);
+  color: var(--destructive);
+  font-size: 14px;
+}
+
+.tableWrap {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+}
+
+.table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.table tbody tr {
+  height: 106px;
+}
+
+.newRow {
+  background: color-mix(in oklab, var(--accent) 7%, transparent);
+}
+
+.newRow:hover {
+  background: color-mix(in oklab, var(--accent) 11%, transparent);
+}
+
+.dateCol {
+  width: 12%;
+}
+
+.clientCol {
+  width: 16.5%;
+}
+
+.contactCol {
+  width: 17%;
+}
+
+.productCol {
+  width: 15.5%;
+}
+
+.messageCol {
+  width: 23%;
+}
+
+.actionsCol {
+  width: 16%;
+}
+
+.dateCell {
+  white-space: nowrap;
+}
+
+.clientCell,
+.contactCell,
+.productCell,
+.messageCell {
+  min-width: 0;
+}
+
+.clientHeader {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.primaryText {
+  min-width: 0;
+  color: var(--foreground);
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.newBadge,
+.viewedBadge {
+  display: inline-flex;
+  flex: 0 0 auto;
+  min-height: 22px;
+  align-items: center;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1;
+}
+
+.newBadge {
+  border: 1px solid color-mix(in oklab, #f59e0b 48%, transparent);
+  background: color-mix(in oklab, #f59e0b 16%, transparent);
+  color: color-mix(in oklab, #f59e0b 78%, white);
+}
+
+.viewedBadge {
+  border: 1px solid color-mix(in oklab, var(--border) 80%, transparent);
+  background: color-mix(in oklab, var(--muted) 72%, transparent);
+  color: var(--muted-foreground);
+}
+
+.mutedText {
+  margin-top: 2px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.messageCell {
+  white-space: normal;
+}
+
+.singleLineText {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.clampedText {
+  display: -webkit-box;
+  max-width: 100%;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.messagePreview {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.viewTextButton {
+  height: 28px;
+  gap: 6px;
+  padding: 0 8px;
+  color: var(--muted-foreground);
+}
+
+.actionsHead {
+  text-align: left;
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.actionButton {
+  min-width: 0;
+  height: 34px;
+  gap: 5px;
+  padding: 0 6px;
+  font-size: 13px;
+}
+
+.iconOnlyButton {
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0;
+}
+
+.emptyCell {
+  height: 96px;
+  color: var(--muted-foreground);
+  text-align: center;
+}
+
+.textModal {
+  width: min(760px, calc(100vw - 32px));
+  max-width: min(760px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+}
+
+.fullTextMeta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+
+.fullTextMeta span {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  padding: 0 9px;
+  border-radius: 999px;
+  background: var(--muted);
+}
+
+.fullTextBox {
+  max-height: min(58vh, 520px);
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  background: var(--chrome);
+  color: var(--foreground);
+  font-size: 15px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .modalContent {
+    width: calc(100vw - 20px);
+    max-width: calc(100vw - 20px);
+  }
+
+  .toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

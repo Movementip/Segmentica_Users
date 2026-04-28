@@ -97,6 +97,9 @@ services:
       NODE_ENV: production
       PORT: 3001
       NEXTAUTH_URL: http://localhost:3000
+      AUTH_COOKIE_SECURE: "false"
+      AUTH_SESSION_HOURS: "12"
+      AUTH_REMEMBER_ME_HOURS: "24"
       DOCUMENT_RENDERER_URL: http://libreoffice:3000
       DOCUMENT_RENDERER_FALLBACK_URLS: http://libreoffice:3000
     restart: unless-stopped
@@ -159,6 +162,7 @@ services:
       SYMMETRIC_DB_URL: jdbc:postgresql://db:5432/Segmentica
       SYMMETRIC_DB_USER: postgres
       SYMMETRIC_DB_PASSWORD: postgres
+      JAVA_TOOL_OPTIONS: -Dsun.net.inetaddr.ttl=10 -Dsun.net.inetaddr.negative.ttl=0
     volumes:
       - symmetricds-logs:/opt/symmetricds/logs
       - symmetricds-tmp:/opt/symmetricds/tmp

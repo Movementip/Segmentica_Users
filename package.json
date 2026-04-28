@@ -20,10 +20,16 @@
         "clean:npm": "npm cache clean --force",
         "clean:project": "npm run clean:next && npm run docker:prune",
         "docker:df": "docker system df -v",
-        "docker:prune": "docker image prune -f && docker builder prune -f --filter until=24h --keep-storage 1GB",
-        "docker:infra": "docker compose up -d --build --remove-orphans db tailscale db-tailscale-proxy libreoffice symmetricds",
-        "docker:up": "npm run build:frontend:docker && docker compose up -d --build --remove-orphans",
+        "docker:prune:images": "docker image prune -f",
+        "docker:prune:build-cache": "docker builder prune -f --filter until=24h --keep-storage 1GB",
+        "docker:prune": "npm run docker:prune:images && npm run docker:prune:build-cache",
+        "docker:infra": "docker compose up -d --build --remove-orphans db tailscale db-tailscale-proxy libreoffice symmetricds && npm run docker:prune:images",
+        "docker:up": "npm run build:frontend:docker && docker compose up -d --build --remove-orphans && npm run docker:prune:images",
         "docker:app": "npm run docker:up",
-        "docker:renderer": "docker compose -f docker-compose.libreoffice.yml up -d --build --remove-orphans && npm run docker:prune"
+        "docker:renderer": "docker compose -f docker-compose.libreoffice.yml up -d --build --remove-orphans && npm run docker:prune:images",
+        "release:prepare": "sh release/prepare-release.sh",
+        "release:export-db": "sh release/export-current-db.sh",
+        "release:publish": "sh release/publish-images.sh",
+        "release:install": "sh release/install.sh"
     }
 }

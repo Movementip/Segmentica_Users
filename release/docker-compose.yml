@@ -1,0 +1,115 @@
+name: segmentica
+
+services:
+  db:
+    image: postgres:${POSTGRES_VERSION:-17}
+    container_name: segmentica-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-Segmentica}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "${POSTGRES_PORT:-5439}:5432"
+    volumes:
+      - segmentica-postgres-data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+      - ./db/schema:/docker-schema:ro
+      - ./seed:/seed:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-Segmentica}"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    restart: unless-stopped
+
+  backend:
+    image: ${SEGMENTICA_IMAGE_PREFIX:-ghcr.io/your-org}/segmentica-backend:${SEGMENTICA_VERSION:-latest}
+    container_name: segmentica-backend
+    depends_on:
+      db:
+        condition: service_healthy
+      libreoffice:
+        condition: service_started
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-Segmentica}
+      LOCAL_DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@db:5432/${POSTGRES_DB:-Segmentica}
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-Segmentica}
+      DB_USER: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      NODE_ENV: production
+      PORT: 3001
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:-segmentica-change-me}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-false}
+      AUTH_SESSION_HOURS: ${AUTH_SESSION_HOURS:-12}
+      AUTH_REMEMBER_ME_HOURS: ${AUTH_REMEMBER_ME_HOURS:-24}
+      DOCUMENT_RENDERER_URL: http://libreoffice:3000
+      DOCUMENT_RENDERER_FALLBACK_URLS: http://libreoffice:3000
+      REMOTE_DATABASE_URL: ${REMOTE_DATABASE_URL:-}
+      REMOTE_DB_HOST: ${REMOTE_DB_HOST:-}
+      REMOTE_DB_PORT: ${REMOTE_DB_PORT:-5432}
+      REMOTE_DB_NAME: ${REMOTE_DB_NAME:-Segmentica}
+      REMOTE_DB_USER: ${REMOTE_DB_USER:-postgres}
+      REMOTE_DB_PASSWORD: ${REMOTE_DB_PASSWORD:-postgres}
+      REMOTE_DB_SSL: ${REMOTE_DB_SSL:-false}
+    restart: unless-stopped
+
+  frontend:
+    image: ${SEGMENTICA_IMAGE_PREFIX:-ghcr.io/your-org}/segmentica-frontend:${SEGMENTICA_VERSION:-latest}
+    container_name: segmentica-frontend
+    depends_on:
+      backend:
+        condition: service_started
+    environment:
+      PORT: 3000
+      NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
+      FRONTEND_API_INTERNAL_URL: http://backend:3001
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    restart: unless-stopped
+
+  libreoffice:
+    image: ${SEGMENTICA_IMAGE_PREFIX:-ghcr.io/your-org}/segmentica-libreoffice:${SEGMENTICA_VERSION:-latest}
+    container_name: segmentica-libreoffice
+    environment:
+      PORT: 3000
+      LIBREOFFICE_BIN: /usr/bin/soffice
+      TEMPLATES_DIR: /app/templates/forms
+    ports:
+      - "${DOCUMENT_RENDERER_PORT:-3010}:3000"
+    restart: unless-stopped
+
+  symmetricds:
+    image: ${SEGMENTICA_IMAGE_PREFIX:-ghcr.io/your-org}/segmentica-symmetricds:${SEGMENTICA_VERSION:-latest}
+    container_name: segmentica-symmetricds
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_NAME: ${POSTGRES_DB:-Segmentica}
+      DB_USER: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      SYMMETRIC_ENGINE_NAME: ${SYMMETRIC_ENGINE_NAME:-node-mac}
+      SYMMETRIC_HTTP_PORT: 31415
+      SYMMETRIC_DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-Segmentica}
+      SYMMETRIC_DB_USER: ${POSTGRES_USER:-postgres}
+      SYMMETRIC_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      SYMMETRIC_PUBLIC_URL: ${SYMMETRIC_PUBLIC_URL:-}
+      SYMMETRIC_REGISTRATION_URL: ${SYMMETRIC_REGISTRATION_URL:-}
+      JAVA_TOOL_OPTIONS: -Dsun.net.inetaddr.ttl=10 -Dsun.net.inetaddr.negative.ttl=0
+    ports:
+      - "${SYMMETRIC_HTTP_PORT:-31415}:31415"
+    volumes:
+      - symmetricds-logs:/opt/symmetricds/logs
+      - symmetricds-tmp:/opt/symmetricds/tmp
+    restart: unless-stopped
+
+volumes:
+  segmentica-postgres-data:
+    name: segmentica-postgres-data
+  symmetricds-logs:
+  symmetricds-tmp:

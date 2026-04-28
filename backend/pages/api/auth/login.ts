@@ -1,15 +1,18 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { ensurePgCrypto, query } from '../../../lib/db';
+import { ensureLocalPgCrypto, queryLocalNoAudit } from '../../../lib/db';
 import { setSessionCookie } from '../../../lib/auth';
 import { enterRequestContext } from '../../../lib/requestContext';
 
-const getNextMondayExpiration = (now: Date): Date => {
-    const next = new Date(now);
-    next.setHours(0, 0, 0, 0);
-    const currentWeekday = next.getDay(); // 0 Sunday ... 6 Saturday
-    const daysUntilNextMonday = currentWeekday === 1 ? 7 : ((8 - currentWeekday) % 7 || 7);
-    next.setDate(next.getDate() + daysUntilNextMonday);
-    return next;
+const parsePositiveHours = (value: string | undefined, fallback: number): number => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const getSessionExpiration = (now: Date, rememberMe: boolean): Date => {
+    const sessionHours = parsePositiveHours(process.env.AUTH_SESSION_HOURS, 12);
+    const rememberHours = parsePositiveHours(process.env.AUTH_REMEMBER_ME_HOURS, 24);
+    const hours = rememberMe ? rememberHours : sessionHours;
+    return new Date(now.getTime() + hours * 60 * 60 * 1000);
 };
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -30,7 +33,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     try {
-        const userRes = await query(
+        const userRes = await queryLocalNoAudit(
             `SELECT id, password_hash, is_active
              FROM public.users
              WHERE employee_id = $1
@@ -46,9 +49,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             return res.status(403).json({ error: 'Пользователь отключен' });
         }
 
-        await ensurePgCrypto();
+        await ensureLocalPgCrypto();
 
-        const verifyRes = await query(
+        const verifyRes = await queryLocalNoAudit(
             `SELECT (password_hash = crypt($1, password_hash)) AS ok
              FROM public.users
              WHERE id = $2`,
@@ -61,7 +64,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
 
         if (nextTheme) {
-            await query(
+            await queryLocalNoAudit(
                 `UPDATE public.users
                  SET preferences = COALESCE(preferences, '{}'::jsonb) || $2::jsonb
                  WHERE id = $1`,
@@ -70,14 +73,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
 
         const now = new Date();
-        const expiresAt = rem
-            ? getNextMondayExpiration(now)
-            : new Date(now.getTime() + 12 * 60 * 60 * 1000);
+        const expiresAt = getSessionExpiration(now, rem);
 
         const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').toString().slice(0, 200);
         const userAgent = (req.headers['user-agent'] || '').toString().slice(0, 500);
 
-        const sessionRes = await query(
+        const sessionRes = await queryLocalNoAudit(
             `INSERT INTO public.sessions(user_id, expires_at, ip, user_agent)
              VALUES ($1, $2, $3, $4)
              RETURNING id`,

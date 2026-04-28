@@ -7,18 +7,24 @@ import styles from "./OrdersPageHeader.module.css"
 
 type OrdersPageHeaderProps = {
   canCreate: boolean
+  canOpenBitrixRequests: boolean
+  bitrixNewCount?: number
   isRefreshing: boolean
   refreshKey: number
   onRefresh: () => void
   onCreate: () => void
+  onOpenBitrixRequests: () => void
 }
 
 export function OrdersPageHeader({
   canCreate,
+  canOpenBitrixRequests,
+  bitrixNewCount = 0,
   isRefreshing,
   refreshKey,
   onRefresh,
   onCreate,
+  onOpenBitrixRequests,
 }: OrdersPageHeaderProps) {
   return (
     <PageHeader
@@ -36,6 +42,18 @@ export function OrdersPageHeader({
               onRefresh()
             }}
           />
+
+          {canOpenBitrixRequests ? (
+            <CreateEntityButton
+              className={cn(styles.headerActionButtonDel)}
+              onClick={onOpenBitrixRequests}
+            >
+              <span>Заявки с Битрикс24</span>
+              {bitrixNewCount > 0 ? (
+                <span className={styles.counterBadge}>{bitrixNewCount.toLocaleString("ru-RU")}</span>
+              ) : null}
+            </CreateEntityButton>
+          ) : null}
 
           {canCreate ? (
             <CreateEntityButton

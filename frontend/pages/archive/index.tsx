@@ -104,6 +104,20 @@ interface FinancialRecord {
   [key: string]: unknown
 }
 
+interface ArchivedBitrixRequest {
+  id: number
+  source_form_name?: string | null
+  source_entry_name?: string | null
+  person_name?: string | null
+  phone?: string | null
+  email?: string | null
+  product_name?: string | null
+  message?: string | null
+  imported_at?: string | null
+  processed_at?: string | null
+  notes?: string | null
+}
+
 interface ArchiveStatistics {
   завершенные_заявки: number
   завершенные_закупки: number
@@ -113,6 +127,7 @@ interface ArchiveStatistics {
   выручка_от_заявок: number | null
   затраты_на_закупки: number | null
   общие_выплаты: number | null
+  заявок_битрикс?: number
 }
 
 interface ArchiveData {
@@ -121,6 +136,7 @@ interface ArchiveData {
   completedShipments: CompletedShipment[]
   employeePayments: EmployeePayment[]
   financialRecords: FinancialRecord[]
+  bitrixRequests: ArchivedBitrixRequest[]
   statistics: ArchiveStatistics
 }
 
@@ -159,13 +175,14 @@ export default function Archive(): JSX.Element {
   const canShipmentsTab = Boolean(user?.permissions?.includes("archive.shipments.list"))
   const canPaymentsTab = Boolean(user?.permissions?.includes("archive.payments.list"))
   const canFinanceTab = Boolean(user?.permissions?.includes("archive.finance.list"))
+  const canBitrixTab = Boolean(user?.permissions?.includes("archive.bitrix_requests.list"))
 
   const canOrdersRow = Boolean(user?.permissions?.includes("archive.orders.view"))
   const canPurchasesRow = Boolean(user?.permissions?.includes("archive.purchases.view"))
   const canShipmentsRow = Boolean(user?.permissions?.includes("archive.shipments.view"))
 
   const canArchive =
-    canOrdersTab || canPurchasesTab || canShipmentsTab || canPaymentsTab || canFinanceTab
+    canOrdersTab || canPurchasesTab || canShipmentsTab || canPaymentsTab || canFinanceTab || canBitrixTab
 
   const availableTabs = useMemo(() => {
     const tabs: Array<{ value: ArchiveViewTab; label: string }> = []
@@ -174,8 +191,9 @@ export default function Archive(): JSX.Element {
     if (canShipmentsTab) tabs.push({ value: "shipments", label: "Отгрузки" })
     if (canPaymentsTab) tabs.push({ value: "payments", label: "Выплаты" })
     if (canFinanceTab) tabs.push({ value: "finance", label: "Финансы" })
+    if (canBitrixTab) tabs.push({ value: "bitrix", label: "Битрикс24" })
     return tabs
-  }, [canFinanceTab, canOrdersTab, canPaymentsTab, canPurchasesTab, canShipmentsTab])
+  }, [canBitrixTab, canFinanceTab, canOrdersTab, canPaymentsTab, canPurchasesTab, canShipmentsTab])
 
   useEffect(() => {
     if (authLoading) return
@@ -460,6 +478,21 @@ export default function Archive(): JSX.Element {
     })
   }, [data, isWithinPeriod, normalizedQuery])
 
+  const filteredBitrixRequests = useMemo(() => {
+    if (!data) return []
+    return (data.bitrixRequests || []).filter((item) => {
+      if (!isWithinPeriod(item.processed_at || item.imported_at)) return false
+      if (!normalizedQuery) return true
+      return (
+        String(item.id).includes(normalizedQuery) ||
+        String(item.person_name || item.source_entry_name || "").toLowerCase().includes(normalizedQuery) ||
+        String(item.phone || item.email || "").toLowerCase().includes(normalizedQuery) ||
+        String(item.product_name || "").toLowerCase().includes(normalizedQuery) ||
+        String(item.message || item.notes || "").toLowerCase().includes(normalizedQuery)
+      )
+    })
+  }, [data, isWithinPeriod, normalizedQuery])
+
   const financeTotals = useMemo(() => {
     let income = 0
     let expense = 0
@@ -509,8 +542,14 @@ export default function Archive(): JSX.Element {
               value: formatCurrency(stats?.выручка_от_заявок ?? 0),
             }
           : null,
+        canBitrixTab
+          ? {
+              label: "Заявок Битрикс24",
+              value: (stats?.заявок_битрикс ?? 0).toLocaleString("ru-RU"),
+            }
+          : null,
       ].filter(Boolean) as Array<{ label: string; value: string }>,
-    [canOrdersTab, canPurchasesTab, canShipmentsTab, formatCurrency, stats]
+    [canBitrixTab, canOrdersTab, canPurchasesTab, canShipmentsTab, formatCurrency, stats]
   )
 
   const searchPlaceholder =
@@ -518,6 +557,8 @@ export default function Archive(): JSX.Element {
       ? "Поиск по сотруднику или заявке..."
       : activeTab === "finance"
         ? "Поиск по описанию или номеру..."
+        : activeTab === "bitrix"
+          ? "Поиск по клиенту, товару или контакту..."
         : "Поиск по названию или коду..."
 
   const archiveSkeletonConfig = useMemo(() => {
@@ -535,6 +576,10 @@ export default function Archive(): JSX.Element {
 
     if (activeTab === "finance") {
       return { columns: 5, rows: 7, actionColumn: false }
+    }
+
+    if (activeTab === "bitrix") {
+      return { columns: 7, rows: 7, actionColumn: false }
     }
 
     return { columns: 8, rows: 7, actionColumn: false }
@@ -643,7 +688,7 @@ export default function Archive(): JSX.Element {
                     </SelectContent>
                   </Select>
 
-                  {activeTab !== "payments" && activeTab !== "finance" ? (
+                  {activeTab !== "payments" && activeTab !== "finance" && activeTab !== "bitrix" ? (
                     <Select
                       value={statusFilter}
                       items={STATUS_OPTIONS}
@@ -951,6 +996,57 @@ export default function Archive(): JSX.Element {
                   </Table>
                 </EntityTableSurface>
               </div>
+            ) : null}
+
+            {activeTab === "bitrix" ? (
+              <EntityTableSurface
+                key={`bitrix-${tableKey}`}
+                variant="embedded"
+                clip="bottom"
+                className={styles.tableSurface}
+              >
+                <Table className={cn(entityTableClassName, styles.table)}>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>№</TableHead>
+                      <TableHead>Клиент</TableHead>
+                      <TableHead>Контакты</TableHead>
+                      <TableHead>Товар</TableHead>
+                      <TableHead>Комментарий</TableHead>
+                      <TableHead>Обработано</TableHead>
+                      <TableHead>Заметка</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredBitrixRequests.length ? (
+                      <AnimatePresence>
+                        {filteredBitrixRequests.map((item) => (
+                          <MotionTableRow
+                            key={item.id}
+                            className={styles.tableRow}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                          >
+                            <TableCell>#{item.id}</TableCell>
+                            <TableCell>{item.person_name || item.source_entry_name || "-"}</TableCell>
+                            <TableCell>
+                              {[item.phone, item.email].map((value) => value?.trim()).filter(Boolean).join(" · ") || "-"}
+                            </TableCell>
+                            <TableCell>{item.product_name || "-"}</TableCell>
+                            <TableCell>{item.message || "-"}</TableCell>
+                            <TableCell>{item.processed_at ? formatDateTime(item.processed_at) : "-"}</TableCell>
+                            <TableCell>{item.notes || "-"}</TableCell>
+                          </MotionTableRow>
+                        ))}
+                      </AnimatePresence>
+                    ) : (
+                      renderEmptyRow(7)
+                    )}
+                  </TableBody>
+                </Table>
+              </EntityTableSurface>
             ) : null}
 
             {activeTab === "finance" ? (

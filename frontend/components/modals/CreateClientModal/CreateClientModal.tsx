@@ -1,20 +1,32 @@
 import React, { useState } from 'react';
 import { ClientContragentModal } from '../ClientContragentModal/ClientContragentModal';
-import type { ClientContragentPayload } from '../../../lib/clientContragents';
+import type { ClientContragent, ClientContragentPayload } from '../../../lib/clientContragents';
 
 interface CreateClientModalProps {
     isOpen: boolean;
     onClose: () => void;
+    onBack?: () => void;
     onClientCreated: () => void;
+    initialClient?: Partial<ClientContragent> | null;
 }
 
-export function CreateClientModal({ isOpen, onClose, onClientCreated }: CreateClientModalProps): JSX.Element {
+export function CreateClientModal({ isOpen, onClose, onBack, onClientCreated, initialClient }: CreateClientModalProps): JSX.Element {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     const handleClose = () => {
         setError(null);
         setLoading(false);
+        onClose();
+    };
+
+    const handleBack = () => {
+        setError(null);
+        setLoading(false);
+        if (onBack) {
+            onBack();
+            return;
+        }
         onClose();
     };
 
@@ -49,11 +61,13 @@ export function CreateClientModal({ isOpen, onClose, onClientCreated }: CreateCl
         <ClientContragentModal
             isOpen={isOpen}
             onClose={handleClose}
+            onBack={onBack ? handleBack : undefined}
             onSubmit={handleSubmit}
             title="Карточка контрагента"
             submitLabel="Сохранить"
             loading={loading}
             error={error}
+            value={initialClient}
         />
     );
 }

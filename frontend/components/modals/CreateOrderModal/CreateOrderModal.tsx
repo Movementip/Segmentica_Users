@@ -36,6 +36,15 @@ interface Product {
     ндс_id?: number;
 }
 
+export type CreateOrderImportedRequest = {
+    id: number;
+    person_name?: string | null;
+    phone?: string | null;
+    email?: string | null;
+    product_name?: string | null;
+    message?: string | null;
+};
+
 interface OrderPosition {
     товар_id: number;
     способ_обеспечения: OrderSupplyMode;
@@ -47,11 +56,16 @@ interface OrderPosition {
 interface CreateOrderModalProps {
     isOpen: boolean;
     onClose: () => void;
+    onBack?: () => void;
     onSubmit: (orderData: any) => void;
     canCreate?: boolean;
+    initialImportedRequest?: CreateOrderImportedRequest | null;
 }
 
-const CreateOrderModal: React.FC<CreateOrderModalProps> = ({ isOpen, onClose, onSubmit, canCreate }) => {
+const normalizeDigits = (value?: string | null) => String(value || '').replace(/\D/g, '');
+const normalizeSearchText = (value?: string | null) => String(value || '').trim().toLowerCase();
+
+const CreateOrderModal: React.FC<CreateOrderModalProps> = ({ isOpen, onClose, onBack, onSubmit, canCreate, initialImportedRequest }) => {
     const [clients, setClients] = useState<Client[]>([]);
     const [managers, setManagers] = useState<Manager[]>([]);
     const [products, setProducts] = useState<Product[]>([]);
@@ -63,6 +77,7 @@ const CreateOrderModal: React.FC<CreateOrderModalProps> = ({ isOpen, onClose, on
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [defaultVatRateId, setDefaultVatRateId] = useState(DEFAULT_VAT_RATE_ID);
+    const [appliedImportId, setAppliedImportId] = useState<number | null>(null);
 
     const blocked = canCreate === false;
     const getProductSalePrice = (product?: Product | null) => Number(product?.цена_продажи ?? product?.цена ?? 0);
@@ -96,6 +111,54 @@ const CreateOrderModal: React.FC<CreateOrderModalProps> = ({ isOpen, onClose, on
             });
         }
     }, [isOpen]);
+
+    useEffect(() => {
+        if (!isOpen) {
+            setAppliedImportId(null);
+            return;
+        }
+
+        if (!initialImportedRequest || appliedImportId === initialImportedRequest.id) return;
+        if (clients.length === 0 || products.length === 0) return;
+
+        const importPhoneDigits = normalizeDigits(initialImportedRequest.phone);
+        const importEmail = normalizeSearchText(initialImportedRequest.email);
+        const importName = normalizeSearchText(initialImportedRequest.person_name);
+
+        const matchedClient = clients.find((client) => {
+            const source = client as Client & { телефон?: string | null; email?: string | null };
+            const clientPhoneDigits = normalizeDigits(source.телефон);
+            const clientEmail = normalizeSearchText(source.email);
+            const clientName = normalizeSearchText(client.название);
+
+            return (
+                (importPhoneDigits && clientPhoneDigits && importPhoneDigits === clientPhoneDigits)
+                || (importEmail && clientEmail && importEmail === clientEmail)
+                || (importName && clientName && importName === clientName)
+            );
+        });
+
+        if (matchedClient) {
+            setSelectedClient(matchedClient.id);
+        }
+
+        const importProductName = normalizeSearchText(initialImportedRequest.product_name);
+        const matchedProduct = importProductName
+            ? products.find((product) => normalizeSearchText(product.название) === importProductName)
+            : null;
+
+        if (matchedProduct) {
+            setPositions([{
+                товар_id: matchedProduct.id,
+                способ_обеспечения: DEFAULT_ORDER_SUPPLY_MODE,
+                количество: 1,
+                цена: getProductSalePrice(matchedProduct),
+                ндс_id: getProductVatRateId(matchedProduct),
+            }]);
+        }
+
+        setAppliedImportId(initialImportedRequest.id);
+    }, [appliedImportId, clients, initialImportedRequest, isOpen, products]);
 
     const loadClients = async () => {
         try {
@@ -232,13 +295,27 @@ const CreateOrderModal: React.FC<CreateOrderModalProps> = ({ isOpen, onClose, on
         }
     };
 
-    const handleClose = () => {
+    const resetForm = () => {
         setSelectedClient('');
         setSelectedManager('');
         setDeliveryAddress('');
         setExecutionMode(DEFAULT_ORDER_EXECUTION_MODE);
         setPositions([]);
         setError('');
+        setAppliedImportId(null);
+    };
+
+    const handleClose = () => {
+        resetForm();
+        onClose();
+    };
+
+    const handleBack = () => {
+        resetForm();
+        if (onBack) {
+            onBack();
+            return;
+        }
         onClose();
     };
 
@@ -258,11 +335,49 @@ const CreateOrderModal: React.FC<CreateOrderModalProps> = ({ isOpen, onClose, on
         return map;
     }, [products]);
 
+    const importClientMatched = useMemo(() => {
+        if (!initialImportedRequest) return true;
+        const hasClientData = Boolean(
+            initialImportedRequest.person_name?.trim()
+            || initialImportedRequest.phone?.trim()
+            || initialImportedRequest.email?.trim()
+        );
+        if (!hasClientData) return true;
+        return Boolean(selectedClient);
+    }, [initialImportedRequest, selectedClient]);
+
+    const importedProductMatched = useMemo(() => {
+        if (!initialImportedRequest?.product_name) return true;
+        const importProductName = normalizeSearchText(initialImportedRequest.product_name);
+        return positions.some((position) => normalizeSearchText(productsById.get(position.товар_id)?.название) === importProductName);
+    }, [initialImportedRequest, positions, productsById]);
+
     return (
         <Dialog open={isOpen} onOpenChange={(open) => (!open ? handleClose() : undefined)}>
             <EntityModalShell className={styles.modalContent} onClose={handleClose} title="Создать новую заявку">
                 <form onSubmit={handleSubmit} className={styles.form}>
                     <Flex direction="column" gap="4">
+                        {initialImportedRequest ? (
+                            <Box className={styles.importNotice}>
+                                <Text as="span" size="2" weight="medium">Битрикс24 #{initialImportedRequest.id}</Text>
+                                <Text as="span" size="2" color="gray">
+                                    {[initialImportedRequest.person_name, initialImportedRequest.phone, initialImportedRequest.email]
+                                        .map((item) => item?.trim())
+                                        .filter(Boolean)
+                                        .join(' · ') || 'Контакт не указан'}
+                                </Text>
+                                {initialImportedRequest.message ? (
+                                    <Text as="span" size="2" color="gray">{initialImportedRequest.message}</Text>
+                                ) : null}
+                                {initialImportedRequest.product_name && !importedProductMatched ? (
+                                    <Text as="span" size="2" color="red">Товар не найден: {initialImportedRequest.product_name}</Text>
+                                ) : null}
+                                {!importClientMatched ? (
+                                    <Text as="span" size="2" color="red">Клиент не найден</Text>
+                                ) : null}
+                            </Box>
+                        ) : null}
+
                         <OrderSearchSelect
                             label="Клиент"
                             required
@@ -490,8 +605,8 @@ const CreateOrderModal: React.FC<CreateOrderModalProps> = ({ isOpen, onClose, on
                         )}
 
                         <Flex justify="end" gap="3" mt="4" className={styles.modalActions}>
-                            <Button type="button" variant="surface" color="gray" highContrast onClick={handleClose}>
-                                Отмена
+                            <Button type="button" variant="surface" color="gray" highContrast onClick={onBack ? handleBack : handleClose}>
+                                {onBack ? 'Назад' : 'Отмена'}
                             </Button>
                             <Button type="submit" variant="solid" color="gray" highContrast disabled={!canSubmit || blocked} loading={loading}>
                                 Создать заявку
