@@ -87,7 +87,13 @@ export function ThemeProvider({
             syncTheme(event.data.theme);
         };
 
+        const handleExternalTheme = (event: Event) => {
+            const nextTheme = (event as CustomEvent<{ theme?: unknown }>).detail?.theme;
+            syncTheme(nextTheme);
+        };
+
         window.addEventListener("storage", handleStorage);
+        window.addEventListener("segmentica-theme-external", handleExternalTheme);
         const channel = typeof BroadcastChannel !== "undefined"
             ? new BroadcastChannel("segmentica-theme")
             : null;
@@ -103,6 +109,7 @@ export function ThemeProvider({
 
         return () => {
             window.removeEventListener("storage", handleStorage);
+            window.removeEventListener("segmentica-theme-external", handleExternalTheme);
             channel?.removeEventListener("message", handleBroadcastMessage);
             channel?.close();
             unsubscribeElectronTheme?.();
