@@ -3,7 +3,14 @@ declare module '/pdfjs/pdf.mjs' {
         workerSrc: string;
     };
 
-    export function getDocument(source: { data: Uint8Array }): {
+    export function getDocument(source: {
+        data: Uint8Array;
+        isOffscreenCanvasSupported?: boolean;
+        isImageDecoderSupported?: boolean;
+        useWasm?: boolean;
+        enableHWA?: boolean;
+        canvasMaxAreaInBytes?: number;
+    }): {
         promise: Promise<{
             numPages: number;
             getPage(pageNumber: number): Promise<{
@@ -20,6 +27,7 @@ declare module '/pdfjs/pdf.mjs' {
                     background: string;
                 }): {
                     promise: Promise<void>;
+                    cancel?: () => void;
                 };
             }>;
         }>;

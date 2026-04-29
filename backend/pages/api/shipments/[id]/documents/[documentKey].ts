@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { hasPermission, requireAuth } from '../../../../../lib/auth';
-import { hasDocumentRenderer, renderXlsxTemplateDocument } from '../../../../../lib/documentRendererClient';
+import { hasDocumentRenderer, renderPdfPreview, renderXlsxTemplateDocument } from '../../../../../lib/documentRendererClient';
 import { buildShipmentDocumentPayload } from '../../../../../lib/shipmentDocumentBuilder';
 import { normalizeShipmentDocumentKey } from '../../../../../lib/shipmentDocumentDefinitions';
 
@@ -17,7 +17,8 @@ const normalizeQueryValue = (value: string | string[] | undefined): string | nul
     return text || null;
 };
 
-const resolveFormat = (value: string | null): 'pdf' | 'excel' => {
+const resolveFormat = (value: string | null): 'pdf' | 'excel' | 'preview' => {
+    if (value === 'preview') return 'preview';
     if (value === 'excel') return 'excel';
     return 'pdf';
 };
@@ -57,7 +58,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(403).json({ error: 'Forbidden' });
     }
 
-    if (format === 'pdf' && !canPrintShipments) {
+    if ((format === 'pdf' || format === 'preview') && !canPrintShipments) {
         return res.status(403).json({ error: 'Forbidden' });
     }
 
@@ -81,7 +82,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             return res.status(400).json({ error: 'Пока поддерживаются только шаблоны XLSX для документов отгрузки' });
         }
 
-        if (!templateDefinition.outputFormats.includes(format)) {
+        const renderFormat = format === 'preview' ? 'pdf' : format;
+
+        if (!templateDefinition.outputFormats.includes(renderFormat)) {
             return res.status(400).json({ error: `Формат ${format} не поддерживается для этого шаблона` });
         }
 
@@ -95,9 +98,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             sheetCopies: payload.sheetCopies,
             hiddenSheets: payload.hiddenSheets,
             sheetPageSetup: payload.sheetPageSetup,
-            outputFormat: format,
-            postprocess: format === 'pdf' ? payload.pdfPostprocess : 'none',
+            outputFormat: renderFormat,
+            postprocess: renderFormat === 'pdf' ? payload.pdfPostprocess : 'none',
         });
+
+        if (format === 'preview') {
+            const preview = await renderPdfPreview({
+                buffer: rendered.buffer,
+                filename: rendered.filename,
+            });
+            return res.status(200).json(preview);
+        }
 
         const safeDisposition = format === 'pdf' ? disposition : 'attachment';
         res.setHeader('Content-Type', rendered.contentType);

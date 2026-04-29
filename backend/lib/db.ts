@@ -410,6 +410,15 @@ const ensurePool = async () => {
     return poolPromise;
 };
 
+const clearPrimaryPoolReference = () => {
+    pool = null;
+    poolPromise = null;
+    pgCryptoEnsurePromise = null;
+    globalForDb.__segmenticaDbPool = null;
+    globalForDb.__segmenticaDbPoolPromise = null;
+    globalForDb.__segmenticaPgCryptoEnsurePromise = null;
+};
+
 const createLocalPool = async () => {
     const connectionString = getLocalDatabaseConnectionString();
     return new Pool({
@@ -429,6 +438,17 @@ const ensureLocalPool = async () => {
         globalForDb.__segmenticaLocalDbPoolPromise = localPoolPromise;
     }
     return localPoolPromise;
+};
+
+const clearLocalPoolReference = () => {
+    localPool = null;
+    localPoolPromise = null;
+    globalForDb.__segmenticaLocalDbPool = null;
+    globalForDb.__segmenticaLocalDbPoolPromise = null;
+};
+
+const isPoolEndedError = (error: unknown): boolean => {
+    return error instanceof Error && /Cannot use a pool after calling end on the pool/i.test(error.message);
 };
 
 type AuditColumns = {
@@ -680,12 +700,7 @@ export const resetPool = async () => {
                 console.error('Error closing existing DB pool:', error);
             }
         }
-        pool = null;
-        poolPromise = null;
-        pgCryptoEnsurePromise = null;
-        globalForDb.__segmenticaDbPool = null;
-        globalForDb.__segmenticaDbPoolPromise = null;
-        globalForDb.__segmenticaPgCryptoEnsurePromise = null;
+        clearPrimaryPoolReference();
         await ensurePool();
     })().finally(() => {
         resetPoolPromise = null;
@@ -705,7 +720,17 @@ const queryNoAudit = async (text: string, params?: any[]) => {
     }
 
     const p = await ensurePool();
-    return p.query(text, params);
+    try {
+        return await p.query(text, params);
+    } catch (error) {
+        if (!isPoolEndedError(error)) {
+            throw error;
+        }
+
+        clearPrimaryPoolReference();
+        const retryPool = await ensurePool();
+        return retryPool.query(text, params);
+    }
 };
 
 export const ensurePgCrypto = async (): Promise<void> => {
@@ -757,7 +782,18 @@ const query = async (text: string, params?: any[]) => {
         }
     }
 
-    const result = await queryable.query(text, params);
+    let result;
+    try {
+        result = await queryable.query(text, params);
+    } catch (error) {
+        if (txClient || !isPoolEndedError(error)) {
+            throw error;
+        }
+
+        clearPrimaryPoolReference();
+        const retryPool = await ensurePool();
+        return retryPool.query(text, params);
+    }
 
     try {
         if (isMutatingSql(text)) {
@@ -814,7 +850,17 @@ const query = async (text: string, params?: any[]) => {
 
 const queryLocalNoAudit = async (text: string, params?: any[]) => {
     const p = await ensureLocalPool();
-    return p.query(text, params);
+    try {
+        return await p.query(text, params);
+    } catch (error) {
+        if (!isPoolEndedError(error)) {
+            throw error;
+        }
+
+        clearLocalPoolReference();
+        const retryPool = await ensureLocalPool();
+        return retryPool.query(text, params);
+    }
 };
 
 const getPool = async () => {

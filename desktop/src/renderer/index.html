@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Segmentica</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main id="startupShell" class="shell">
+      <section class="panel">
+        <div class="brand">
+          <img id="startupLogo" class="mark" alt="" />
+          <div>
+            <h1>Segmentica</h1>
+            <p>Запуск локального Docker-стека</p>
+          </div>
+        </div>
+
+        <div class="progress">
+          <div class="spinner" aria-hidden="true"></div>
+          <div>
+            <h2 id="status">Подготовка...</h2>
+            <p id="detail">Проверяю окружение</p>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="docker" type="button">Docker Desktop</button>
+          <button id="folder" type="button">Папка данных</button>
+        </div>
+      </section>
+    </main>
+
+    <main id="appShell" class="app-shell" hidden>
+      <header class="browser-chrome">
+        <div id="tabs" class="tabs" role="tablist" aria-label="Вкладки Segmentica"></div>
+        <button id="newTab" class="chrome-button icon-button" type="button" title="Новая вкладка" aria-label="Новая вкладка">+</button>
+        <div class="chrome-spacer"></div>
+        <button id="refreshApp" class="chrome-button" type="button" title="Обновить активную вкладку">Обновить</button>
+        <button id="closeApp" class="chrome-button close-button" type="button" title="Закрыть это окно">Закрыть</button>
+      </header>
+      <section id="viewHost" class="view-host" aria-label="Окна Segmentica"></section>
+    </main>
+
+    <script src="./renderer.js"></script>
+  </body>
+</html>

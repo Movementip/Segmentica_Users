@@ -25,7 +25,7 @@ import { PageLoader } from '../../components/ui/PageLoader/PageLoader';
 import { FinanceHero } from '../../components/admin/finance/FinanceHero/FinanceHero';
 import { FinancePayrollTable } from '../../components/admin/finance/FinancePayrollTable/FinancePayrollTable';
 import { FinancePaymentsJournal } from '../../components/admin/finance/FinancePaymentsJournal/FinancePaymentsJournal';
-import { lockBodyScroll, openInNewTabWithUnlock, scheduleForceUnlockBodyScroll } from '../../utils/bodyScrollLock';
+import { lockBodyScroll, scheduleForceUnlockBodyScroll } from '../../utils/bodyScrollLock';
 import type { DocumentPreviewPageImage, DocumentPreviewStateBase, PdfJsModule } from '../../types/document-preview';
 import type {
     FinanceColumn,
@@ -45,6 +45,65 @@ type StatementPreviewState = DocumentPreviewStateBase & {
 const PREVIEW_ZOOM_MIN = 0.6;
 const PREVIEW_ZOOM_MAX = 2;
 const PREVIEW_ZOOM_STEP = 0.2;
+const PREVIEW_PAGE_RENDER_TIMEOUT_MS = 12000;
+
+const isElectronRuntime = (): boolean => (
+    typeof navigator !== 'undefined' && /\bElectron\//i.test(navigator.userAgent)
+);
+
+const buildPdfJsDocumentOptions = (data: Uint8Array) => {
+    if (!isElectronRuntime()) {
+        return { data };
+    }
+
+    return {
+        data,
+        isOffscreenCanvasSupported: false,
+        isImageDecoderSupported: false,
+        useWasm: false,
+        enableHWA: false,
+        canvasMaxAreaInBytes: -1,
+    };
+};
+
+const waitForPdfPageRender = async (renderTask: { promise: Promise<void>; cancel?: () => void }) => {
+    let timeoutId: number | null = null;
+
+    try {
+        await Promise.race([
+            renderTask.promise,
+            new Promise<never>((_, reject) => {
+                timeoutId = window.setTimeout(() => {
+                    renderTask.cancel?.();
+                    reject(new Error('Не удалось подготовить предпросмотр PDF. Попробуйте открыть документ в новой вкладке.'));
+                }, PREVIEW_PAGE_RENDER_TIMEOUT_MS);
+            }),
+        ]);
+    } finally {
+        if (timeoutId) {
+            window.clearTimeout(timeoutId);
+        }
+    }
+};
+
+const buildRasterPreviewUrl = (previewUrl: string): string => {
+    const url = new URL(previewUrl, window.location.origin);
+    url.searchParams.set('format', 'preview');
+    url.searchParams.set('disposition', 'inline');
+    return `${url.pathname}${url.search}${url.hash}`;
+};
+
+const scalePreviewPages = (
+    pages: DocumentPreviewPageImage[],
+    zoom: number,
+    stageWidth: number | undefined
+): DocumentPreviewPageImage[] => (
+    pages.map((page) => ({
+        ...page,
+        width: page.width * ((Math.max((stageWidth ?? 1200) - 8, 320) / Math.max(page.width, 1)) * zoom),
+        height: page.height * ((Math.max((stageWidth ?? 1200) - 8, 320) / Math.max(page.width, 1)) * zoom),
+    }))
+);
 
 type FinanceTabKey = 'summary' | 'accruals' | 'withheld' | 'paid' | 'contributions';
 
@@ -237,9 +296,6 @@ function AdminFinancePage(): JSX.Element {
                 setPreviewError(null);
                 setPreviewPages([]);
 
-                const loadPdfJs = Function('return import("/pdfjs/pdf.mjs")') as () => Promise<PdfJsModule>;
-                const pdfjs = await loadPdfJs();
-                pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/pdf.worker.min.mjs';
                 let fileBytes = previewPdfBytesRef.current;
 
                 if (!fileBytes || previewPdfSourceUrlRef.current !== statementPreview.previewUrl) {
@@ -266,7 +322,31 @@ function AdminFinancePage(): JSX.Element {
                     });
                 }
 
-                const loadingTask = pdfjs.getDocument({ data: fileBytes.slice() });
+                if (isElectronRuntime()) {
+                    const previewResponse = await fetch(buildRasterPreviewUrl(statementPreview.previewUrl), { credentials: 'include' });
+                    if (!previewResponse.ok) {
+                        const errorText = await previewResponse.text().catch(() => '');
+                        throw new Error(errorText || 'Не удалось загрузить предпросмотр PDF');
+                    }
+                    const previewPayload = await previewResponse.json().catch(() => null) as { pages?: DocumentPreviewPageImage[] } | null;
+                    const previewPages = Array.isArray(previewPayload?.pages) ? previewPayload.pages : [];
+                    if (!previewPages.length) {
+                        throw new Error('Не удалось подготовить предпросмотр PDF');
+                    }
+                    if (!cancelled) {
+                        setPreviewPages(scalePreviewPages(
+                            previewPages,
+                            previewZoom,
+                            previewStageRef.current?.clientWidth
+                        ));
+                    }
+                    return;
+                }
+
+                const loadPdfJs = Function('return import("/pdfjs/pdf.mjs")') as () => Promise<PdfJsModule>;
+                const pdfjs = await loadPdfJs();
+                pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/pdf.worker.min.mjs';
+                const loadingTask = pdfjs.getDocument(buildPdfJsDocumentOptions(fileBytes.slice()));
                 const pdf = await loadingTask.promise;
 
                 const availableWidth = Math.max((previewStageRef.current?.clientWidth ?? 1200) - 8, 320);
@@ -298,11 +378,11 @@ function AdminFinancePage(): JSX.Element {
                         context.setTransform(outputScale, 0, 0, outputScale, 0, 0);
                     }
 
-                    await page.render({
+                    await waitForPdfPageRender(page.render({
                         canvasContext: context,
                         viewport,
                         background: 'rgb(255,255,255)',
-                    }).promise;
+                    }));
 
                     pages.push({
                         src: canvas.toDataURL('image/png'),
@@ -1238,7 +1318,7 @@ function AdminFinancePage(): JSX.Element {
                                     type="button"
                                     variant="outline"
                                     className={`${styles.previewActionButton} ${styles.surfaceButton}`}
-                                    onClick={() => openInNewTabWithUnlock(statementPreview.previewUrl)}
+                                    onClick={() => window.open(statementPreview.previewUrl, '_blank', 'noopener,noreferrer')}
                                 >
                                     <FiExternalLink className={styles.icon} />
                                     Открыть

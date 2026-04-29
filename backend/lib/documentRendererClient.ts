@@ -70,6 +70,12 @@ export type RenderDocxTemplateParams = {
     outputFormat: 'word' | 'pdf';
 };
 
+export type PdfPreviewPage = {
+    src: string;
+    width: number;
+    height: number;
+};
+
 export const renderXlsxTemplateDocument = async (params: RenderXlsxTemplateParams): Promise<{
     buffer: Buffer;
     filename: string;
@@ -175,4 +181,57 @@ export const renderDocxTemplateDocument = async (params: RenderDocxTemplateParam
     }
 
     throw buildDocumentRendererError('render DOCX template document', attempts);
+};
+
+export const renderPdfPreview = async (params: {
+    buffer: Buffer;
+    filename: string;
+    maxPages?: number;
+}): Promise<{ pages: PdfPreviewPage[] }> => {
+    const rendererBaseUrls = getDocumentRendererBaseUrls();
+    if (rendererBaseUrls.length === 0) {
+        throw new Error('DOCUMENT_RENDERER_URL is not configured');
+    }
+
+    const attempts: string[] = [];
+
+    for (const baseUrl of rendererBaseUrls) {
+        const requestUrl = `${baseUrl}/render/pdf-preview`;
+        try {
+            const form = new FormData();
+            const pdfBytes = params.buffer.buffer.slice(
+                params.buffer.byteOffset,
+                params.buffer.byteOffset + params.buffer.byteLength
+            ) as ArrayBuffer;
+            form.set('file', new Blob([pdfBytes], { type: 'application/pdf' }), params.filename || 'document.pdf');
+            if (params.maxPages) {
+                form.set('maxPages', String(params.maxPages));
+            }
+
+            const response = await fetch(requestUrl, {
+                method: 'POST',
+                body: form,
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text().catch(() => '');
+                attempts.push(`${requestUrl} -> ${response.status}${errorText ? `: ${errorText}` : ''}`);
+                continue;
+            }
+
+            const payload = await response.json().catch(() => null) as { pages?: PdfPreviewPage[] } | null;
+            const pages = Array.isArray(payload?.pages) ? payload.pages : [];
+            if (!pages.length) {
+                attempts.push(`${requestUrl} -> empty preview response`);
+                continue;
+            }
+
+            return { pages };
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown fetch error';
+            attempts.push(`${requestUrl} -> ${message}`);
+        }
+    }
+
+    throw buildDocumentRendererError('render PDF preview', attempts);
 };

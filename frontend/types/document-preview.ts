@@ -15,7 +15,14 @@ export type PdfJsModule = {
     GlobalWorkerOptions: {
         workerSrc: string;
     };
-    getDocument: (source: { data: Uint8Array }) => {
+    getDocument: (source: {
+        data: Uint8Array;
+        isOffscreenCanvasSupported?: boolean;
+        isImageDecoderSupported?: boolean;
+        useWasm?: boolean;
+        enableHWA?: boolean;
+        canvasMaxAreaInBytes?: number;
+    }) => {
         promise: Promise<{
             numPages: number;
             getPage: (pageNumber: number) => Promise<{
@@ -24,7 +31,10 @@ export type PdfJsModule = {
                     canvasContext: CanvasRenderingContext2D;
                     viewport: { width: number; height: number };
                     background: string;
-                }) => { promise: Promise<void> };
+                }) => {
+                    promise: Promise<void>;
+                    cancel?: () => void;
+                };
             }>;
         }>;
     };

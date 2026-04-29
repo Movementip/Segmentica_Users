@@ -13,7 +13,7 @@ export type { AuthEmployee, AuthUser } from '../types/auth';
 type AuthContextValue = {
     user: AuthUser | null;
     loading: boolean;
-    refresh: () => Promise<void>;
+    refresh: (options?: { silent?: boolean }) => Promise<void>;
     setTheme: (theme: 'light' | 'dark') => Promise<void>;
     logout: () => Promise<void>;
 };
@@ -45,14 +45,17 @@ export function AuthProvider({
         redirectToLogin();
     }, []);
 
-    const refresh = useCallback(async () => {
+    const refresh = useCallback(async (options?: { silent?: boolean }) => {
+        const silent = Boolean(options?.silent);
         try {
-            setLoading(true);
+            if (!silent) {
+                setLoading(true);
+            }
             const res = await fetch('/api/auth/me');
             if (!res.ok) {
                 if (res.status === 401) {
                     handleUnauthorized();
-                } else {
+                } else if (!silent) {
                     setUser(null);
                 }
                 return;
@@ -63,9 +66,13 @@ export function AuthProvider({
                 redirectAuthenticatedLogin();
             }
         } catch {
-            setUser(null);
+            if (!silent) {
+                setUser(null);
+            }
         } finally {
-            setLoading(false);
+            if (!silent) {
+                setLoading(false);
+            }
         }
     }, [handleUnauthorized]);
 

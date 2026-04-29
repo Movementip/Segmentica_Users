@@ -14,7 +14,7 @@ import {
 } from '../../../../lib/financePayslipDocument';
 import { buildFinanceTimesheetBatchTemplatePayload } from '../../../../lib/financeTimesheetDocument';
 import { convertOfficeDocumentToPdf } from '../../../../lib/documentConverter';
-import { hasDocumentRenderer, renderXlsxTemplateDocument } from '../../../../lib/documentRendererClient';
+import { hasDocumentRenderer, renderPdfPreview, renderXlsxTemplateDocument, type PdfPreviewPage } from '../../../../lib/documentRendererClient';
 import {
     getFinancePayload,
     type FinanceEmployee,
@@ -35,9 +35,10 @@ const normalizeQueryValue = (value: string | string[] | undefined): string | nul
     return text || null;
 };
 
-const resolveFormat = (value: string | null): 'html' | 'excel' | 'pdf' => {
+const resolveFormat = (value: string | null): 'html' | 'excel' | 'pdf' | 'preview' => {
     if (value === 'excel') return value;
     if (value === 'pdf') return value;
+    if (value === 'preview') return value;
     return 'html';
 };
 
@@ -306,7 +307,10 @@ const getFilePath = (
     return files.htmlPath;
 };
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse<Buffer | { error: string }>) {
+export default async function handler(
+    req: NextApiRequest,
+    res: NextApiResponse<Buffer | { error: string } | { pages: PdfPreviewPage[] }>
+) {
     let cleanupDir: string | null = null;
 
     try {
@@ -331,7 +335,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         const canFinanceExportPdf = hasPermission(actor, 'finance.export.pdf');
         const canFinanceExportExcel = hasPermission(actor, 'finance.export.excel');
 
-        if ((format === 'pdf' || format === 'html') && !canFinancePrint && !canFinanceExportPdf) {
+        if ((format === 'pdf' || format === 'html' || format === 'preview') && !canFinancePrint && !canFinanceExportPdf) {
             return res.status(403).json({ error: 'Forbidden' });
         }
 
@@ -503,7 +507,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
 
         const resolvedEmployee = isBatchCurrent ? null : employee;
 
-        if (hasDocumentRenderer() && (format === 'excel' || format === 'pdf')) {
+        if (hasDocumentRenderer() && (format === 'excel' || format === 'pdf' || format === 'preview')) {
             const templatePayload = isBatchCurrent
                 ? documentKind === 'payslip'
                     ? await buildFinancePayslipBatchTemplatePayload(payslipBatchEntries)
@@ -567,9 +571,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
                 sheetCopies: templatePayload.sheetCopies,
                 hiddenSheets: templatePayload.hiddenSheets,
                 sheetPageSetup: templatePayload.sheetPageSetup,
-                outputFormat: format,
-                postprocess: format === 'pdf' ? templatePayload.pdfPostprocess : 'none',
+                outputFormat: format === 'excel' ? 'excel' : 'pdf',
+                postprocess: format === 'excel' ? 'none' : templatePayload.pdfPostprocess,
             });
+
+            if (format === 'preview') {
+                const preview = await renderPdfPreview({
+                    buffer: rendered.buffer,
+                    filename: rendered.filename,
+                });
+                return res.status(200).json(preview);
+            }
 
             const finalDisposition = format === 'pdf' && disposition === 'inline' ? 'inline' : 'attachment';
             res.setHeader('Content-Type', rendered.contentType);
@@ -587,6 +599,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
 
         if (documentKind === 'timesheet') {
             return res.status(400).json({ error: 'Для табеля учета рабочего времени нужен включенный document renderer' });
+        }
+
+        if (format === 'preview') {
+            return res.status(400).json({ error: 'Для предпросмотра PDF нужен включенный document renderer' });
         }
 
         const statementParams = {

@@ -30,7 +30,7 @@ export const redirectAuthenticatedLogin = () => {
 
 type UseAuthSyncOptions = {
     skipInitialRefresh?: boolean;
-    refresh: () => Promise<void>;
+    refresh: (options?: { silent?: boolean }) => Promise<void>;
     onUnauthorized: (options?: { broadcast?: boolean }) => void;
 };
 
@@ -84,12 +84,12 @@ export const useAuthSync = ({
         if (skipInitialRefresh) return;
 
         const intervalId = window.setInterval(() => {
-            void refresh();
+            void refresh({ silent: true });
         }, 5 * 60 * 1000);
 
         const onVisibilityChange = () => {
             if (document.visibilityState === 'visible') {
-                void refresh();
+                void refresh({ silent: true });
             }
         };
 
@@ -114,7 +114,7 @@ export const useAuthSync = ({
                 return;
             }
 
-            void refresh();
+            void refresh({ silent: true });
         };
 
         window.addEventListener('storage', onStorage);

@@ -52,7 +52,7 @@ import { NoAccessPage } from '../../components/ui/NoAccessPage/NoAccessPage';
 import { PageLoader } from '../../components/ui/PageLoader/PageLoader';
 import { calculateVatAmountsFromLine, getVatRateOption } from '../../lib/vat';
 import { getClientContragentTypeLabel, normalizeClientContragentType } from '../../lib/clientContragents';
-import { lockBodyScroll, openInNewTabWithUnlock, scheduleForceUnlockBodyScroll } from '../../utils/bodyScrollLock';
+import { lockBodyScroll, scheduleForceUnlockBodyScroll } from '../../utils/bodyScrollLock';
 import { fetchGeneratedBlob, saveGeneratedAttachments, type GeneratedAttachmentFile } from '../../utils/generatedAttachments';
 import {
     getAvailableOrderDocumentDefinitions,
@@ -275,6 +275,70 @@ const formatDateRu = (value: Date): string => {
 const PREVIEW_ZOOM_MIN = 0.6;
 const PREVIEW_ZOOM_MAX = 2;
 const PREVIEW_ZOOM_STEP = 0.2;
+const PREVIEW_RENDER_TIMEOUT_MS = 30000;
+const PREVIEW_PAGE_RENDER_TIMEOUT_MS = 12000;
+
+const isElectronRuntime = (): boolean => (
+    typeof navigator !== 'undefined' && /\bElectron\//i.test(navigator.userAgent)
+);
+
+const preparePdfJsForRuntime = async (pdfjs: PdfJsModule) => {
+    pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/pdf.worker.min.mjs';
+};
+
+const buildPdfJsDocumentOptions = (data: Uint8Array) => {
+    if (!isElectronRuntime()) {
+        return { data };
+    }
+
+    return {
+        data,
+        isOffscreenCanvasSupported: false,
+        isImageDecoderSupported: false,
+        useWasm: false,
+        enableHWA: false,
+        canvasMaxAreaInBytes: -1,
+    };
+};
+
+const waitForPdfPageRender = async (renderTask: { promise: Promise<void>; cancel?: () => void }) => {
+    let timeoutId: number | null = null;
+
+    try {
+        await Promise.race([
+            renderTask.promise,
+            new Promise<never>((_, reject) => {
+                timeoutId = window.setTimeout(() => {
+                    renderTask.cancel?.();
+                    reject(new Error('Не удалось подготовить предпросмотр PDF. Попробуйте открыть документ в новой вкладке.'));
+                }, PREVIEW_PAGE_RENDER_TIMEOUT_MS);
+            }),
+        ]);
+    } finally {
+        if (timeoutId) {
+            window.clearTimeout(timeoutId);
+        }
+    }
+};
+
+const buildRasterPreviewUrl = (previewUrl: string): string => {
+    const url = new URL(previewUrl, window.location.origin);
+    url.searchParams.set('format', 'preview');
+    url.searchParams.set('disposition', 'inline');
+    return `${url.pathname}${url.search}${url.hash}`;
+};
+
+const scalePreviewPages = (
+    pages: DocumentPreviewPageImage[],
+    zoom: number,
+    stageWidth: number | undefined
+): DocumentPreviewPageImage[] => (
+    pages.map((page) => ({
+        ...page,
+        width: page.width * ((Math.max((stageWidth ?? 1200) - 8, 320) / Math.max(page.width, 1)) * zoom),
+        height: page.height * ((Math.max((stageWidth ?? 1200) - 8, 320) / Math.max(page.width, 1)) * zoom),
+    }))
+);
 
 function OrderDetailPage(): JSX.Element {
     const router = useRouter();
@@ -409,6 +473,16 @@ function OrderDetailPage(): JSX.Element {
         }
 
         let cancelled = false;
+        let timeoutReached = false;
+
+        const renderTimeout = window.setTimeout(() => {
+            timeoutReached = true;
+            if (!cancelled) {
+                setDocumentPreviewPages([]);
+                setDocumentPreviewError('Не удалось подготовить предпросмотр PDF. Попробуйте открыть документ в новой вкладке.');
+                setDocumentPreviewLoading(false);
+            }
+        }, PREVIEW_RENDER_TIMEOUT_MS);
 
         const renderPreview = async () => {
             try {
@@ -417,9 +491,6 @@ function OrderDetailPage(): JSX.Element {
                 setDocumentPreviewSaveMessage(null);
                 setDocumentPreviewPages([]);
 
-                const loadPdfJs = Function('return import("/pdfjs/pdf.mjs")') as () => Promise<PdfJsModule>;
-                const pdfjs = await loadPdfJs();
-                pdfjs.GlobalWorkerOptions.workerSrc = '/pdfjs/pdf.worker.min.mjs';
                 let fileBytes = documentPreviewPdfBytesRef.current;
 
                 if (!fileBytes || documentPreviewPdfSourceUrlRef.current !== documentPreview.previewUrl) {
@@ -446,7 +517,31 @@ function OrderDetailPage(): JSX.Element {
                     });
                 }
 
-                const loadingTask = pdfjs.getDocument({ data: fileBytes.slice() });
+                if (isElectronRuntime()) {
+                    const previewResponse = await fetch(buildRasterPreviewUrl(documentPreview.previewUrl), { credentials: 'include' });
+                    if (!previewResponse.ok) {
+                        const errorText = await previewResponse.text().catch(() => '');
+                        throw new Error(errorText || 'Не удалось загрузить предпросмотр PDF');
+                    }
+                    const previewPayload = await previewResponse.json().catch(() => null) as { pages?: DocumentPreviewPageImage[] } | null;
+                    const previewPages = Array.isArray(previewPayload?.pages) ? previewPayload.pages : [];
+                    if (!previewPages.length) {
+                        throw new Error('Не удалось подготовить предпросмотр PDF');
+                    }
+                    if (!cancelled && !timeoutReached) {
+                        setDocumentPreviewPages(scalePreviewPages(
+                            previewPages,
+                            documentPreviewZoom,
+                            documentPreviewStageRef.current?.clientWidth
+                        ));
+                    }
+                    return;
+                }
+
+                const loadPdfJs = Function('return import("/pdfjs/pdf.mjs")') as () => Promise<PdfJsModule>;
+                const pdfjs = await loadPdfJs();
+                await preparePdfJsForRuntime(pdfjs);
+                const loadingTask = pdfjs.getDocument(buildPdfJsDocumentOptions(fileBytes.slice()));
                 const pdf = await loadingTask.promise;
 
                 const availableWidth = Math.max((documentPreviewStageRef.current?.clientWidth ?? 1200) - 8, 320);
@@ -478,11 +573,11 @@ function OrderDetailPage(): JSX.Element {
                         context.setTransform(outputScale, 0, 0, outputScale, 0, 0);
                     }
 
-                    await page.render({
+                    await waitForPdfPageRender(page.render({
                         canvasContext: context,
                         viewport,
                         background: 'rgb(255,255,255)',
-                    }).promise;
+                    }));
 
                     pages.push({
                         src: canvas.toDataURL('image/png'),
@@ -491,15 +586,16 @@ function OrderDetailPage(): JSX.Element {
                     });
                 }
 
-                if (!cancelled) {
+                if (!cancelled && !timeoutReached) {
                     setDocumentPreviewPages(pages);
                 }
             } catch (previewError) {
-                if (!cancelled) {
+                if (!cancelled && !timeoutReached) {
                     setDocumentPreviewError(previewError instanceof Error ? previewError.message : 'Не удалось открыть предпросмотр PDF');
                 }
             } finally {
-                if (!cancelled) {
+                window.clearTimeout(renderTimeout);
+                if (!cancelled && !timeoutReached) {
                     setDocumentPreviewLoading(false);
                 }
             }
@@ -509,6 +605,7 @@ function OrderDetailPage(): JSX.Element {
 
         return () => {
             cancelled = true;
+            window.clearTimeout(renderTimeout);
         };
     }, [documentPreview, documentPreviewZoom]);
 
@@ -995,9 +1092,7 @@ function OrderDetailPage(): JSX.Element {
     };
 
     const openOrderDocumentInNewTab = useCallback((url: string) => {
-        openInNewTabWithUnlock(url, {
-            onBeforeOpen: closeOrderDocumentPreview,
-        });
+        window.open(url, '_blank', 'noopener,noreferrer');
     }, []);
 
     const updateDocumentPreviewZoom = (nextZoom: number) => {

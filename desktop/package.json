@@ -1,0 +1,63 @@
+{
+  "name": "segmentica-desktop",
+  "version": "2026.04.28",
+  "private": true,
+  "description": "Segmentica desktop launcher",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:mac": "electron-builder --mac dmg zip",
+    "build:win": "electron-builder --win nsis zip",
+    "build": "electron-builder --mac dmg zip --win nsis zip"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "electron": "^30.5.1",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "ru.segmentica.desktop",
+    "productName": "Segmentica",
+    "artifactName": "Segmentica-${version}-${os}-${arch}.${ext}",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../release/dist/segmentica-release.zip",
+        "to": "release/segmentica-release.zip"
+      },
+      {
+        "from": "assets/Segmentica.icns",
+        "to": "Segmentica.icns"
+      },
+      {
+        "from": "../frontend/utils/Segmentica.icns/icon_512x512@2x.png",
+        "to": "startup-icon.png"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.business",
+      "icon": "assets/Segmentica.icns",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "zip"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

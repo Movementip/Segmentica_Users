@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { hasPermission, requireAuth } from '../../../../../lib/auth';
-import { hasDocumentRenderer, renderDocxTemplateDocument } from '../../../../../lib/documentRendererClient';
+import { hasDocumentRenderer, renderDocxTemplateDocument, renderPdfPreview } from '../../../../../lib/documentRendererClient';
 import { buildOrderDocumentPayload } from '../../../../../lib/orderDocumentBuilder';
 import { normalizeOrderDocumentKey } from '../../../../../lib/orderDocumentDefinitions';
 
@@ -17,7 +17,8 @@ const normalizeQueryValue = (value: string | string[] | undefined): string | nul
     return text || null;
 };
 
-const resolveFormat = (value: string | null): 'pdf' | 'word' => {
+const resolveFormat = (value: string | null): 'pdf' | 'word' | 'preview' => {
+    if (value === 'preview') return 'preview';
     if (value === 'word') return 'word';
     return 'pdf';
 };
@@ -58,7 +59,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(403).json({ error: 'Forbidden' });
     }
 
-    if (format === 'pdf' && !canPrintOrders && !canExportPdf) {
+    if ((format === 'pdf' || format === 'preview') && !canPrintOrders && !canExportPdf) {
         return res.status(403).json({ error: 'Forbidden' });
     }
 
@@ -82,7 +83,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             return res.status(400).json({ error: 'Пока поддерживаются только шаблоны Word для документов заявки' });
         }
 
-        if (!templateDefinition.outputFormats.includes(format)) {
+        const renderFormat = format === 'preview' ? 'pdf' : format;
+
+        if (!templateDefinition.outputFormats.includes(renderFormat)) {
             return res.status(400).json({ error: `Формат ${format} не поддерживается для этого шаблона` });
         }
 
@@ -91,8 +94,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             fileBaseName: payload.fileBaseName,
             replacements: payload.replacements,
             replaceFirstImageBase64: payload.replaceFirstImageBase64,
-            outputFormat: format,
+            outputFormat: renderFormat,
         });
+
+        if (format === 'preview') {
+            const preview = await renderPdfPreview({
+                buffer: rendered.buffer,
+                filename: rendered.filename,
+            });
+            return res.status(200).json(preview);
+        }
 
         const safeDisposition = format === 'pdf' ? disposition : 'attachment';
         res.setHeader('Content-Type', rendered.contentType);

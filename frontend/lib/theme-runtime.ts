@@ -30,10 +30,14 @@ export const getInitialTheme = (storageKey: string, fallbackTheme: Theme): Theme
 };
 
 const disableDocumentTransitions = (): (() => void) => {
+    document.documentElement.dataset.themeTransitionDisabled = 'true';
+    document.body?.dataset && (document.body.dataset.themeTransitionDisabled = 'true');
+
     const styleNode = document.createElement('style');
+    styleNode.dataset.segmenticaThemeTransitionLock = 'true';
     styleNode.appendChild(
         document.createTextNode(
-            '*,*::before,*::after{-webkit-transition:none!important;transition:none!important;-webkit-animation:none!important;animation:none!important}'
+            ':root[data-theme-transition-disabled] *, :root[data-theme-transition-disabled] *::before, :root[data-theme-transition-disabled] *::after, body[data-theme-transition-disabled] *, body[data-theme-transition-disabled] *::before, body[data-theme-transition-disabled] *::after{-webkit-transition:none!important;transition:none!important;-webkit-animation:none!important;animation:none!important;animation-duration:0s!important;animation-delay:0s!important;transition-duration:0s!important;transition-delay:0s!important}'
         )
     );
     document.head.appendChild(styleNode);
@@ -41,12 +45,13 @@ const disableDocumentTransitions = (): (() => void) => {
     void window.getComputedStyle(document.body).opacity;
 
     return () => {
-        void window.getComputedStyle(document.body).opacity;
-        window.requestAnimationFrame(() => {
-            window.requestAnimationFrame(() => {
-                styleNode.remove();
-            });
-        });
+        window.setTimeout(() => {
+            delete document.documentElement.dataset.themeTransitionDisabled;
+            if (document.body) {
+                delete document.body.dataset.themeTransitionDisabled;
+            }
+            styleNode.remove();
+        }, 180);
     };
 };
 

@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import posixpath
+import struct
 import shutil
 import subprocess
 import tempfile
@@ -54,6 +55,8 @@ RELATIONSHIP_TAG = f"{{{PACKAGE_REL_NS}}}Relationship"
 REL_EMBED_ATTR = f"{{{OFFICE_DOCUMENT_REL_NS}}}embed"
 FIRST_REPLACED_IMAGE_SCALE = 1.0
 DOCX_MIMETYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+PDF_PREVIEW_MAX_PAGES = int(os.environ.get("PDF_PREVIEW_MAX_PAGES", "20"))
+PDF_PREVIEW_DPI = int(os.environ.get("PDF_PREVIEW_DPI", "150"))
 
 ET.register_namespace("w", WORDPROCESSING_NS)
 
@@ -75,6 +78,55 @@ def apply_download_filename(response, filename: str, as_attachment: bool = True)
         f"{disposition}; filename=\"{ascii_fallback}\"; filename*=UTF-8''{encoded}"
     )
     return response
+
+
+def png_dimensions(png_bytes: bytes) -> tuple[int, int]:
+    if len(png_bytes) < 24 or png_bytes[:8] != b"\x89PNG\r\n\x1a\n":
+        raise ValueError("Invalid PNG data")
+    width, height = struct.unpack(">II", png_bytes[16:24])
+    return int(width), int(height)
+
+
+def render_pdf_preview_pages(pdf_path: Path, output_dir: Path, max_pages: int = PDF_PREVIEW_MAX_PAGES) -> list[dict]:
+    output_prefix = output_dir / "page"
+    proc = subprocess.run(
+        [
+            "pdftoppm",
+            "-png",
+            "-r",
+            str(PDF_PREVIEW_DPI),
+            "-f",
+            "1",
+            "-l",
+            str(max(1, max_pages)),
+            str(pdf_path),
+            str(output_prefix),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=LIBREOFFICE_TIMEOUT_MS / 1000,
+        check=False,
+    )
+
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"pdftoppm failed with code {proc.returncode}: {proc.stderr.strip() or proc.stdout.strip() or 'no output'}"
+        )
+
+    pages = []
+    for page_path in sorted(output_dir.glob("page-*.png")):
+        png_bytes = page_path.read_bytes()
+        width, height = png_dimensions(png_bytes)
+        pages.append({
+            "src": f"data:image/png;base64,{base64.b64encode(png_bytes).decode('ascii')}",
+            "width": width,
+            "height": height,
+        })
+
+    if not pages:
+        raise RuntimeError("pdftoppm did not produce preview pages")
+
+    return pages
 
 
 def ensure_template_path(template_name: str) -> Path:
@@ -1199,6 +1251,31 @@ def convert_office_to_pdf():
             download_name=f"{original_stem}.pdf",
         )
         return apply_download_filename(response, f"{original_stem}.pdf")
+    except Exception as error:  # noqa: BLE001
+        traceback.print_exc()
+        return jsonify({"error": str(error)}), 500
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+@app.post("/render/pdf-preview")
+def render_pdf_preview():
+    uploaded_file = request.files.get("file")
+    if uploaded_file is None or not uploaded_file.filename:
+        return jsonify({"error": "file is required"}), 400
+
+    try:
+        max_pages = int(request.form.get("maxPages") or PDF_PREVIEW_MAX_PAGES)
+    except ValueError:
+        max_pages = PDF_PREVIEW_MAX_PAGES
+    max_pages = max(1, min(max_pages, PDF_PREVIEW_MAX_PAGES))
+
+    temp_dir = Path(tempfile.mkdtemp(prefix="segmentica-pdf-preview-"))
+    try:
+        pdf_path = temp_dir / "document.pdf"
+        uploaded_file.save(pdf_path)
+        pages = render_pdf_preview_pages(pdf_path, temp_dir, max_pages)
+        return jsonify({"pages": pages})
     except Exception as error:  # noqa: BLE001
         traceback.print_exc()
         return jsonify({"error": str(error)}), 500
