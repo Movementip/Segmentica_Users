@@ -176,7 +176,7 @@ function applyThemeToTabChrome(tab, theme) {
 }
 
 function createThemeApplyScript(theme) {
-  return `(function(){var theme=${JSON.stringify(theme)};var root=document.documentElement;var body=document.body;var lock=document.getElementById("segmentica-electron-theme-lock");if(!lock){lock=document.createElement("style");lock.id="segmentica-electron-theme-lock";lock.textContent=":root[data-theme-transition-disabled] *,:root[data-theme-transition-disabled] *::before,:root[data-theme-transition-disabled] *::after,body[data-theme-transition-disabled] *,body[data-theme-transition-disabled] *::before,body[data-theme-transition-disabled] *::after{-webkit-transition:none!important;transition:none!important;-webkit-animation:none!important;animation:none!important;animation-duration:0s!important;animation-delay:0s!important;transition-duration:0s!important;transition-delay:0s!important}";document.head&&document.head.appendChild(lock)}root.dataset.themeTransitionDisabled="true";if(body){body.dataset.themeTransitionDisabled="true"}try{window.localStorage.setItem("segmentica-theme",theme)}catch(e){}var apply=function(target){if(!target)return;target.classList.toggle("dark",theme==="dark");target.classList.toggle("light",theme==="light");target.dataset.theme=theme;target.style.colorScheme=theme};apply(root);apply(body);window.dispatchEvent(new CustomEvent("segmentica-theme-external",{detail:{theme:theme}}));window.clearTimeout(window.__segmenticaElectronThemeUnlock);window.__segmenticaElectronThemeUnlock=window.setTimeout(function(){delete root.dataset.themeTransitionDisabled;if(document.body){delete document.body.dataset.themeTransitionDisabled}var node=document.getElementById("segmentica-electron-theme-lock");node&&node.remove()},180);return new Promise(function(resolve){requestAnimationFrame(function(){requestAnimationFrame(resolve)})})}())`;
+  return `(function(){var theme=${JSON.stringify(theme)};var root=document.documentElement;var body=document.body;var lock=document.getElementById("segmentica-electron-theme-lock");if(!lock){lock=document.createElement("style");lock.id="segmentica-electron-theme-lock";lock.textContent=":root[data-theme-transition-disabled] *,:root[data-theme-transition-disabled] *::before,:root[data-theme-transition-disabled] *::after,body[data-theme-transition-disabled] *,body[data-theme-transition-disabled] *::before,body[data-theme-transition-disabled] *::after{-webkit-transition:none!important;transition:none!important;-webkit-animation:none!important;animation:none!important;animation-duration:0s!important;animation-delay:0s!important;transition-duration:0s!important;transition-delay:0s!important}";document.head&&document.head.appendChild(lock)}root.dataset.themeTransitionDisabled="true";if(body){body.dataset.themeTransitionDisabled="true"}try{window.localStorage.setItem("segmentica-theme",theme)}catch(e){}var apply=function(target){if(!target)return;target.classList.toggle("dark",theme==="dark");target.classList.toggle("light",theme==="light");target.dataset.theme=theme;target.style.colorScheme=theme};apply(root);apply(body);window.dispatchEvent(new CustomEvent("segmentica-theme-external",{detail:{theme:theme}}));window.clearTimeout(window.__segmenticaElectronThemeUnlock);window.__segmenticaElectronThemeUnlock=window.setTimeout(function(){delete root.dataset.themeTransitionDisabled;if(document.body){delete document.body.dataset.themeTransitionDisabled}var node=document.getElementById("segmentica-electron-theme-lock");node&&node.remove()},180);return theme}())`;
 }
 
 function applyThemeToTabPage(tab, theme) {
@@ -228,7 +228,7 @@ function applyBrowserTabTheme(tab, theme) {
   applyGlobalTheme(theme);
 }
 
-async function activateBrowserTab(appWindow, tabId) {
+function activateBrowserTab(appWindow, tabId) {
   if (!appWindow || appWindow.window.isDestroyed()) {
     return;
   }
@@ -245,7 +245,7 @@ async function activateBrowserTab(appWindow, tabId) {
 
   nextTab.theme = currentTheme;
   applyThemeToTabChrome(nextTab, currentTheme);
-  await applyThemeToTabPage(nextTab, currentTheme);
+  void applyThemeToTabPage(nextTab, currentTheme);
   appWindow.activeTabId = tabId;
   nativeTheme.themeSource = currentTheme;
   appWindow.window.addBrowserView(nextTab.view);
@@ -904,6 +904,14 @@ function createWindow() {
 }
 
 function installApplicationMenu() {
+  const reloadActiveTab = (_menuItem, browserWindow) => {
+    const appWindow = getAppWindowByBrowserWindow(browserWindow || BrowserWindow.getFocusedWindow());
+    const activeTab = findBrowserTab(appWindow?.activeTabId);
+    if (activeTab && !activeTab.view.webContents.isDestroyed()) {
+      activeTab.view.webContents.reload();
+    }
+  };
+
   const template = [
     {
       label: "Segmentica",
@@ -919,9 +927,53 @@ function installApplicationMenu() {
         { role: "quit", label: "Выйти из Segmentica" }
       ]
     },
-    { role: "fileMenu", label: "Файл" },
+    {
+      label: "Файл",
+      submenu: [
+        {
+          label: "Новая вкладка",
+          accelerator: "CmdOrCtrl+T",
+          click: (_menuItem, browserWindow) => {
+            createBrowserTab(getAppWindowByBrowserWindow(browserWindow || BrowserWindow.getFocusedWindow()), APP_URL);
+          }
+        },
+        {
+          label: "Закрыть вкладку",
+          accelerator: "CmdOrCtrl+W",
+          click: (_menuItem, browserWindow) => {
+            const appWindow = getAppWindowByBrowserWindow(browserWindow || BrowserWindow.getFocusedWindow());
+            if (appWindow?.activeTabId) {
+              closeBrowserTab(appWindow, appWindow.activeTabId);
+            }
+          }
+        }
+      ]
+    },
     { role: "editMenu", label: "Правка" },
-    { role: "viewMenu", label: "Вид" },
+    {
+      label: "Вид",
+      submenu: [
+        {
+          label: "Перезагрузить вкладку",
+          accelerator: "CmdOrCtrl+R",
+          click: reloadActiveTab
+        },
+        {
+          label: "Принудительно перезагрузить вкладку",
+          accelerator: "CmdOrCtrl+Shift+R",
+          click: (_menuItem, browserWindow) => {
+            const appWindow = getAppWindowByBrowserWindow(browserWindow || BrowserWindow.getFocusedWindow());
+            const activeTab = findBrowserTab(appWindow?.activeTabId);
+            if (activeTab && !activeTab.view.webContents.isDestroyed()) {
+              activeTab.view.webContents.reloadIgnoringCache();
+            }
+          }
+        },
+        { type: "separator" },
+        { role: "toggleDevTools", label: "Инструменты разработчика" },
+        { role: "togglefullscreen", label: "Во весь экран" }
+      ]
+    },
     { role: "windowMenu", label: "Окно" },
     { role: "help", label: "Справка", submenu: [] }
   ];
@@ -960,13 +1012,6 @@ ipcMain.handle("launcher:renderer-ready", async (event) => {
   };
 });
 
-ipcMain.handle("launcher:close-app", (event) => {
-  const appWindow = getAppWindowFromEvent(event);
-  if (appWindow && !appWindow.window.isDestroyed()) {
-    appWindow.window.close();
-  }
-});
-
 ipcMain.handle("tabs:create", (event, url = APP_URL) => {
   createBrowserTab(getAppWindowFromEvent(event), url);
 });
@@ -994,14 +1039,6 @@ ipcMain.handle("tabs:finish-drag", (_event, tabId, point, shouldDetach) => {
   }
   if (draggedTab?.tabId === tabId) {
     draggedTab = null;
-  }
-});
-
-ipcMain.handle("tabs:reload-active", (event) => {
-  const appWindow = getAppWindowFromEvent(event);
-  const activeTab = findBrowserTab(appWindow?.activeTabId);
-  if (activeTab && !activeTab.view.webContents.isDestroyed()) {
-    activeTab.view.webContents.reload();
   }
 });
 

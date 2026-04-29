@@ -7,8 +7,6 @@ const appShell = document.getElementById("appShell");
 const tabsEl = document.getElementById("tabs");
 const viewHost = document.getElementById("viewHost");
 const newTabButton = document.getElementById("newTab");
-const refreshButton = document.getElementById("refreshApp");
-const closeAppButton = document.getElementById("closeApp");
 const startupLogo = document.getElementById("startupLogo");
 
 let tabs = [];
@@ -299,12 +297,4 @@ folderButton.addEventListener("click", () => {
 
 newTabButton.addEventListener("click", () => {
   window.segmenticaLauncher.createTab(defaultAppUrl);
-});
-
-refreshButton.addEventListener("click", () => {
-  window.segmenticaLauncher.reloadActiveTab();
-});
-
-closeAppButton.addEventListener("click", () => {
-  window.segmenticaLauncher.closeApp();
 });

@@ -28,9 +28,6 @@ contextBridge.exposeInMainWorld("segmenticaLauncher", {
   openRuntimeFolder() {
     return ipcRenderer.invoke("launcher:open-runtime-folder");
   },
-  closeApp() {
-    return ipcRenderer.invoke("launcher:close-app");
-  },
   createTab(url) {
     return ipcRenderer.invoke("tabs:create", url);
   },
@@ -48,9 +45,6 @@ contextBridge.exposeInMainWorld("segmenticaLauncher", {
   },
   finishTabDrag(tabId, point, shouldDetach) {
     return ipcRenderer.invoke("tabs:finish-drag", tabId, point, shouldDetach);
-  },
-  reloadActiveTab() {
-    return ipcRenderer.invoke("tabs:reload-active");
   },
   updateTabBounds(bounds) {
     return ipcRenderer.invoke("tabs:update-bounds", bounds);

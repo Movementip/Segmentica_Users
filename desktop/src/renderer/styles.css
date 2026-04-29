@@ -200,7 +200,7 @@ h1 {
   align-items: end;
   gap: 4px;
   min-width: 0;
-  max-width: min(72vw, 920px);
+  max-width: calc(100vw - 78px);
   height: 100%;
   overflow: hidden;
   -webkit-app-region: no-drag;
@@ -296,19 +296,11 @@ h1 {
 }
 
 .icon-button {
+  align-self: center;
   width: 30px;
   padding: 0;
   font-size: 20px;
   line-height: 1;
-}
-
-.close-button:hover {
-  border-color: rgba(255, 87, 87, 0.45);
-  background: rgba(170, 35, 35, 0.48);
-}
-
-.chrome-spacer {
-  flex: 1;
 }
 
 .view-host {
