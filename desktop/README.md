@@ -1,23 +1,53 @@
 # Segmentica Desktop
 
-Electron-обёртка для запуска Segmentica как desktop-приложения.
+Electron-приложение для запуска Segmentica вместе с локальным окружением
+контейнеров.
 
 ## Что делает приложение
 
-- Проверяет наличие Docker и Docker Compose.
-- Пытается запустить Docker Desktop, если daemon не активен.
+- Показывает панель окружения перед входом в сайт.
+- Управляет встроенной виртуальной машиной Lima для контейнеров Segmentica.
 - Распаковывает bundled `segmentica-release.zip` в пользовательскую папку приложения.
-- Проверяет нужные Docker images и скачивает отсутствующие.
-- Запускает `docker compose up -d`.
-- При первом запуске восстанавливает заполненную базу из `seed/Segmentica.dump`.
-- Открывает `http://localhost:3000` внутри окна приложения.
-- При закрытии приложения выполняет `docker compose down --remove-orphans`, не удаляя volume с базой.
+- Готовит compose-файлы, images, volumes и сеть контейнеров.
+- Запускает и останавливает контейнеры из интерфейса Electron.
+- Открывает `http://localhost:3000` во вкладке приложения.
+- При закрытии приложения останавливает контейнеры перед выходом.
 
-## Ограничение Docker
+## Встроенное окружение
 
-На macOS и Windows Docker нельзя корректно встроить внутрь Electron-приложения как обычную библиотеку. Нужен Docker Desktop или совместимый Docker daemon, потому что он использует системную виртуализацию и требует пользовательской установки.
+Для macOS приложение может поставляться с `limactl` внутри ресурсов Electron.
+Это убирает зависимость от `PATH` пользователя и позволяет управлять окружением
+из одного приложения.
 
-Если Docker Desktop не установлен, приложение откроет страницу скачивания Docker Desktop.
+Важно: сама виртуальная машина Lima всё равно использует системную виртуализацию
+macOS. Segmentica задаёт для неё отдельный `LIMA_HOME`, поэтому файлы VM лежат
+в пользовательской папке приложения:
+
+```text
+~/Library/Application Support/Segmentica/lima
+```
+
+Файлы окружения compose/release лежат рядом:
+
+```text
+~/Library/Application Support/Segmentica/runtime
+```
+
+Физически контейнеры, images и volumes находятся внутри диска виртуальной машины в этой
+папке приложения. Внутрь самого `.app` bundle VM-диск не кладётся: bundle может
+быть read-only, подписанным и заменяться при обновлении.
+
+Подготовить bundled `limactl`:
+
+```sh
+npm --prefix desktop run bundle:lima
+```
+
+Если `limactl` лежит не в `PATH`, укажите его явно:
+
+```sh
+SEGMENTICA_LIMACTL_PATH=/opt/homebrew/bin/limactl npm --prefix desktop run bundle:lima
+```
 
 ## Сборка
 
@@ -37,16 +67,22 @@ npm --prefix desktop install
 Запуск в dev-режиме:
 
 ```sh
-npm --prefix desktop start
+SEGMENTICA_CONTAINER_RUNTIME=embedded-lima npm --prefix desktop start
 ```
 
-Сборка под macOS:
+Сборка macOS с bundled Lima:
+
+```sh
+npm --prefix desktop run build:mac:bundled
+```
+
+Обычная сборка macOS:
 
 ```sh
 npm --prefix desktop run build:mac
 ```
 
-Сборка под Windows:
+Сборка Windows:
 
 ```sh
 npm --prefix desktop run build:win

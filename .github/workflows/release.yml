@@ -1,0 +1,203 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version, for example 2026.04.28"
+        required: true
+        default: "2026.04.28"
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  IMAGE_PREFIX: ghcr.io/movementip
+
+jobs:
+  release-package:
+    name: Build Docker Compose release package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare release env
+        shell: bash
+        run: |
+          sed -i "s|^SEGMENTICA_IMAGE_PREFIX=.*|SEGMENTICA_IMAGE_PREFIX=${IMAGE_PREFIX}|" release/.env.example
+          sed -i "s|^SEGMENTICA_VERSION=.*|SEGMENTICA_VERSION=${{ steps.version.outputs.version }}|" release/.env.example
+
+      - name: Build release zip
+        run: sh release/prepare-release.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-dist
+          path: |
+            release/dist/segmentica-release.zip
+            release/dist/install.sh
+            release/dist/install.ps1
+
+  packages:
+    name: Publish GHCR packages
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            backend/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm --prefix frontend ci
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build and publish images
+        shell: bash
+        run: |
+          SEGMENTICA_IMAGE_PREFIX="${IMAGE_PREFIX}" \
+          SEGMENTICA_VERSION="${{ steps.version.outputs.version }}" \
+          BUILD_IMAGES=1 \
+          PUSH_LATEST=1 \
+          sh release/publish-images.sh
+
+  desktop-mac:
+    name: Build macOS desktop
+    runs-on: macos-14
+    needs: release-package
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-dist
+          path: release/dist
+
+      - name: Install desktop dependencies
+        run: npm --prefix desktop ci
+
+      - name: Install Lima for bundling
+        run: brew install lima
+
+      - name: Build macOS app
+        run: npm --prefix desktop run build:mac:bundled
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-mac
+          path: |
+            desktop/dist/*.dmg
+            desktop/dist/*mac*.zip
+
+  desktop-win:
+    name: Build Windows desktop
+    runs-on: windows-latest
+    needs: release-package
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-dist
+          path: release/dist
+
+      - name: Install desktop dependencies
+        run: npm --prefix desktop ci
+
+      - name: Build Windows app
+        run: npm --prefix desktop run build:win
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-win
+          path: |
+            desktop/dist/*.exe
+            desktop/dist/*win*.zip
+
+  github-release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    needs:
+      - release-package
+      - packages
+      - desktop-mac
+      - desktop-win
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+            TAG="v$VERSION"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+            TAG="$GITHUB_REF_NAME"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Segmentica ${{ steps.version.outputs.version }}
+          body_path: docs/RELEASE_NOTES_2026.04.28.md
+          files: |
+            artifacts/release-dist/*
+            artifacts/desktop-mac/*
+            artifacts/desktop-win/*

@@ -35,6 +35,7 @@
         "desktop:install": "npm --prefix desktop install",
         "desktop:start": "npm --prefix desktop start",
         "desktop:build:mac": "npm --prefix desktop run build:mac",
+        "desktop:build:mac:bundled": "npm --prefix desktop run build:mac:bundled",
         "desktop:build:win": "npm --prefix desktop run build:win"
     }
 }

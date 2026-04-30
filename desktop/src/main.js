@@ -10,6 +10,8 @@ app.setAppUserModelId("ru.segmentica.desktop");
 const APP_URL = "http://localhost:3000";
 const RELEASE_VERSION = "2026.04.28";
 const DOCKER_DESKTOP_URL = "https://www.docker.com/products/docker-desktop/";
+const LIMA_INSTALL_URL = "https://lima-vm.io/docs/installation/";
+const LIMA_INSTANCE_NAME = "segmentica";
 const APP_ICON_PATH = fs.existsSync(path.resolve(__dirname, "..", "assets", "Segmentica.icns"))
   ? path.resolve(__dirname, "..", "assets", "Segmentica.icns")
   : path.join(process.resourcesPath || "", "Segmentica.icns");
@@ -42,6 +44,15 @@ const CONTAINER_START_ORDER = [
   "segmentica-backend",
   "segmentica-frontend"
 ];
+const CONTAINER_STOP_TIMEOUT_SECONDS = 5;
+const CONTAINER_STOP_COMMAND_TIMEOUT_MS = 45_000;
+const CONTAINER_KILL_COMMAND_TIMEOUT_MS = 20_000;
+const APP_HEALTHCHECK_TIMEOUT_MS = 1_500;
+const RUNTIME_SNAPSHOT_COMMAND_TIMEOUT_MS = 8_000;
+const RUNTIME_LOG_COMMAND_TIMEOUT_MS = 12_000;
+const RUNTIME_LOG_TAIL_PER_CONTAINER = 120;
+const RUNTIME_TAB_ID = "runtime-dashboard";
+const CONTAINER_RUNTIME = normalizeContainerRuntime(process.env.SEGMENTICA_CONTAINER_RUNTIME);
 
 let mainWindow;
 let shutdownRequested = false;
@@ -51,11 +62,31 @@ let existingContainerNamesStartedByLauncher = [];
 let stackStartPromise = null;
 let launcherReadyState = { ready: false, url: APP_URL };
 let launcherStatusState = { message: "Подготовка...", detail: "Проверяю окружение" };
+let runtimeControlState = { mode: "idle", lastUpdatedAt: null };
 let nextWindowId = 1;
 let nextTabId = 1;
 const appWindows = new Map();
 let draggedTab = null;
 let currentTheme = "dark";
+let resolvedLimaCommand = null;
+
+function normalizeContainerRuntime(value) {
+  if (value === "embedded-lima") {
+    return "embedded-lima";
+  }
+  if (value === "docker-desktop") {
+    return "docker-desktop";
+  }
+  return process.platform === "darwin" ? "embedded-lima" : "docker-desktop";
+}
+
+function isEmbeddedLimaRuntime() {
+  return CONTAINER_RUNTIME === "embedded-lima";
+}
+
+function containerRuntimeLabel() {
+  return isEmbeddedLimaRuntime() ? "Встроенная виртуальная машина" : "Локальный Docker";
+}
 
 function themeBackground(theme = currentTheme) {
   return theme === "light" ? "#ffffff" : "#08090a";
@@ -63,6 +94,63 @@ function themeBackground(theme = currentTheme) {
 
 function runtimeDir() {
   return path.join(app.getPath("userData"), "runtime");
+}
+
+function limaHomeDir() {
+  return path.join(app.getPath("userData"), "lima");
+}
+
+function legacyLimaHomeDir() {
+  return path.join(os.homedir(), ".lima");
+}
+
+function limaInstanceDir(homeDir = limaHomeDir()) {
+  return path.join(homeDir, LIMA_INSTANCE_NAME);
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isExecutableFile(filePath) {
+  try {
+    fs.accessSync(filePath, fs.constants.X_OK);
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+function bundledRuntimePath(...segments) {
+  const packagedPath = path.join(process.resourcesPath || "", "runtime", ...segments);
+  if (process.resourcesPath && fs.existsSync(packagedPath)) {
+    return packagedPath;
+  }
+  return path.resolve(__dirname, "..", "runtime", ...segments);
+}
+
+function limaCommand() {
+  if (resolvedLimaCommand) {
+    return resolvedLimaCommand;
+  }
+
+  const executableName = process.platform === "win32" ? "limactl.exe" : "limactl";
+  const candidates = [
+    process.env.SEGMENTICA_LIMACTL_PATH,
+    bundledRuntimePath("bin", executableName)
+  ].filter(Boolean);
+
+  resolvedLimaCommand = candidates.find(isExecutableFile) || executableName;
+  return resolvedLimaCommand;
+}
+
+function commandEnvironment(command, env = {}) {
+  const nextEnv = { ...process.env, ...env };
+  if (isEmbeddedLimaRuntime() && command === limaCommand()) {
+    fs.mkdirSync(limaHomeDir(), { recursive: true });
+    nextEnv.LIMA_HOME = limaHomeDir();
+  }
+  return nextEnv;
 }
 
 function releaseZipPath() {
@@ -91,6 +179,15 @@ function sendReady(url = APP_URL) {
   }
 }
 
+function sendStopped() {
+  launcherReadyState = { ready: false, url: APP_URL };
+  for (const appWindow of appWindows.values()) {
+    if (!appWindow.window.isDestroyed()) {
+      appWindow.window.webContents.send("launcher:stopped", { url: APP_URL });
+    }
+  }
+}
+
 function formatTabTitle(title, url) {
   const normalized = String(title || "").trim();
   if (!normalized || normalized === url) {
@@ -104,16 +201,19 @@ function sendTabsState(appWindow) {
     return;
   }
   const activeTab = findBrowserTab(appWindow.activeTabId);
+  const runtimeTab = appWindow.runtimeTabOpen
+    ? [{ id: RUNTIME_TAB_ID, title: "Окружение", url: "segmentica://runtime", theme: currentTheme, type: "runtime" }]
+    : [];
   appWindow.window.webContents.send("tabs:state", {
     windowId: appWindow.id,
     activeTabId: appWindow.activeTabId,
     activeTheme: activeTab?.theme || currentTheme,
-    tabs: appWindow.tabs.map((tab) => ({
+    tabs: [...appWindow.tabs.map((tab) => ({
       id: tab.id,
       title: tab.title,
       url: tab.url,
       theme: tab.theme || currentTheme
-    }))
+    })), ...runtimeTab]
   });
 }
 
@@ -233,6 +333,11 @@ function activateBrowserTab(appWindow, tabId) {
     return;
   }
 
+  if (tabId === RUNTIME_TAB_ID) {
+    openRuntimeDashboardTab(appWindow);
+    return;
+  }
+
   const nextTab = findBrowserTab(tabId);
   if (!nextTab || !appWindow.tabs.includes(nextTab) || appWindow.activeTabId === tabId) {
     return;
@@ -246,6 +351,7 @@ function activateBrowserTab(appWindow, tabId) {
   nextTab.theme = currentTheme;
   applyThemeToTabChrome(nextTab, currentTheme);
   void applyThemeToTabPage(nextTab, currentTheme);
+  appWindow.runtimeTabOpen = false;
   appWindow.activeTabId = tabId;
   nativeTheme.themeSource = currentTheme;
   appWindow.window.addBrowserView(nextTab.view);
@@ -355,6 +461,7 @@ function createShellWindow({ initialTab = null, initialBounds = null, showStartu
     tabs: [],
     activeTabId: null,
     viewBounds: { x: 0, y: 44, width: 1180, height: 776 },
+    runtimeTabOpen: false,
     showStartup
   };
 
@@ -374,6 +481,17 @@ function createShellWindow({ initialTab = null, initialBounds = null, showStartu
 
   browserWindow.loadFile(path.join(__dirname, "renderer", "index.html")).catch(showStartupError);
   browserWindow.on("resize", () => updateActiveBrowserViewBounds(appWindow));
+  browserWindow.on("close", (event) => {
+    if (shutdownRequested || appWindows.size > 1 || appWindow.tabs.length === 0) {
+      return;
+    }
+
+    event.preventDefault();
+    void stopRuntimeAndShowDashboard().catch((error) => {
+      runtimeControlState = { mode: "error", lastUpdatedAt: new Date().toISOString() };
+      sendStatus("Не удалось остановить контейнеры", error.message);
+    });
+  });
   browserWindow.on("closed", () => {
     for (const tab of appWindow.tabs) {
       if (!tab.view.webContents.isDestroyed()) {
@@ -535,7 +653,23 @@ function closeBrowserTab(appWindow, tabId) {
 
 function exec(command, args = [], options = {}) {
   return new Promise((resolve, reject) => {
-    execFile(command, args, { encoding: "utf8", maxBuffer: 1024 * 1024 * 20, ...options }, (error, stdout, stderr) => {
+    const { timeout, timeoutMs, env, ...execOptions } = options;
+    const effectiveTimeoutMs = timeoutMs || timeout || 0;
+    let settled = false;
+    let timer = null;
+    const child = execFile(command, args, {
+      encoding: "utf8",
+      maxBuffer: 1024 * 1024 * 20,
+      ...execOptions,
+      env: commandEnvironment(command, env)
+    }, (error, stdout, stderr) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      if (timer) {
+        clearTimeout(timer);
+      }
       if (error) {
         error.stdout = stdout;
         error.stderr = stderr;
@@ -544,31 +678,109 @@ function exec(command, args = [], options = {}) {
       }
       resolve({ stdout, stderr });
     });
+    timer = effectiveTimeoutMs
+      ? setTimeout(() => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        child.kill("SIGTERM");
+        setTimeout(() => child.kill("SIGKILL"), 1_000).unref?.();
+        const error = new Error(`${command} ${args.join(" ")} не завершился за ${Math.round(effectiveTimeoutMs / 1000)} сек.`);
+        error.stdout = "";
+        error.stderr = "";
+        error.timedOut = true;
+        reject(error);
+      }, effectiveTimeoutMs)
+      : null;
   });
 }
 
 function run(command, args = [], options = {}) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"], ...options });
+    const child = spawn(command, args, {
+      stdio: ["ignore", "pipe", "pipe"],
+      ...options,
+      env: commandEnvironment(command, options.env)
+    });
     let stdout = "";
     let stderr = "";
+    let lastStatusAt = 0;
+    let settled = false;
+    const maxBufferedOutput = options.maxBufferedOutput || 1024 * 1024;
+    const timeout = options.timeoutMs
+      ? setTimeout(() => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        child.kill("SIGTERM");
+        const error = new Error(`${command} ${args.join(" ")} не завершился за ${Math.round(options.timeoutMs / 1000)} сек.`);
+        error.stdout = stdout;
+        error.stderr = stderr;
+        error.timedOut = true;
+        reject(error);
+      }, options.timeoutMs)
+      : null;
+
+    const appendOutput = (current, chunk) => {
+      const next = current + chunk.toString();
+      return next.length > maxBufferedOutput ? next.slice(-maxBufferedOutput) : next;
+    };
+
+    const cleanStatusLine = (value) => {
+      return value
+        .replace(/\u001b\[[0-9;]*m/g, "")
+        .replace(/\r/g, "\n")
+        .trim()
+        .split(/\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .slice(-1)[0]
+        ?.slice(0, 240);
+    };
+
+    const maybeSendStatus = (chunk) => {
+      const now = Date.now();
+      if (now - lastStatusAt < (options.statusThrottleMs || 750)) {
+        return;
+      }
+
+      const lastLine = cleanStatusLine(chunk.toString());
+      if (!lastLine) {
+        return;
+      }
+
+      lastStatusAt = now;
+      sendStatus(options.statusMessage || "Выполняю команду...", lastLine);
+    };
 
     child.stdout.on("data", (chunk) => {
-      stdout += chunk.toString();
-      const lastLine = stdout.trim().split(/\r?\n/).slice(-1)[0];
-      if (lastLine) {
-        sendStatus(options.statusMessage || "Выполняю команду...", lastLine);
-      }
+      stdout = appendOutput(stdout, chunk);
+      maybeSendStatus(chunk);
     });
     child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString();
-      const lastLine = stderr.trim().split(/\r?\n/).slice(-1)[0];
-      if (lastLine) {
-        sendStatus(options.statusMessage || "Выполняю команду...", lastLine);
-      }
+      stderr = appendOutput(stderr, chunk);
+      maybeSendStatus(chunk);
     });
-    child.on("error", reject);
+    child.on("error", (error) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+      reject(error);
+    });
     child.on("close", (code) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      if (timeout) {
+        clearTimeout(timeout);
+      }
       if (code === 0) {
         resolve({ stdout, stderr });
       } else {
@@ -581,8 +793,188 @@ function run(command, args = [], options = {}) {
   });
 }
 
-function dockerComposeArgs(args) {
-  return ["compose", "-f", path.join(runtimeDir(), "docker-compose.yml"), "--env-file", path.join(runtimeDir(), ".env"), ...args];
+function parseJsonLines(stdout = "") {
+  return stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      try {
+        return JSON.parse(line);
+      } catch (error) {
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
+
+async function tryExec(command, args = [], options = {}) {
+  try {
+    return await exec(command, args, options);
+  } catch (error) {
+    return { stdout: "", stderr: error.stderr || error.message || "", error };
+  }
+}
+
+async function tryRun(command, args = [], options = {}) {
+  try {
+    return await run(command, args, options);
+  } catch (error) {
+    return { stdout: error.stdout || "", stderr: error.stderr || error.message || "", error };
+  }
+}
+
+function runtimeComposeFile() {
+  return path.join(runtimeDir(), "docker-compose.yml");
+}
+
+function runtimeEnvFile() {
+  return path.join(runtimeDir(), ".env");
+}
+
+function limaConfigPath() {
+  return path.join(runtimeDir(), "segmentica-lima.yaml");
+}
+
+function yamlQuote(value) {
+  return JSON.stringify(String(value));
+}
+
+function ensureLimaConfigFile() {
+  const dir = runtimeDir();
+  fs.mkdirSync(dir, { recursive: true });
+
+  const configPath = limaConfigPath();
+  const mountedRuntimeDir = runtimeDir();
+  const config = [
+    "# Generated by Segmentica. Do not edit while the app is running.",
+    "minimumLimaVersion: 2.0.0",
+    "base:",
+    "  - template:_images/ubuntu",
+    "  - template:_default/mounts",
+    "containerd:",
+    "  system: true",
+    "  user: false",
+    "mounts:",
+    `  - location: ${yamlQuote(mountedRuntimeDir)}`,
+    `    mountPoint: ${yamlQuote(mountedRuntimeDir)}`,
+    "    writable: true",
+    "portForwards:",
+    "  - guestPort: 3000",
+    "    hostPort: 3000",
+    "    hostIP: 127.0.0.1",
+    "  - guestPort: 3001",
+    "    hostPort: 3001",
+    "    hostIP: 127.0.0.1",
+    "  - guestPort: 3010",
+    "    hostPort: 3010",
+    "    hostIP: 127.0.0.1",
+    "  - guestPort: 31415",
+    "    hostPort: 31415",
+    "    hostIP: 127.0.0.1",
+    "  - guestPort: 5439",
+    "    hostPort: 5439",
+    "    hostIP: 127.0.0.1",
+    ""
+  ].join("\n");
+
+  fs.writeFileSync(configPath, config);
+  return configPath;
+}
+
+function containerComposeCommand() {
+  return isEmbeddedLimaRuntime() ? limaCommand() : "docker";
+}
+
+function limaNerdctlArgs(args) {
+  return ["shell", LIMA_INSTANCE_NAME, "sudo", "nerdctl", ...args];
+}
+
+function containerComposeArgs(args) {
+  if (isEmbeddedLimaRuntime()) {
+    return limaNerdctlArgs(["compose", "-f", runtimeComposeFile(), "--env-file", runtimeEnvFile(), ...args]);
+  }
+
+  return ["compose", "-f", runtimeComposeFile(), "--env-file", runtimeEnvFile(), ...args];
+}
+
+function containerListCommand() {
+  return isEmbeddedLimaRuntime() ? limaCommand() : "docker";
+}
+
+function containerListArgs() {
+  if (isEmbeddedLimaRuntime()) {
+    return limaNerdctlArgs(["ps", "-a", "--format", "{{.Names}}"]);
+  }
+
+  return ["ps", "-a", "--format", "{{.Names}}"];
+}
+
+function containerImageInspectCommand() {
+  return isEmbeddedLimaRuntime() ? limaCommand() : "docker";
+}
+
+function containerImageInspectArgs(image) {
+  if (isEmbeddedLimaRuntime()) {
+    return limaNerdctlArgs(["image", "inspect", image]);
+  }
+
+  return ["image", "inspect", image];
+}
+
+function containerStartCommand() {
+  return isEmbeddedLimaRuntime() ? limaCommand() : "docker";
+}
+
+function containerStartArgs(containerNames) {
+  if (isEmbeddedLimaRuntime()) {
+    return limaNerdctlArgs(["start", ...containerNames]);
+  }
+
+  return ["start", ...containerNames];
+}
+
+function containerStopCommand() {
+  return isEmbeddedLimaRuntime() ? limaCommand() : "docker";
+}
+
+function containerStopArgs(containerNames) {
+  if (isEmbeddedLimaRuntime()) {
+    return limaNerdctlArgs(["stop", "--time", String(CONTAINER_STOP_TIMEOUT_SECONDS), ...containerNames]);
+  }
+
+  return ["stop", "--timeout", String(CONTAINER_STOP_TIMEOUT_SECONDS), ...containerNames];
+}
+
+function containerKillCommand() {
+  return isEmbeddedLimaRuntime() ? limaCommand() : "docker";
+}
+
+function containerKillArgs(containerNames) {
+  if (isEmbeddedLimaRuntime()) {
+    return limaNerdctlArgs(["kill", ...containerNames]);
+  }
+
+  return ["kill", ...containerNames];
+}
+
+function embeddedStackScriptArgs() {
+  return ["shell", LIMA_INSTANCE_NAME, "sudo", "/usr/local/sbin/segmentica-start-stack"];
+}
+
+async function hasEmbeddedStackScript() {
+  return isEmbeddedLimaRuntime()
+    && await hasCommand(limaCommand(), ["shell", LIMA_INSTANCE_NAME, "test", "-x", "/usr/local/sbin/segmentica-start-stack"]);
+}
+
+async function ensureEmbeddedContainerdIfPossible() {
+  if (!isEmbeddedLimaRuntime()) {
+    return;
+  }
+
+  if (await hasEmbeddedStackScript()) {
+    await tryRun(limaCommand(), embeddedStackScriptArgs(), { statusMessage: "Проверяю окружение..." });
+  }
 }
 
 async function hasCommand(command, args) {
@@ -634,6 +1026,89 @@ async function assertDockerAvailable() {
   await ensureDockerDesktopStarted();
 }
 
+async function ensureLimaAvailable() {
+  if (process.platform !== "darwin") {
+    throw new Error("Встроенная среда контейнеров пока поддерживается только на macOS.");
+  }
+
+  migrateLegacyLimaInstanceIfNeeded();
+  const configPath = ensureLimaConfigFile();
+  const limaExists = await hasCommand(limaCommand(), ["--version"]);
+  if (!limaExists) {
+    throw new Error("Встроенная среда контейнеров не найдена. Установите Lima: brew install lima");
+  }
+
+  const hasInstance = await hasCommand(limaCommand(), ["list", LIMA_INSTANCE_NAME]);
+  if (hasInstance) {
+    sendStatus("Запускаю встроенное окружение Segmentica...", `Среда: ${LIMA_INSTANCE_NAME}`);
+    await run(limaCommand(), ["start", LIMA_INSTANCE_NAME], { statusMessage: "Запускаю виртуальную машину..." }).catch(() => null);
+  } else {
+    sendStatus("Создаю встроенное окружение Segmentica...", `Среда: ${LIMA_INSTANCE_NAME}`);
+    await run(limaCommand(), [
+      "start",
+      "--tty=false",
+      `--name=${LIMA_INSTANCE_NAME}`,
+      configPath
+    ], { statusMessage: "Создаю виртуальную машину..." });
+  }
+
+  await waitForEmbeddedLimaShell();
+  await ensureEmbeddedContainerdIfPossible();
+  try {
+    await exec(limaCommand(), ["shell", LIMA_INSTANCE_NAME, "test", "-r", runtimeComposeFile()]);
+    await exec(limaCommand(), ["shell", LIMA_INSTANCE_NAME, "test", "-r", runtimeEnvFile()]);
+  } catch (error) {
+    throw new Error(`Виртуальная машина не видит файлы окружения Segmentica. Удалите старую среду из папки данных Segmentica и запустите приложение снова.`);
+  }
+}
+
+function migrateLegacyLimaInstanceIfNeeded() {
+  if (!isEmbeddedLimaRuntime()) {
+    return;
+  }
+
+  const targetDir = limaInstanceDir();
+  const legacyDir = limaInstanceDir(legacyLimaHomeDir());
+  if (fs.existsSync(targetDir) || !fs.existsSync(legacyDir)) {
+    return;
+  }
+
+  fs.mkdirSync(limaHomeDir(), { recursive: true });
+  sendStatus("Переношу виртуальную машину Segmentica...", "Сохраняю уже загруженные контейнеры и тома.");
+  try {
+    fs.renameSync(legacyDir, targetDir);
+  } catch (error) {
+    sendStatus("Не удалось автоматически перенести старую виртуальную машину", error.message);
+  }
+}
+
+async function waitForEmbeddedLimaShell() {
+  let lastError = "";
+  for (let attempt = 0; attempt < 90; attempt += 1) {
+    const result = await tryExec(limaCommand(), limaNerdctlArgs(["version"]), {
+      timeout: 5_000
+    });
+    if (!result.error) {
+      return;
+    }
+
+    lastError = result.stderr || result.error.message || "";
+    sendStatus("Жду готовность виртуальной машины...", lastError.split(/\r?\n/).filter(Boolean).slice(-1)[0] || "");
+    await delay(2_000);
+  }
+
+  throw new Error(`Виртуальная машина запущена, но контейнерная среда не ответила. ${lastError}`.trim());
+}
+
+async function assertContainerRuntimeAvailable() {
+  if (isEmbeddedLimaRuntime()) {
+    await ensureLimaAvailable();
+    return;
+  }
+
+  await assertDockerAvailable();
+}
+
 async function ensureRuntimeFiles() {
   const dir = runtimeDir();
   const marker = path.join(dir, `.release-${RELEASE_VERSION}`);
@@ -672,7 +1147,7 @@ async function ensureRuntimeFiles() {
 }
 
 async function imageExists(image) {
-  return hasCommand("docker", ["image", "inspect", image]);
+  return hasCommand(containerImageInspectCommand(), containerImageInspectArgs(image));
 }
 
 async function ensureImages() {
@@ -687,8 +1162,8 @@ async function ensureImages() {
     return;
   }
 
-  sendStatus("Скачиваю Docker images...", missing.join(", "));
-  await run("docker", dockerComposeArgs(["pull"]), { statusMessage: "Скачиваю Docker images..." });
+  sendStatus("Скачиваю container images...", missing.join(", "));
+  await run(containerComposeCommand(), containerComposeArgs(["pull"]), { statusMessage: "Скачиваю container images..." });
 }
 
 async function restoreSeedIfNeeded() {
@@ -701,7 +1176,7 @@ async function restoreSeedIfNeeded() {
 
   sendStatus("Восстанавливаю заполненную базу...", "Это выполняется только при первом запуске.");
   await waitForDb();
-  await run("docker", dockerComposeArgs([
+  await run(containerComposeCommand(), containerComposeArgs([
     "exec",
     "-T",
     "db",
@@ -720,7 +1195,7 @@ async function restoreSeedIfNeeded() {
 async function waitForDb() {
   for (let attempt = 0; attempt < 90; attempt += 1) {
     try {
-      await exec("docker", dockerComposeArgs(["exec", "-T", "db", "pg_isready", "-U", "postgres", "-d", "Segmentica"]));
+      await exec(containerComposeCommand(), containerComposeArgs(["exec", "-T", "db", "pg_isready", "-U", "postgres", "-d", "Segmentica"]));
       return;
     } catch (error) {
       await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -732,7 +1207,7 @@ async function waitForDb() {
 async function waitForApp() {
   for (let attempt = 0; attempt < 90; attempt += 1) {
     try {
-      const response = await fetch(APP_URL, { method: "GET" });
+      const response = await fetchWithTimeout(APP_URL, { method: "GET" }, 3_000);
       if (response.status < 500) {
         return;
       }
@@ -744,22 +1219,225 @@ async function waitForApp() {
   throw new Error("Segmentica не успела запуститься.");
 }
 
+async function fetchWithTimeout(url, options = {}, timeoutMs = APP_HEALTHCHECK_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function isAppAvailable() {
   try {
-    const response = await fetch(APP_URL, { method: "GET" });
+    const response = await fetchWithTimeout(APP_URL, { method: "GET" });
     return response.status < 500;
   } catch (error) {
     return false;
   }
 }
 
+function normalizeRuntimeRows(rows) {
+  return rows.map((row) => {
+    const normalized = { ...row };
+    for (const [key, value] of Object.entries(normalized)) {
+      if (value == null) {
+        normalized[key] = "";
+      } else if (typeof value !== "string") {
+        normalized[key] = String(value);
+      }
+    }
+    return normalized;
+  });
+}
+
+async function getEmbeddedLimaStatus() {
+  const { stdout } = await tryExec(limaCommand(), ["list", LIMA_INSTANCE_NAME], {
+    timeout: RUNTIME_SNAPSHOT_COMMAND_TIMEOUT_MS
+  });
+  const line = stdout
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .find((item) => item.startsWith(`${LIMA_INSTANCE_NAME} `));
+
+  if (!line) {
+    return { exists: false, running: false, status: "Missing", ssh: "" };
+  }
+
+  const parts = line.split(/\s+/);
+  return {
+    exists: true,
+    running: parts[1] === "Running",
+    status: parts[1] || "Unknown",
+    ssh: parts[2] || ""
+  };
+}
+
+async function getVolumeSizes() {
+  if (!isEmbeddedLimaRuntime()) {
+    return new Map();
+  }
+
+  const { stdout } = await tryExec(limaCommand(), [
+    "shell",
+    LIMA_INSTANCE_NAME,
+    "sudo",
+    "sh",
+    "-lc",
+    "for d in /var/lib/nerdctl/1935db59/volumes/default/*/_data; do [ -d \"$d\" ] && du -sh \"$d\"; done"
+  ], { timeout: RUNTIME_SNAPSHOT_COMMAND_TIMEOUT_MS });
+  const sizes = new Map();
+  stdout.split(/\r?\n/).forEach((line) => {
+    const match = line.match(/^(\S+)\s+\/var\/lib\/nerdctl\/1935db59\/volumes\/default\/(.+)\/_data$/);
+    if (match) {
+      sizes.set(match[2], match[1]);
+    }
+  });
+  return sizes;
+}
+
+async function getContainerLogs() {
+  const script = [
+    "set +e",
+    "names=$(nerdctl ps -a --format '{{.Names}}' | grep '^segmentica-' | sort)",
+    "if [ -z \"$names\" ]; then exit 0; fi",
+    "tmp=$(mktemp)",
+    "trap 'rm -f \"$tmp\"' EXIT",
+    "for c in $names; do",
+    `  nerdctl logs --tail ${RUNTIME_LOG_TAIL_PER_CONTAINER} --timestamps "$c" 2>&1 | sed "s/^\\\\([^ ]*\\\\) /\\\\1 [$c] /; t; s/^/[$c] /" >> "$tmp"`,
+    "done",
+    "sort \"$tmp\""
+  ].join("\n");
+
+  const dockerScript = [
+    "set +e",
+    "names=$(docker ps -a --format '{{.Names}}' | grep '^segmentica-' | sort)",
+    "if [ -z \"$names\" ]; then exit 0; fi",
+    "tmp=$(mktemp)",
+    "trap 'rm -f \"$tmp\"' EXIT",
+    "for c in $names; do",
+    `  docker logs --tail ${RUNTIME_LOG_TAIL_PER_CONTAINER} --timestamps "$c" 2>&1 | sed "s/^\\\\([^ ]*\\\\) /\\\\1 [$c] /; t; s/^/[$c] /" >> "$tmp"`,
+    "done",
+    "sort \"$tmp\""
+  ].join("\n");
+
+  const result = isEmbeddedLimaRuntime()
+    ? await tryExec(limaCommand(), ["shell", LIMA_INSTANCE_NAME, "sudo", "sh", "-lc", script], { timeout: RUNTIME_LOG_COMMAND_TIMEOUT_MS })
+    : await tryExec("sh", ["-lc", dockerScript], { timeout: RUNTIME_LOG_COMMAND_TIMEOUT_MS });
+
+  if (result.error) {
+    return result.stderr || result.error.message || "Не удалось получить логи контейнеров.";
+  }
+
+  return result.stdout.trim();
+}
+
+async function collectRuntimeSnapshot() {
+  const snapshot = {
+    mode: CONTAINER_RUNTIME,
+    label: containerRuntimeLabel(),
+    control: { ...runtimeControlState },
+    appUrl: APP_URL,
+    appAvailable: await isAppAvailable(),
+    lima: null,
+    containers: [],
+    images: [],
+    volumes: [],
+    networks: [],
+    logs: "",
+    error: ""
+  };
+
+  try {
+    if (isEmbeddedLimaRuntime()) {
+      snapshot.lima = await getEmbeddedLimaStatus();
+      if (!snapshot.lima.running) {
+        return snapshot;
+      }
+
+      const commandTimeout = { timeout: RUNTIME_SNAPSHOT_COMMAND_TIMEOUT_MS };
+      const [containers, images, volumes, networks, volumeSizes, logs] = await Promise.all([
+        tryExec(limaCommand(), limaNerdctlArgs(["ps", "-a", "--format", "{{json .}}"]), commandTimeout),
+        tryExec(limaCommand(), limaNerdctlArgs(["images", "--format", "{{json .}}"]), commandTimeout),
+        tryExec(limaCommand(), limaNerdctlArgs(["volume", "ls", "--format", "{{json .}}"]), commandTimeout),
+        tryExec(limaCommand(), limaNerdctlArgs(["network", "ls", "--format", "{{json .}}"]), commandTimeout),
+        getVolumeSizes(),
+        getContainerLogs()
+      ]);
+      snapshot.containers = normalizeRuntimeRows(parseJsonLines(containers.stdout));
+      snapshot.images = normalizeRuntimeRows(parseJsonLines(images.stdout));
+      snapshot.volumes = normalizeRuntimeRows(parseJsonLines(volumes.stdout)).map((volume) => ({
+        ...volume,
+        Size: volume.Size || volumeSizes.get(volume.Name) || ""
+      }));
+      snapshot.networks = normalizeRuntimeRows(parseJsonLines(networks.stdout));
+      snapshot.logs = logs;
+      snapshot.error = [containers, images, volumes, networks]
+        .map((result) => result.error ? result.stderr : "")
+        .filter(Boolean)
+        .join("\n");
+      return snapshot;
+    }
+
+    const commandTimeout = { timeout: RUNTIME_SNAPSHOT_COMMAND_TIMEOUT_MS };
+    const [containers, images, volumes, networks, logs] = await Promise.all([
+      tryExec("docker", ["ps", "-a", "--format", "{{json .}}"], commandTimeout),
+      tryExec("docker", ["images", "--format", "{{json .}}"], commandTimeout),
+      tryExec("docker", ["volume", "ls", "--format", "{{json .}}"], commandTimeout),
+      tryExec("docker", ["network", "ls", "--format", "{{json .}}"], commandTimeout),
+      getContainerLogs()
+    ]);
+    snapshot.containers = normalizeRuntimeRows(parseJsonLines(containers.stdout));
+    snapshot.images = normalizeRuntimeRows(parseJsonLines(images.stdout));
+    snapshot.volumes = normalizeRuntimeRows(parseJsonLines(volumes.stdout));
+    snapshot.networks = normalizeRuntimeRows(parseJsonLines(networks.stdout));
+    snapshot.logs = logs;
+    snapshot.error = [containers, images, volumes, networks]
+      .map((result) => result.error ? result.stderr : "")
+      .filter(Boolean)
+      .join("\n");
+    return snapshot;
+  } catch (error) {
+    snapshot.error = error.message;
+    return snapshot;
+  } finally {
+    snapshot.control = { ...runtimeControlState, lastUpdatedAt: new Date().toISOString() };
+  }
+}
+
 async function getExistingSegmenticaContainers() {
   try {
-    const { stdout } = await exec("docker", ["ps", "-a", "--format", "{{.Names}}"]);
+    const { stdout } = await exec(containerListCommand(), containerListArgs(), {
+      timeout: RUNTIME_SNAPSHOT_COMMAND_TIMEOUT_MS
+    });
     return stdout
       .split(/\r?\n/)
       .map((name) => name.trim())
       .filter((name) => name.startsWith("segmentica-"));
+  } catch (error) {
+    return [];
+  }
+}
+
+function getRuntimeContainerName(container) {
+  return String(container?.Names || container?.Name || "").trim();
+}
+
+function isRuntimeContainerUp(container) {
+  return String(container?.Status || "").toLowerCase().startsWith("up");
+}
+
+async function getSegmenticaContainerRows() {
+  try {
+    const args = isEmbeddedLimaRuntime()
+      ? limaNerdctlArgs(["ps", "-a", "--format", "{{json .}}"])
+      : ["ps", "-a", "--format", "{{json .}}"];
+    const { stdout } = await exec(containerListCommand(), args, {
+      timeout: RUNTIME_SNAPSHOT_COMMAND_TIMEOUT_MS
+    });
+    return normalizeRuntimeRows(parseJsonLines(stdout))
+      .filter((container) => getRuntimeContainerName(container).startsWith("segmentica-"));
   } catch (error) {
     return [];
   }
@@ -779,8 +1457,17 @@ async function startExistingSegmenticaContainersIfPossible() {
     return false;
   }
 
+  if (await hasEmbeddedStackScript()) {
+    sendStatus("Запускаю все сервисы Segmentica...", "/usr/local/sbin/segmentica-start-stack");
+    await run(limaCommand(), embeddedStackScriptArgs(), { statusMessage: "Запускаю окружение..." });
+    stackStartedByLauncher = true;
+    existingContainersStartedByLauncher = true;
+    existingContainerNamesStartedByLauncher = containersToStart;
+    return true;
+  }
+
   sendStatus("Запускаю существующие контейнеры Segmentica...", containersToStart.join(", "));
-  await run("docker", ["start", ...containersToStart], { statusMessage: "Запускаю существующие контейнеры..." });
+  await run(containerStartCommand(), containerStartArgs(containersToStart), { statusMessage: "Запускаю существующие контейнеры..." });
   stackStartedByLauncher = true;
   existingContainersStartedByLauncher = true;
   existingContainerNamesStartedByLauncher = containersToStart;
@@ -809,9 +1496,9 @@ async function startStack() {
     return;
   }
 
-  sendStatus("Проверяю Docker...", "");
-  await assertDockerAvailable();
   await ensureRuntimeFiles();
+  sendStatus(`Проверяю окружение: ${containerRuntimeLabel()}...`, "");
+  await assertContainerRuntimeAvailable();
 
   sendStatus("Запускаю контейнеры Segmentica...", "");
   let usedExistingContainers = false;
@@ -819,7 +1506,7 @@ async function startStack() {
     usedExistingContainers = await startExistingSegmenticaContainersIfPossible();
     if (!usedExistingContainers) {
       await ensureImages();
-      await run("docker", dockerComposeArgs(["up", "-d", "--remove-orphans"]), { statusMessage: "Запускаю контейнеры..." });
+      await run(containerComposeCommand(), containerComposeArgs(["up", "-d", "--remove-orphans"]), { statusMessage: "Запускаю контейнеры..." });
       stackStartedByLauncher = true;
     }
   } catch (error) {
@@ -855,26 +1542,147 @@ async function showStartupError(error) {
     type: "warning",
     title: "Segmentica",
     message: "Не удалось запустить Segmentica",
-    detail: `${error.message}\n\nЕсли Docker Desktop не установлен, установите его и запустите приложение снова.`,
-    buttons: ["Скачать Docker Desktop", "Закрыть"],
+    detail: `${error.message}\n\nТекущее окружение: ${containerRuntimeLabel()}.`,
+    buttons: [isEmbeddedLimaRuntime() ? "Открыть инструкцию" : "Скачать Docker Desktop", "Закрыть"],
     defaultId: 0,
     cancelId: 1
   });
 
   if (result.response === 0) {
-    shell.openExternal(DOCKER_DESKTOP_URL);
+    shell.openExternal(isEmbeddedLimaRuntime() ? LIMA_INSTALL_URL : DOCKER_DESKTOP_URL);
   }
 }
 
 function startStackOnce() {
   if (!stackStartPromise) {
-    stackStartPromise = startStack().catch(async (error) => {
+    stackStartPromise = startStack().finally(() => {
       stackStartPromise = null;
+    }).catch(async (error) => {
       await showStartupError(error);
+      throw error;
     });
   }
 
   return stackStartPromise;
+}
+
+function closeAllBrowserTabs() {
+  for (const appWindow of appWindows.values()) {
+    if (appWindow.window.isDestroyed()) {
+      continue;
+    }
+    for (const tab of appWindow.tabs) {
+      appWindow.window.removeBrowserView(tab.view);
+      if (!tab.view.webContents.isDestroyed()) {
+        tab.view.webContents.close({ waitForBeforeUnload: false });
+      }
+    }
+    appWindow.tabs = [];
+    appWindow.runtimeTabOpen = false;
+    appWindow.activeTabId = null;
+    sendTabsState(appWindow);
+  }
+}
+
+function openRuntimeDashboardTab(appWindow) {
+  if (!appWindow || appWindow.window.isDestroyed()) {
+    return;
+  }
+
+  const activeTab = findBrowserTab(appWindow.activeTabId);
+  if (activeTab) {
+    appWindow.window.removeBrowserView(activeTab.view);
+  }
+  appWindow.runtimeTabOpen = true;
+  appWindow.activeTabId = RUNTIME_TAB_ID;
+  sendStatus("Панель окружения", "Контейнеры продолжают работать.");
+  sendTabsState(appWindow);
+}
+
+async function showRuntimeDashboard(appWindow) {
+  openRuntimeDashboardTab(appWindow);
+  return collectRuntimeSnapshot();
+}
+
+async function stopRuntimeStack() {
+  const existingContainers = await getSegmenticaContainerRows();
+  const runningContainers = existingContainers
+    .filter(isRuntimeContainerUp)
+    .map(getRuntimeContainerName)
+    .filter(Boolean);
+  const existingSet = new Set(runningContainers);
+  const orderedContainers = [
+    ...CONTAINER_START_ORDER.filter((name) => existingSet.has(name)).reverse(),
+    ...runningContainers.filter((name) => !CONTAINER_START_ORDER.includes(name))
+  ];
+
+  if (orderedContainers.length === 0) {
+    return;
+  }
+
+  const stopped = await tryRun(containerStopCommand(), containerStopArgs(orderedContainers), {
+    statusMessage: "Останавливаю контейнеры...",
+    timeoutMs: CONTAINER_STOP_COMMAND_TIMEOUT_MS
+  });
+
+  if (!stopped.error) {
+    return;
+  }
+
+  const stillRunning = (await getSegmenticaContainerRows())
+    .filter(isRuntimeContainerUp)
+    .map(getRuntimeContainerName)
+    .filter(Boolean);
+
+  if (stillRunning.length === 0) {
+    return;
+  }
+
+  sendStatus("Принудительно останавливаю контейнеры...", stillRunning.join(", "));
+  await run(containerKillCommand(), containerKillArgs(stillRunning), {
+    statusMessage: "Принудительно останавливаю контейнеры...",
+    timeoutMs: CONTAINER_KILL_COMMAND_TIMEOUT_MS
+  });
+}
+
+async function stopRuntimeAndShowDashboard() {
+  runtimeControlState = { mode: "stopping", lastUpdatedAt: new Date().toISOString() };
+  sendStatus("Останавливаю контейнеры Segmentica...", "После остановки откроется панель окружения.");
+  closeAllBrowserTabs();
+  sendStopped();
+  await stopRuntimeStack();
+  stackStartedByLauncher = false;
+  existingContainersStartedByLauncher = false;
+  existingContainerNamesStartedByLauncher = [];
+  runtimeControlState = { mode: "idle", lastUpdatedAt: new Date().toISOString() };
+  sendStatus("Контейнеры остановлены", "Можно снова запустить окружение из панели.");
+}
+
+async function stopRuntimeAndQuit() {
+  shutdownRequested = true;
+  runtimeControlState = { mode: "stopping", lastUpdatedAt: new Date().toISOString() };
+  sendStatus("Завершаю Segmentica...", "Останавливаю контейнеры перед закрытием.");
+  try {
+    await stopRuntimeStack();
+    stackStartedByLauncher = false;
+    existingContainersStartedByLauncher = false;
+    existingContainerNamesStartedByLauncher = [];
+  } catch (error) {
+    sendStatus("Не удалось штатно остановить контейнеры", "Пробую принудительную остановку перед закрытием.");
+    const stillRunning = (await getSegmenticaContainerRows())
+      .filter(isRuntimeContainerUp)
+      .map(getRuntimeContainerName)
+      .filter(Boolean);
+    if (stillRunning.length > 0) {
+      await tryRun(containerKillCommand(), containerKillArgs(stillRunning), {
+        statusMessage: "Принудительно останавливаю контейнеры...",
+        timeoutMs: CONTAINER_KILL_COMMAND_TIMEOUT_MS
+      });
+    }
+  } finally {
+    sendStatus("Закрываю Segmentica...", "Контейнеры остановлены.");
+    app.quit();
+  }
 }
 
 function stopStackInBackground() {
@@ -884,12 +1692,15 @@ function stopStackInBackground() {
   shutdownRequested = true;
 
   try {
-    const args = existingContainersStartedByLauncher
-      ? ["stop", ...existingContainerNamesStartedByLauncher]
-      : dockerComposeArgs(["down", "--remove-orphans"]);
-    const child = spawn("docker", args, {
+    const command = containerStopCommand();
+    const names = existingContainerNamesStartedByLauncher.length > 0
+      ? existingContainerNamesStartedByLauncher
+      : CONTAINER_START_ORDER;
+    const args = containerStopArgs([...names].reverse());
+    const child = spawn(command, args, {
       detached: true,
-      stdio: "ignore"
+      stdio: "ignore",
+      env: commandEnvironment(command)
     });
     child.unref();
   } catch (error) {
@@ -982,11 +1793,11 @@ function installApplicationMenu() {
 }
 
 ipcMain.handle("launcher:open-docker-download", async () => {
-  await shell.openExternal(DOCKER_DESKTOP_URL);
+  await shell.openExternal(isEmbeddedLimaRuntime() ? LIMA_INSTALL_URL : DOCKER_DESKTOP_URL);
 });
 
 ipcMain.handle("launcher:open-runtime-folder", async () => {
-  await shell.openPath(runtimeDir());
+  await shell.openPath(app.getPath("userData"));
 });
 
 ipcMain.handle("launcher:get-ready-state", () => launcherReadyState);
@@ -1000,16 +1811,50 @@ ipcMain.handle("launcher:get-app-icon", () => {
 
 ipcMain.handle("launcher:renderer-ready", async (event) => {
   const appWindow = getAppWindowFromEvent(event);
-  await startStackOnce();
   sendTabsState(appWindow);
   return {
     ready: launcherReadyState,
     status: launcherStatusState,
+    runtimeState: await collectRuntimeSnapshot(),
     theme: currentTheme,
+    runtime: {
+      mode: CONTAINER_RUNTIME,
+      label: containerRuntimeLabel(),
+      helpLabel: "Справка"
+    },
     windowId: appWindow?.id ?? null,
     hasTabs: Boolean(appWindow?.tabs.length),
     showStartup: appWindow?.showStartup !== false
   };
+});
+
+ipcMain.handle("runtime:get-state", async () => {
+  return collectRuntimeSnapshot();
+});
+
+ipcMain.handle("runtime:start", async () => {
+  runtimeControlState = { mode: "starting", lastUpdatedAt: new Date().toISOString() };
+  sendStatus("Запускаю контейнеры Segmentica...", containerRuntimeLabel());
+  try {
+    await startStackOnce();
+    runtimeControlState = { mode: "running", lastUpdatedAt: new Date().toISOString() };
+  } catch (error) {
+    runtimeControlState = { mode: "error", lastUpdatedAt: new Date().toISOString() };
+  }
+  return collectRuntimeSnapshot();
+});
+
+ipcMain.handle("runtime:stop", async () => {
+  await stopRuntimeAndShowDashboard();
+  return collectRuntimeSnapshot();
+});
+
+ipcMain.handle("runtime:show-dashboard", async (event) => {
+  return showRuntimeDashboard(getAppWindowFromEvent(event));
+});
+
+ipcMain.handle("runtime:quit", async () => {
+  await stopRuntimeAndQuit();
 });
 
 ipcMain.handle("tabs:create", (event, url = APP_URL) => {

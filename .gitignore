@@ -22,6 +22,11 @@ services/symmetricds/server/tmp/
 backups/postgres/*.dump
 backups/postgres/*.sql
 release/dist/
+desktop/dist/
+desktop/runtime/bin/*
+desktop/runtime/share/
+desktop/runtime/libexec/
+!desktop/runtime/bin/.gitkeep
 
 # OS
 .DS_Store

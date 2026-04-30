@@ -7,35 +7,139 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <main id="startupShell" class="shell">
-      <section class="panel">
+    <main id="startupShell" class="runtime-shell">
+      <section class="runtime-header">
         <div class="brand">
           <img id="startupLogo" class="mark" alt="" />
           <div>
             <h1>Segmentica</h1>
-            <p>Запуск локального Docker-стека</p>
+            <p id="runtimeSubtitle">Локальное окружение</p>
           </div>
         </div>
 
+        <div class="runtime-actions">
+          <button id="startRuntime" class="primary-action" type="button">Запустить</button>
+          <button id="stopRuntime" type="button">Остановить</button>
+          <button id="refreshRuntime" type="button">Обновить</button>
+          <button id="folder" type="button">Папка данных</button>
+          <button id="quitRuntime" class="danger-action" type="button">Закрыть</button>
+        </div>
+      </section>
+
+      <section class="runtime-status">
         <div class="progress">
-          <div class="spinner" aria-hidden="true"></div>
+          <div id="runtimeIndicator" class="runtime-dot" aria-hidden="true"></div>
           <div>
             <h2 id="status">Подготовка...</h2>
             <p id="detail">Проверяю окружение</p>
           </div>
         </div>
-
-        <div class="actions">
-          <button id="docker" type="button">Docker Desktop</button>
-          <button id="folder" type="button">Папка данных</button>
+        <div class="runtime-summary" aria-label="Сводка окружения">
+          <div><span>Среда</span><strong id="runtimeMode">-</strong></div>
+          <div><span>Виртуальная машина</span><strong id="limaState">-</strong></div>
+          <div><span>Контейнеры</span><strong id="containerCount">-</strong></div>
+          <div><span>Образы</span><strong id="imageCount">-</strong></div>
+          <div><span>Тома</span><strong id="volumeCount">-</strong></div>
         </div>
       </section>
+
+      <section class="runtime-grid">
+        <article class="runtime-card runtime-card-wide">
+          <header>
+            <h2>Контейнеры</h2>
+            <span id="containersHint"></span>
+          </header>
+          <div class="runtime-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Имя</th>
+                  <th>Образ</th>
+                  <th>Статус</th>
+                  <th>Порты</th>
+                  <th>Команда</th>
+                </tr>
+              </thead>
+              <tbody id="containersBody"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="runtime-card">
+          <header>
+            <h2>Тома</h2>
+            <span id="volumesHint"></span>
+          </header>
+          <div class="runtime-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Имя</th>
+                  <th>Размер</th>
+                  <th>Точка монтирования</th>
+                </tr>
+              </thead>
+              <tbody id="volumesBody"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="runtime-card">
+          <header>
+            <h2>Образы</h2>
+            <span id="imagesHint"></span>
+          </header>
+          <div class="runtime-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Репозиторий</th>
+                  <th>Тег</th>
+                  <th>Размер</th>
+                  <th>Платформа</th>
+                </tr>
+              </thead>
+              <tbody id="imagesBody"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="runtime-card">
+          <header>
+            <h2>Сети</h2>
+            <span id="networksHint"></span>
+          </header>
+          <div class="runtime-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Имя</th>
+                  <th>ID</th>
+                  <th>Метки</th>
+                </tr>
+              </thead>
+              <tbody id="networksBody"></tbody>
+            </table>
+          </div>
+        </article>
+
+        <article class="runtime-card">
+          <header>
+            <h2>Журнал контейнеров</h2>
+            <span id="runtimeUpdated">-</span>
+          </header>
+          <pre id="runtimeLog" class="runtime-log"></pre>
+        </article>
+      </section>
+      <button id="docker" class="runtime-help-link" type="button">Справка</button>
     </main>
 
     <main id="appShell" class="app-shell" hidden>
       <header class="browser-chrome">
         <div id="tabs" class="tabs" role="tablist" aria-label="Вкладки Segmentica"></div>
         <button id="newTab" class="chrome-button icon-button" type="button" title="Новая вкладка" aria-label="Новая вкладка">+</button>
+        <button id="runtimeFromApp" class="chrome-button side-action" type="button">Окружение</button>
+        <button id="stopFromApp" class="chrome-button stop-button" type="button">Выключить</button>
       </header>
       <section id="viewHost" class="view-host" aria-label="Окна Segmentica"></section>
     </main>

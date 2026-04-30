@@ -7,6 +7,9 @@ contextBridge.exposeInMainWorld("segmenticaLauncher", {
   onReady(callback) {
     ipcRenderer.on("launcher:ready", (_event, payload) => callback(payload));
   },
+  onStopped(callback) {
+    ipcRenderer.on("launcher:stopped", (_event, payload) => callback(payload));
+  },
   onTabsChanged(callback) {
     ipcRenderer.on("tabs:state", (_event, payload) => callback(payload));
   },
@@ -27,6 +30,21 @@ contextBridge.exposeInMainWorld("segmenticaLauncher", {
   },
   openRuntimeFolder() {
     return ipcRenderer.invoke("launcher:open-runtime-folder");
+  },
+  getRuntimeState() {
+    return ipcRenderer.invoke("runtime:get-state");
+  },
+  startRuntime() {
+    return ipcRenderer.invoke("runtime:start");
+  },
+  stopRuntime() {
+    return ipcRenderer.invoke("runtime:stop");
+  },
+  quitRuntime() {
+    return ipcRenderer.invoke("runtime:quit");
+  },
+  showRuntimeDashboard() {
+    return ipcRenderer.invoke("runtime:show-dashboard");
   },
   createTab(url) {
     return ipcRenderer.invoke("tabs:create", url);

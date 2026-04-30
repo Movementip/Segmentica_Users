@@ -8,18 +8,18 @@
 - Доступ к registry, где опубликованы images Segmentica.
 - Свободный порт `3000` для сайта. При необходимости его можно поменять в `.env`.
 
-## Быстрый запуск
+## Быстрый запуск из GitHub Release
 
 macOS / Linux:
 
 ```sh
-SEGMENTICA_RELEASE_URL="https://example.com/segmentica-release.zip" sh -c "$(curl -fsSL https://example.com/install.sh)"
+SEGMENTICA_RELEASE_URL="https://github.com/Movementip/Segmentica_Users/releases/latest/download/segmentica-release.zip" sh -c "$(curl -fsSL https://github.com/Movementip/Segmentica_Users/releases/latest/download/install.sh)"
 ```
 
 Windows PowerShell:
 
 ```powershell
-$env:SEGMENTICA_RELEASE_URL="https://example.com/segmentica-release.zip"; iwr https://example.com/install.ps1 -UseBasicParsing | iex
+$env:SEGMENTICA_RELEASE_URL="https://github.com/Movementip/Segmentica_Users/releases/latest/download/segmentica-release.zip"; iwr https://github.com/Movementip/Segmentica_Users/releases/latest/download/install.ps1 -UseBasicParsing | iex
 ```
 
 Если архив уже скачан и распакован:
@@ -33,7 +33,7 @@ docker compose up -d
 
 После запуска открыть `http://localhost:3000`.
 
-Для “одной ссылки” загрузите рядом три файла из `release/dist`: `segmentica-release.zip`, `install.sh`, `install.ps1`. Ссылка на установку будет вести на короткую инструкцию с одной командой выше; сами данные и compose скачает установщик.
+Для “одной ссылки” загрузите рядом три файла из `release/dist`: `segmentica-release.zip`, `install.sh`, `install.ps1`. GitHub Actions workflow делает это автоматически при публикации тега.
 
 ## Настройка перед публикацией
 

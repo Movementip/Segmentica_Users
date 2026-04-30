@@ -6,8 +6,11 @@
   "main": "src/main.js",
   "scripts": {
     "start": "electron .",
+    "bundle:lima": "sh scripts/bundle-lima.sh",
     "build:mac": "electron-builder --mac dmg zip",
-    "build:win": "electron-builder --win nsis zip",
+    "build:mac:bundled": "npm run bundle:lima && electron-builder --mac dmg zip",
+    "build:win": "electron-builder --win nsis zip --x64",
+    "build:win:arm64": "electron-builder --win nsis zip --arm64",
     "build": "electron-builder --mac dmg zip --win nsis zip"
   },
   "dependencies": {},
@@ -39,6 +42,13 @@
       {
         "from": "../frontend/utils/Segmentica.icns/icon_512x512@2x.png",
         "to": "startup-icon.png"
+      },
+      {
+        "from": "runtime",
+        "to": "runtime",
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "mac": {
@@ -50,6 +60,7 @@
       ]
     },
     "win": {
+      "icon": "assets/Segmentica.ico",
       "target": [
         "nsis",
         "zip"
