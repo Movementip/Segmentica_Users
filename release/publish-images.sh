@@ -7,6 +7,8 @@ IMAGE_PREFIX="${SEGMENTICA_IMAGE_PREFIX:-}"
 IMAGE_VERSION="${SEGMENTICA_VERSION:-}"
 BUILD_IMAGES="${BUILD_IMAGES:-0}"
 PUSH_LATEST="${PUSH_LATEST:-0}"
+PUSH_IMAGES="${PUSH_IMAGES:-1}"
+ALLOW_PUSH_FAILURE="${ALLOW_PUSH_FAILURE:-0}"
 
 if [ -z "$IMAGE_PREFIX" ]; then
   echo "Укажите SEGMENTICA_IMAGE_PREFIX, например:" >&2
@@ -39,12 +41,28 @@ publish_image() {
 
   echo "Публикую $local_name -> $target"
   docker tag "$local_name" "$target"
-  docker push "$target"
+  if [ "$PUSH_IMAGES" = "1" ]; then
+    if ! docker push "$target"; then
+      if [ "$ALLOW_PUSH_FAILURE" = "1" ]; then
+        echo "Не удалось опубликовать $target, продолжаю: push недоступен." >&2
+      else
+        exit 1
+      fi
+    fi
+  fi
 
   if [ "$PUSH_LATEST" = "1" ]; then
     latest="$IMAGE_PREFIX/$remote_name:latest"
     docker tag "$local_name" "$latest"
-    docker push "$latest"
+    if [ "$PUSH_IMAGES" = "1" ]; then
+      if ! docker push "$latest"; then
+        if [ "$ALLOW_PUSH_FAILURE" = "1" ]; then
+          echo "Не удалось опубликовать $latest, продолжаю: push недоступен." >&2
+        else
+          exit 1
+        fi
+      fi
+    fi
   fi
 }
 

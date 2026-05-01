@@ -51,6 +51,7 @@ const APP_HEALTHCHECK_TIMEOUT_MS = 1_500;
 const RUNTIME_SNAPSHOT_COMMAND_TIMEOUT_MS = 8_000;
 const RUNTIME_LOG_COMMAND_TIMEOUT_MS = 12_000;
 const RUNTIME_LOG_TAIL_PER_CONTAINER = 120;
+const IMAGE_ARCHIVE_LOAD_TIMEOUT_MS = 30 * 60_000;
 const APP_READY_ATTEMPTS = 60;
 const RUNTIME_TAB_ID = "runtime-dashboard";
 const CONTAINER_RUNTIME = normalizeContainerRuntime(process.env.SEGMENTICA_CONTAINER_RUNTIME);
@@ -160,6 +161,14 @@ function releaseZipPath() {
     return packagedPath;
   }
   return path.resolve(__dirname, "..", "..", "release", "dist", "segmentica-release.zip");
+}
+
+function releaseImageArchivePath() {
+  const packagedPath = path.join(process.resourcesPath, "release", "segmentica-images.tar.gz");
+  if (fs.existsSync(packagedPath)) {
+    return packagedPath;
+  }
+  return path.resolve(__dirname, "..", "..", "release", "dist", "segmentica-images.tar.gz");
 }
 
 function sendStatus(message, detail = "") {
@@ -1225,6 +1234,11 @@ async function ensureRuntimeFiles() {
     fs.copyFileSync(path.join(dir, ".env.example"), envPath);
   }
 
+  const archivePath = releaseImageArchivePath();
+  if (fs.existsSync(archivePath)) {
+    fs.copyFileSync(archivePath, path.join(dir, "segmentica-images.tar.gz"));
+  }
+
   fs.writeFileSync(marker, new Date().toISOString());
 }
 
@@ -1244,8 +1258,53 @@ async function ensureImages() {
     return;
   }
 
+  if (await loadImageArchiveIfAvailable(missing)) {
+    const stillMissing = [];
+    for (const image of SERVICE_IMAGES) {
+      if (!(await imageExists(image))) {
+        stillMissing.push(image);
+      }
+    }
+
+    if (stillMissing.length === 0) {
+      return;
+    }
+  }
+
   sendStatus("Скачиваю container images...", missing.join(", "));
   await run(containerComposeCommand(), containerComposeArgs(["pull"]), { statusMessage: "Скачиваю container images..." });
+}
+
+async function loadImageArchiveIfAvailable(missingImages = []) {
+  const archivePath = path.join(runtimeDir(), "segmentica-images.tar.gz");
+  if (!fs.existsSync(archivePath)) {
+    return false;
+  }
+
+  const marker = path.join(runtimeDir(), ".segmentica-images-loaded");
+  if (fs.existsSync(marker)) {
+    return false;
+  }
+
+  sendStatus(
+    "Загружаю container images из пакета...",
+    missingImages.length > 0 ? missingImages.join(", ") : "segmentica-images.tar.gz"
+  );
+
+  if (isEmbeddedLimaRuntime()) {
+    await run(limaCommand(), limaNerdctlArgs(["load", "-i", archivePath]), {
+      timeout: IMAGE_ARCHIVE_LOAD_TIMEOUT_MS,
+      statusMessage: "Загружаю container images..."
+    });
+  } else {
+    await run("docker", ["load", "-i", archivePath], {
+      timeout: IMAGE_ARCHIVE_LOAD_TIMEOUT_MS,
+      statusMessage: "Загружаю container images..."
+    });
+  }
+
+  fs.writeFileSync(marker, new Date().toISOString());
+  return true;
 }
 
 async function restoreSeedIfNeeded() {

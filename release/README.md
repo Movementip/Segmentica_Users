@@ -1,11 +1,11 @@
 # Segmentica Release
 
-Этот пакет поднимает Segmentica целиком через Docker: PostgreSQL, backend, frontend, рендер документов и SymmetricDS. Если внутри архива есть `seed/Segmentica.dump`, база восстанавливается из него при первом запуске.
+Этот пакет поднимает Segmentica целиком через Docker: PostgreSQL, backend, frontend, рендер документов и SymmetricDS. Если рядом или внутри пакета есть `segmentica-images.tar.gz`, установщик сначала загрузит образы из него. Если внутри архива есть `seed/Segmentica.dump`, база восстанавливается из него при первом запуске.
 
 ## Что нужно пользователю
 
 - Docker Desktop.
-- Доступ к registry, где опубликованы images Segmentica.
+- Доступ к GitHub Release asset `segmentica-images.tar.gz` или к registry, где опубликованы images Segmentica.
 - Свободный порт `3000` для сайта. При необходимости его можно поменять в `.env`.
 - Для репликации между двумя машинами: reusable auth key Tailscale и заполненные `TS_AUTHKEY`, `TS_HOSTNAME`, `TAILSCALE_WINDOWS_IP` в `.env`.
 
@@ -34,7 +34,7 @@ docker compose up -d
 
 После запуска открыть `http://localhost:3000`.
 
-Для “одной ссылки” загрузите рядом три файла из `release/dist`: `segmentica-release.zip`, `install.sh`, `install.ps1`. GitHub Actions workflow делает это автоматически при публикации тега.
+Для “одной ссылки” загрузите рядом четыре файла: `segmentica-release.zip`, `segmentica-images.tar.gz`, `install.sh`, `install.ps1`. GitHub Actions workflow делает это автоматически при публикации тега.
 
 ## Tailscale и удалённая база
 

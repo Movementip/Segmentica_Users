@@ -11,7 +11,7 @@ Segmentica Users - локальная система для работы с за
 [Скачать Segmentica для macOS](https://github.com/Movementip/Segmentica_Users/releases/latest/download/Segmentica-macOS.dmg)
 
 После установки откройте `Segmentica.app`. Приложение само управляет встроенной виртуальной машиной Lima и контейнерами Segmentica.
-В релизный пакет входит seed текущей базы: при первом запуске PostgreSQL volume восстанавливается из `seed/Segmentica.dump`.
+В DMG входят архив container images и seed текущей базы: при первом запуске приложение загружает образы локально и восстанавливает PostgreSQL volume из `seed/Segmentica.dump`.
 
 ### Docker Compose
 
@@ -41,9 +41,10 @@ http://localhost:3000
 - `Segmentica-Windows-x64.zip` - стабильная portable zip-версия Windows, когда сборка доступна.
 - `Segmentica-...` - versioned-копии тех же desktop-сборок для истории релизов.
 - `segmentica-release.zip` - Docker Compose release-пакет.
+- `segmentica-images.tar.gz` - архив container images для установки без GHCR/GitHub Packages.
 - `seed/Segmentica.dump` внутри release-пакета - снимок текущей базы для первого восстановления.
 - `install.sh` и `install.ps1` - установщики release-пакета.
-- GHCR packages:
+- GHCR packages, если в репозитории включены права на Packages:
   - `ghcr.io/movementip/segmentica-backend`
   - `ghcr.io/movementip/segmentica-frontend`
   - `ghcr.io/movementip/segmentica-libreoffice`

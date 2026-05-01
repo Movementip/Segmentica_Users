@@ -31,6 +31,10 @@ cp "$ROOT_DIR/infra/tailscale-db-proxy.js" "$WORK_DIR/tailscale-db-proxy.js"
 cp "$ROOT_DIR/infra/db/init/"* "$WORK_DIR/db/init/"
 cp "$ROOT_DIR/infra/db/schema/"* "$WORK_DIR/db/schema/"
 
+if [ -f "$DIST_DIR/segmentica-images.tar.gz" ]; then
+  cp "$DIST_DIR/segmentica-images.tar.gz" "$WORK_DIR/segmentica-images.tar.gz"
+fi
+
 if [ -n "$DB_DUMP" ]; then
   if [ ! -f "$DB_DUMP" ]; then
     echo "SEGMENTICA_DB_DUMP задан, но файл не найден: $DB_DUMP" >&2

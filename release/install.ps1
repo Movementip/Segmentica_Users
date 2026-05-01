@@ -27,6 +27,37 @@ function Download-Release {
     Remove-Item $tmpZip -Force
 }
 
+function Resolve-ImagesUrl {
+    if (-not [string]::IsNullOrWhiteSpace($env:SEGMENTICA_IMAGES_URL)) {
+        return $env:SEGMENTICA_IMAGES_URL
+    }
+
+    if ((-not [string]::IsNullOrWhiteSpace($ReleaseUrl)) -and $ReleaseUrl.EndsWith("/segmentica-release.zip")) {
+        return ($ReleaseUrl -replace "/segmentica-release\.zip$", "/segmentica-images.tar.gz")
+    }
+
+    return $null
+}
+
+function Download-ImagesArchive {
+    if (Test-Path "segmentica-images.tar.gz") {
+        return
+    }
+
+    $imagesUrl = Resolve-ImagesUrl
+    if ([string]::IsNullOrWhiteSpace($imagesUrl)) {
+        return
+    }
+
+    Write-Host "Скачиваю архив container images..."
+    try {
+        Invoke-WebRequest -Uri $imagesUrl -OutFile "segmentica-images.tar.gz"
+    } catch {
+        Remove-Item "segmentica-images.tar.gz" -Force -ErrorAction SilentlyContinue
+        Write-Warning "Архив images недоступен, попробую загрузить images из registry."
+    }
+}
+
 function Load-EnvFile {
     param([string]$Path)
 
@@ -82,6 +113,20 @@ function Restore-SeedIfPresent {
     Get-Date | Out-File -Encoding utf8 $marker
 }
 
+function Load-ImagesIfPresent {
+    if (-not (Test-Path "segmentica-images.tar.gz")) {
+        return $false
+    }
+
+    Write-Host "Загружаю container images из segmentica-images.tar.gz..."
+    docker load -i segmentica-images.tar.gz
+    if ($LASTEXITCODE -ne 0) {
+        throw "docker load завершился с ошибкой."
+    }
+
+    return $true
+}
+
 Require-Command docker
 Download-Release
 
@@ -105,10 +150,14 @@ if (-not $env:POSTGRES_USER) { $env:POSTGRES_USER = "postgres" }
 if (-not $env:POSTGRES_DB) { $env:POSTGRES_DB = "Segmentica" }
 if (-not $env:NEXTAUTH_URL) { $env:NEXTAUTH_URL = "http://localhost:3000" }
 
-Write-Host "Скачиваю Docker images..."
-docker compose pull
-if ($LASTEXITCODE -ne 0) {
-    throw "docker compose pull завершился с ошибкой."
+Download-ImagesArchive
+
+if (-not (Load-ImagesIfPresent)) {
+    Write-Host "Скачиваю Docker images..."
+    docker compose pull
+    if ($LASTEXITCODE -ne 0) {
+        throw "docker compose pull завершился с ошибкой."
+    }
 }
 
 Write-Host "Запускаю Segmentica..."

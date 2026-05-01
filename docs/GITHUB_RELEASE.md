@@ -15,16 +15,19 @@ GitHub Release должен содержать:
 - `Segmentica-Windows-x64.exe`
 - `Segmentica-Windows-x64.zip`
 - `segmentica-release.zip`
+- `segmentica-images.tar.gz`
 - `install.sh`
 - `install.ps1`
 - `seed/Segmentica.dump` внутри `segmentica-release.zip`, если релиз должен устанавливаться с текущей базой.
 
-GitHub Packages / GHCR должен содержать:
+GitHub Packages / GHCR желательно содержит:
 
 - `ghcr.io/movementip/segmentica-backend:<version>`
 - `ghcr.io/movementip/segmentica-frontend:<version>`
 - `ghcr.io/movementip/segmentica-libreoffice:<version>`
 - `ghcr.io/movementip/segmentica-symmetricds:<version>`
+
+`segmentica-images.tar.gz` является обязательным fallback-источником образов. Если GHCR не даёт `write_package` или Packages пустые, установка всё равно работает: desktop-приложение загружает архив из DMG, а Docker Compose install-скрипты скачивают архив рядом с `segmentica-release.zip`.
 
 ## Автоматическая публикация
 
@@ -39,7 +42,8 @@ git push origin v2026.04.28
 ```
 
 3. Workflow `.github/workflows/release.yml`:
-   - собирает и публикует Docker/OCI images в GHCR;
+   - собирает Docker/OCI images, пытается опубликовать их в GHCR и продолжает релиз, если у GitHub token нет прав на Packages;
+   - сохраняет `segmentica-images.tar.gz` как release asset;
    - собирает `segmentica-release.zip`;
    - собирает macOS desktop DMG/ZIP;
    - собирает Windows installer/ZIP;

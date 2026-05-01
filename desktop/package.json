@@ -32,8 +32,12 @@
     ],
     "extraResources": [
       {
-        "from": "../release/dist/segmentica-release.zip",
-        "to": "release/segmentica-release.zip"
+        "from": "../release/dist",
+        "to": "release",
+        "filter": [
+          "segmentica-release.zip",
+          "segmentica-images.tar.gz"
+        ]
       },
       {
         "from": "assets/Segmentica.icns",

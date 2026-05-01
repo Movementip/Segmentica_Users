@@ -29,6 +29,41 @@ download_release() {
   rm -f "$tmp_zip"
 }
 
+resolve_images_url() {
+  if [ -n "${SEGMENTICA_IMAGES_URL:-}" ]; then
+    printf '%s\n' "$SEGMENTICA_IMAGES_URL"
+    return 0
+  fi
+
+  if [ -n "$RELEASE_URL" ]; then
+    case "$RELEASE_URL" in
+      */segmentica-release.zip)
+        printf '%s\n' "$RELEASE_URL" | sed 's#/segmentica-release\.zip$#/segmentica-images.tar.gz#'
+        ;;
+    esac
+  fi
+}
+
+download_images_archive() {
+  if [ -f "segmentica-images.tar.gz" ]; then
+    return 0
+  fi
+
+  images_url="$(resolve_images_url)"
+  if [ -z "$images_url" ]; then
+    return 0
+  fi
+
+  need_cmd curl
+  echo "Скачиваю архив container images..."
+  if curl -fsSL "$images_url" -o segmentica-images.tar.gz; then
+    return 0
+  fi
+
+  rm -f segmentica-images.tar.gz
+  echo "Архив images недоступен, попробую загрузить images из registry." >&2
+}
+
 wait_for_db() {
   echo "Жду готовность PostgreSQL..."
   i=0
@@ -65,6 +100,16 @@ restore_seed_if_present() {
   date > "$marker"
 }
 
+load_images_if_present() {
+  if [ ! -f "segmentica-images.tar.gz" ]; then
+    return 1
+  fi
+
+  echo "Загружаю container images из segmentica-images.tar.gz..."
+  docker load -i segmentica-images.tar.gz
+  return 0
+}
+
 need_cmd docker
 
 download_release
@@ -89,8 +134,12 @@ set -a
 . ./.env
 set +a
 
-echo "Скачиваю Docker images..."
-docker compose pull
+download_images_archive
+
+if ! load_images_if_present; then
+  echo "Скачиваю Docker images..."
+  docker compose pull
+fi
 
 echo "Запускаю Segmentica..."
 docker compose up -d

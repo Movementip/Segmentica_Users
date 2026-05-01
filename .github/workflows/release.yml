@@ -54,7 +54,7 @@ jobs:
             release/dist/install.ps1
 
   packages:
-    name: Publish GHCR packages
+    name: Build images and publish GHCR packages
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -95,12 +95,37 @@ jobs:
           SEGMENTICA_VERSION="${{ steps.version.outputs.version }}" \
           BUILD_IMAGES=1 \
           PUSH_LATEST=1 \
+          ALLOW_PUSH_FAILURE=1 \
           sh release/publish-images.sh
+
+      - name: Build image archive for offline install
+        shell: bash
+        run: |
+          mkdir -p release/dist
+          docker pull postgres:17
+          docker pull tailscale/tailscale:latest
+          docker pull node:20-bookworm-slim
+          docker save \
+            "${IMAGE_PREFIX}/segmentica-backend:${{ steps.version.outputs.version }}" \
+            "${IMAGE_PREFIX}/segmentica-frontend:${{ steps.version.outputs.version }}" \
+            "${IMAGE_PREFIX}/segmentica-libreoffice:${{ steps.version.outputs.version }}" \
+            "${IMAGE_PREFIX}/segmentica-symmetricds:${{ steps.version.outputs.version }}" \
+            postgres:17 \
+            tailscale/tailscale:latest \
+            node:20-bookworm-slim \
+            | gzip -1 > release/dist/segmentica-images.tar.gz
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: image-archive
+          path: release/dist/segmentica-images.tar.gz
 
   desktop-mac:
     name: Build macOS desktop
     runs-on: macos-14
-    needs: release-package
+    needs:
+      - release-package
+      - packages
     steps:
       - uses: actions/checkout@v4
 
@@ -113,6 +138,11 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: release-dist
+          path: release/dist
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: image-archive
           path: release/dist
 
       - name: Install desktop dependencies
@@ -145,7 +175,9 @@ jobs:
   desktop-win:
     name: Build Windows desktop
     runs-on: windows-latest
-    needs: release-package
+    needs:
+      - release-package
+      - packages
     steps:
       - uses: actions/checkout@v4
 
@@ -158,6 +190,11 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: release-dist
+          path: release/dist
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: image-archive
           path: release/dist
 
       - name: Install desktop dependencies
@@ -223,5 +260,6 @@ jobs:
           overwrite_files: true
           files: |
             artifacts/release-dist/*
+            artifacts/image-archive/*
             artifacts/desktop-mac/*
             artifacts/desktop-win/*
