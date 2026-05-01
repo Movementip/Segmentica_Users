@@ -1,6 +1,6 @@
 # Segmentica Release
 
-Этот пакет поднимает Segmentica целиком через Docker: PostgreSQL, backend, frontend, рендер документов и SymmetricDS.
+Этот пакет поднимает Segmentica целиком через Docker: PostgreSQL, backend, frontend, рендер документов и SymmetricDS. Если внутри архива есть `seed/Segmentica.dump`, база восстанавливается из него при первом запуске.
 
 ## Что нужно пользователю
 
@@ -101,4 +101,6 @@ SEGMENTICA_DB_DUMP=backups/postgres/Segmentica.dump npm run release:prepare
 
 ## Важное про данные
 
-По умолчанию дамп базы не попадает в архив. Это сделано специально, чтобы случайно не раздать реальные заявки, сотрудников, клиентов, cookie или другие приватные данные. Если нужен пакет “как сейчас у нас”, сначала выполните `npm run release:export-db`, затем пересоберите архив с `SEGMENTICA_DB_DUMP=release/dist/Segmentica.dump`.
+Текущий release может включать `seed/Segmentica.dump`. Тогда при первой установке PostgreSQL volume будет восстановлен из этого снимка, и пользователь получит состояние базы на момент сборки релиза.
+
+Если нужен новый пакет “как сейчас у нас”, сначала выполните `npm run release:export-db` или снимите дамп из встроенной Lima-среды, затем пересоберите архив с `SEGMENTICA_DB_DUMP=/path/to/Segmentica.dump npm run release:prepare`. Если файл лежит в `release/seed/Segmentica.dump`, `release:prepare` включит его автоматически.

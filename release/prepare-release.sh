@@ -6,6 +6,7 @@ DIST_DIR="$ROOT_DIR/release/dist"
 WORK_DIR="$DIST_DIR/segmentica-release"
 ZIP_PATH="$DIST_DIR/segmentica-release.zip"
 DB_DUMP="${SEGMENTICA_DB_DUMP:-}"
+DEFAULT_DB_DUMP="$ROOT_DIR/release/seed/Segmentica.dump"
 
 need_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -36,6 +37,8 @@ if [ -n "$DB_DUMP" ]; then
     exit 1
   fi
   cp "$DB_DUMP" "$WORK_DIR/seed/Segmentica.dump"
+elif [ -f "$DEFAULT_DB_DUMP" ]; then
+  cp "$DEFAULT_DB_DUMP" "$WORK_DIR/seed/Segmentica.dump"
 else
   touch "$WORK_DIR/seed/.gitkeep"
 fi
@@ -56,6 +59,8 @@ chmod +x "$DIST_DIR/install.sh"
 
 echo "Release-пакет готов: $ZIP_PATH"
 echo "Отдельные установщики: $DIST_DIR/install.sh и $DIST_DIR/install.ps1"
-if [ -z "$DB_DUMP" ]; then
+if [ -f "$WORK_DIR/seed/Segmentica.dump" ]; then
+  echo "Дамп базы включён: seed/Segmentica.dump."
+else
   echo "Дамп базы не включён. Для включения используйте SEGMENTICA_DB_DUMP=/path/to/Segmentica.dump."
 fi

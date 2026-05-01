@@ -17,6 +17,7 @@ GitHub Release должен содержать:
 - `segmentica-release.zip`
 - `install.sh`
 - `install.ps1`
+- `seed/Segmentica.dump` внутри `segmentica-release.zip`, если релиз должен устанавливаться с текущей базой.
 
 GitHub Packages / GHCR должен содержать:
 
@@ -56,6 +57,8 @@ npm run release:prepare
 npm run release:export-db
 SEGMENTICA_DB_DUMP=release/dist/Segmentica.dump npm run release:prepare
 ```
+
+Если актуальный дамп уже лежит в `release/seed/Segmentica.dump`, `npm run release:prepare` включит его автоматически. Именно этот вариант используется для one-click релиза с базой “как сейчас”.
 
 ## Ручная публикация images
 

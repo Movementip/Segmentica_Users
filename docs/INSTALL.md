@@ -20,6 +20,8 @@
 
 Если раньше использовалась старая среда `~/.lima/segmentica`, приложение переносит её в папку Segmentica, чтобы сохранить уже загруженные images, containers и volumes.
 
+Если в релизе есть `seed/Segmentica.dump`, первый запуск восстановит PostgreSQL volume из этого снимка. Так пользователь получает не пустую базу, а состояние, включённое в релиз.
+
 ## Вариант 2. Docker Compose одной командой
 
 Этот способ подходит для macOS, Linux и Windows с Docker Desktop.
