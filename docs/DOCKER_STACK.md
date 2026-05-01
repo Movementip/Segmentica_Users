@@ -123,5 +123,7 @@ docker logs segmentica-symmetricds
 
 - что `tailscale` контейнер действительно вошёл в сеть
 - что `TAILSCALE_WINDOWS_IP` актуален
-- что PostgreSQL на Windows слушает нужный порт
+- что на удалённом узле открыты `100.x.y.z:5432` для PostgreSQL-proxy и `100.x.y.z:31415` для SymmetricDS
 - что при необходимости задан `REMOTE_DATABASE_URL`
+
+`ECONNREFUSED` на `5432` или `31415` значит, что Tailscale-маршрут до узла есть, но удалённая сторона не принимает TCP-соединение на этом порту. Обычно это один из трёх случаев: остановлен `segmentica-db-tailscale-proxy`, остановлен `segmentica-symmetricds`, или Windows/firewall/Docker Desktop не даёт контейнеру слушать порт в Tailscale-сети.

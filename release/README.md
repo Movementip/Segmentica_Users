@@ -7,6 +7,7 @@
 - Docker Desktop.
 - Доступ к registry, где опубликованы images Segmentica.
 - Свободный порт `3000` для сайта. При необходимости его можно поменять в `.env`.
+- Для репликации между двумя машинами: reusable auth key Tailscale и заполненные `TS_AUTHKEY`, `TS_HOSTNAME`, `TAILSCALE_WINDOWS_IP` в `.env`.
 
 ## Быстрый запуск из GitHub Release
 
@@ -34,6 +35,21 @@ docker compose up -d
 После запуска открыть `http://localhost:3000`.
 
 Для “одной ссылки” загрузите рядом три файла из `release/dist`: `segmentica-release.zip`, `install.sh`, `install.ps1`. GitHub Actions workflow делает это автоматически при публикации тега.
+
+## Tailscale и удалённая база
+
+Release-пакет поднимает отдельный контейнер `segmentica-tailscale`. Backend, SymmetricDS и PostgreSQL-proxy работают в его сетевом пространстве, поэтому удалённый узел должен видеть:
+
+- `100.x.y.z:5432` — PostgreSQL через `segmentica-db-tailscale-proxy`;
+- `100.x.y.z:31415` — SymmetricDS.
+
+Если в приложении удалённая БД недоступна, проверьте с другой машины:
+
+```sh
+docker exec segmentica-backend node -e "const net=require('net'); const host=process.env.TAILSCALE_WINDOWS_IP; for (const port of [5432,31415]) { const s=net.createConnection({host,port,timeout:5000},()=>{console.log('open',host,port); s.end();}); s.on('error',e=>console.log('error',host,port,e.code)); s.on('timeout',()=>console.log('timeout',host,port)); } setTimeout(()=>{},6000)"
+```
+
+`ECONNREFUSED` означает, что Tailscale-узел найден, но на удалённой стороне не слушает нужный сервис: не запущен `segmentica-db-tailscale-proxy`/`segmentica-symmetricds`, контейнер Tailscale не авторизован, или порт закрыт локальным firewall.
 
 ## Настройка перед публикацией
 
