@@ -8,7 +8,7 @@ Segmentica Users - локальная система для работы с за
 
 Скачайте последнюю сборку:
 
-[Скачать Segmentica для macOS](https://github.com/Movementip/Segmentica_Users/releases/latest/download/Segmentica-2026.4.28-mac-arm64.dmg)
+[Скачать Segmentica для macOS](https://github.com/Movementip/Segmentica_Users/releases/latest/download/Segmentica-macOS.dmg)
 
 После установки откройте `Segmentica.app`. Приложение само управляет встроенной виртуальной машиной Lima и контейнерами Segmentica.
 
@@ -34,10 +34,11 @@ http://localhost:3000
 
 ## Что входит в релиз
 
-- `Segmentica-...-mac-arm64.dmg` - desktop-приложение для macOS.
-- `Segmentica-...-mac-arm64.zip` - zip-версия macOS-приложения.
-- `Segmentica-...-win-x64.exe` - установщик Windows, когда сборка доступна.
-- `Segmentica-...-win-x64.zip` - portable zip для Windows, когда сборка доступна.
+- `Segmentica-macOS.dmg` - стабильная ссылка на desktop-приложение для macOS.
+- `Segmentica-macOS.zip` - стабильная zip-версия macOS-приложения.
+- `Segmentica-Windows-x64.exe` - стабильная ссылка на Windows-установщик, когда сборка доступна.
+- `Segmentica-Windows-x64.zip` - стабильная portable zip-версия Windows, когда сборка доступна.
+- `Segmentica-...` - versioned-копии тех же desktop-сборок для истории релизов.
 - `segmentica-release.zip` - Docker Compose release-пакет.
 - `install.sh` и `install.ps1` - установщики release-пакета.
 - GHCR packages:

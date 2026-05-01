@@ -124,12 +124,23 @@ jobs:
       - name: Build macOS app
         run: npm --prefix desktop run build:mac:bundled
 
+      - name: Add stable macOS asset names
+        shell: bash
+        run: |
+          DMG="$(find desktop/dist -maxdepth 1 -name '*.dmg' | head -n 1)"
+          ZIP="$(find desktop/dist -maxdepth 1 -name '*mac*.zip' | head -n 1)"
+          test -n "$DMG"
+          test -n "$ZIP"
+          cp "$DMG" desktop/dist/Segmentica-macOS.dmg
+          cp "$ZIP" desktop/dist/Segmentica-macOS.zip
+
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-mac
           path: |
             desktop/dist/*.dmg
             desktop/dist/*mac*.zip
+            desktop/dist/Segmentica-macOS.zip
 
   desktop-win:
     name: Build Windows desktop
@@ -155,12 +166,23 @@ jobs:
       - name: Build Windows app
         run: npm --prefix desktop run build:win
 
+      - name: Add stable Windows asset names
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem desktop/dist -Filter "*.exe" | Select-Object -First 1
+          $zip = Get-ChildItem desktop/dist -Filter "*win*.zip" | Select-Object -First 1
+          if (-not $exe) { throw "Windows exe artifact was not produced." }
+          if (-not $zip) { throw "Windows zip artifact was not produced." }
+          Copy-Item $exe.FullName desktop/dist/Segmentica-Windows-x64.exe -Force
+          Copy-Item $zip.FullName desktop/dist/Segmentica-Windows-x64.zip -Force
+
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-win
           path: |
             desktop/dist/*.exe
             desktop/dist/*win*.zip
+            desktop/dist/Segmentica-Windows-x64.zip
 
   github-release:
     name: Publish GitHub Release
@@ -197,6 +219,7 @@ jobs:
           tag_name: ${{ steps.version.outputs.tag }}
           name: Segmentica ${{ steps.version.outputs.version }}
           body_path: docs/RELEASE_NOTES_2026.04.28.md
+          make_latest: true
           files: |
             artifacts/release-dist/*
             artifacts/desktop-mac/*

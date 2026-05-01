@@ -10,6 +10,10 @@ GitHub Release должен содержать:
 - `Segmentica-<version>-mac-arm64.zip`
 - `Segmentica-<version>-win-x64.exe`
 - `Segmentica-<version>-win-x64.zip`
+- `Segmentica-macOS.dmg`
+- `Segmentica-macOS.zip`
+- `Segmentica-Windows-x64.exe`
+- `Segmentica-Windows-x64.zip`
 - `segmentica-release.zip`
 - `install.sh`
 - `install.ps1`

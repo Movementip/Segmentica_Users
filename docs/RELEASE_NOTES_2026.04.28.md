@@ -14,7 +14,7 @@
 
 macOS:
 
-1. Скачайте `Segmentica-2026.4.28-mac-arm64.dmg`.
+1. Скачайте `Segmentica-macOS.dmg` из assets последнего релиза.
 2. Перенесите `Segmentica.app` в `Applications`.
 3. Запустите приложение и нажмите `Запустить`.
 

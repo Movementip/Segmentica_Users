@@ -6,7 +6,7 @@
 
 1. Откройте страницу релиза:
    <https://github.com/Movementip/Segmentica_Users/releases/latest>
-2. Скачайте `Segmentica-2026.4.28-mac-arm64.dmg`.
+2. Скачайте `Segmentica-macOS.dmg`.
 3. Откройте DMG и перенесите `Segmentica.app` в `Applications`.
 4. Запустите `Segmentica.app`.
 5. Нажмите `Запустить`.
