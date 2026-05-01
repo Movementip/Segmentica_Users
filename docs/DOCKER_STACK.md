@@ -57,6 +57,8 @@ TS_HOSTNAME=segmentica-mac
 TAILSCALE_WINDOWS_IP=100.x.y.z
 ```
 
+Для Windows-узла используйте `SYMMETRIC_ENGINE_NAME=node-win` и `TS_HOSTNAME=segmentica-win`. Образ SymmetricDS содержит оба engine-файла: `node-mac.properties` для Mac-клиента и `node-win.properties` для Windows-сервера.
+
 Дополнительно, если удалённый PostgreSQL на Windows не слушает стандартный `5432`, лучше задать явно:
 
 ```env

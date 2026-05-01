@@ -43,6 +43,9 @@ Release-пакет поднимает отдельный контейнер `seg
 - `100.x.y.z:5432` — PostgreSQL через `segmentica-db-tailscale-proxy`;
 - `100.x.y.z:31415` — SymmetricDS.
 
+На Mac-узле оставьте `SYMMETRIC_ENGINE_NAME=node-mac` и укажите `TAILSCALE_WINDOWS_IP=<ip Windows-узла>`.
+На Windows-узле задайте `SYMMETRIC_ENGINE_NAME=node-win`, `TS_HOSTNAME=segmentica-win` и, если Windows должен регистрироваться через Mac, `TAILSCALE_MAC_IP=<ip Mac-узла>`.
+
 Если в приложении удалённая БД недоступна, проверьте с другой машины:
 
 ```sh

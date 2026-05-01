@@ -84,8 +84,11 @@ if [ -n "$sync_url" ]; then
 fi
 
 registration_url="${SYMMETRIC_REGISTRATION_URL:-}"
-if [ -z "$registration_url" ] && [ -n "${TAILSCALE_WINDOWS_IP:-}" ]; then
+if [ -z "$registration_url" ] && [ "$ENGINE_NAME" = "node-mac" ] && [ -n "${TAILSCALE_WINDOWS_IP:-}" ]; then
   registration_url="http://${TAILSCALE_WINDOWS_IP}:31415/sync/node-win"
+fi
+if [ -z "$registration_url" ] && [ "$ENGINE_NAME" = "node-win" ] && [ -n "${TAILSCALE_MAC_IP:-}" ]; then
+  registration_url="http://${TAILSCALE_MAC_IP}:31415/sync/node-mac"
 fi
 
 if [ -n "$registration_url" ]; then

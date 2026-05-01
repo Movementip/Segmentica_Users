@@ -2,7 +2,7 @@
 
 This folder contains the local SymmetricDS 3.16.8 distribution used by Docker.
 
-The image starts `bin/sym` and patches the selected engine properties from environment variables at container startup. By default it uses the existing `node-mac` engine.
+The image starts `bin/sym` and patches the selected engine properties from environment variables at container startup. By default it uses `node-mac`; use `node-win` for the Windows peer.
 
 Important environment variables:
 
