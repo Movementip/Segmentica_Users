@@ -220,6 +220,7 @@ jobs:
           name: Segmentica ${{ steps.version.outputs.version }}
           body_path: docs/RELEASE_NOTES_2026.04.28.md
           make_latest: true
+          overwrite_files: true
           files: |
             artifacts/release-dist/*
             artifacts/desktop-mac/*
