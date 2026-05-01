@@ -399,7 +399,7 @@ function renderImages(images = []) {
     const row = document.createElement("tr");
     row.append(
       makeCell(image.Repository || image.Name),
-      makeCell(image.Tag),
+      makeCell(image.Tags || image.Tag),
       makeCell(image.Size || image.BlobSize),
       makeCell(image.Platform)
     );

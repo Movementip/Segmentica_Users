@@ -62,7 +62,9 @@ services:
     depends_on:
       backend:
         condition: service_started
+    command: ["sh", "-c", "HOSTNAME=0.0.0.0 node server.js"]
     environment:
+      HOSTNAME: 0.0.0.0
       PORT: 3000
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
       FRONTEND_API_INTERNAL_URL: http://backend:3001

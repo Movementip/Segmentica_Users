@@ -51,6 +51,7 @@ const APP_HEALTHCHECK_TIMEOUT_MS = 1_500;
 const RUNTIME_SNAPSHOT_COMMAND_TIMEOUT_MS = 8_000;
 const RUNTIME_LOG_COMMAND_TIMEOUT_MS = 12_000;
 const RUNTIME_LOG_TAIL_PER_CONTAINER = 120;
+const APP_READY_ATTEMPTS = 60;
 const RUNTIME_TAB_ID = "runtime-dashboard";
 const CONTAINER_RUNTIME = normalizeContainerRuntime(process.env.SEGMENTICA_CONTAINER_RUNTIME);
 
@@ -962,6 +963,85 @@ function embeddedStackScriptArgs() {
   return ["shell", LIMA_INSTANCE_NAME, "sudo", "/usr/local/sbin/segmentica-start-stack"];
 }
 
+function embeddedStackScriptContent() {
+  return `#!/bin/sh
+set -eu
+
+sysctl -w net.ipv4.ip_forward=1 >/dev/null 2>&1 || true
+sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null 2>&1 || true
+mkdir -p /run/containerd /var/lib/containerd /var/log
+if ! pgrep -x containerd >/dev/null 2>&1; then
+  nohup containerd >/var/log/containerd.log 2>&1 &
+  sleep 2
+fi
+
+start_container() {
+  nerdctl start "$1" >/dev/null 2>&1 || true
+}
+
+start_container segmentica-tailscale
+sleep 1
+start_container segmentica-postgres
+start_container segmentica-libreoffice
+start_container segmentica-db-tailscale-proxy
+start_container segmentica-backend
+start_container segmentica-symmetricds
+
+network="$(nerdctl network ls --format '{{.Name}}' | grep -E '^(site[0-9]+|segmentica)_default$' | head -n 1 || true)"
+if [ -z "$network" ]; then
+  network="bridge"
+fi
+
+frontend_image="$(nerdctl inspect --format '{{.Config.Image}}' segmentica-frontend 2>/dev/null || true)"
+if [ -z "$frontend_image" ]; then
+  if nerdctl image inspect segmentica-frontend:local >/dev/null 2>&1; then
+    frontend_image="segmentica-frontend:local"
+  else
+    frontend_image="ghcr.io/movementip/segmentica-frontend:${RELEASE_VERSION}"
+  fi
+fi
+
+tailscale_ip="$(nerdctl inspect --format '{{.NetworkSettings.IPAddress}}' segmentica-tailscale 2>/dev/null || true)"
+api_url="http://backend:3001"
+extra_hosts=""
+if [ -n "$tailscale_ip" ]; then
+  api_url="http://tailscale:3001"
+  extra_hosts="--add-host tailscale:$tailscale_ip"
+fi
+
+nerdctl rm -f segmentica-frontend >/dev/null 2>&1 || true
+nerdctl run -d \\
+  --name segmentica-frontend \\
+  --network "$network" \\
+  $extra_hosts \\
+  -e HOSTNAME=0.0.0.0 \\
+  -e PORT=3000 \\
+  -e NEXTAUTH_URL=http://localhost:3000 \\
+  -e FRONTEND_API_INTERNAL_URL="$api_url" \\
+  -p 3000:3000 \\
+  --entrypoint sh \\
+  --restart unless-stopped \\
+  "$frontend_image" -c 'HOSTNAME=0.0.0.0 node server.js' >/dev/null
+`;
+}
+
+async function installEmbeddedStackScript() {
+  if (!isEmbeddedLimaRuntime()) {
+    return;
+  }
+
+  const script = embeddedStackScriptContent();
+  const command = [
+    "cat > /usr/local/sbin/segmentica-start-stack <<'SEGMENTICA_STACK_SCRIPT'",
+    script,
+    "SEGMENTICA_STACK_SCRIPT",
+    "chmod +x /usr/local/sbin/segmentica-start-stack"
+  ].join("\n");
+  await run(limaCommand(), ["shell", LIMA_INSTANCE_NAME, "sudo", "sh", "-lc", command], {
+    statusMessage: "Настраиваю запуск контейнеров..."
+  });
+}
+
 async function hasEmbeddedStackScript() {
   return isEmbeddedLimaRuntime()
     && await hasCommand(limaCommand(), ["shell", LIMA_INSTANCE_NAME, "test", "-x", "/usr/local/sbin/segmentica-start-stack"]);
@@ -972,9 +1052,10 @@ async function ensureEmbeddedContainerdIfPossible() {
     return;
   }
 
-  if (await hasEmbeddedStackScript()) {
-    await tryRun(limaCommand(), embeddedStackScriptArgs(), { statusMessage: "Проверяю окружение..." });
-  }
+  await tryRun(limaCommand(), ["shell", LIMA_INSTANCE_NAME, "sudo", "sh", "-lc", [
+    "mkdir -p /run/containerd /var/lib/containerd /var/log",
+    "if ! pgrep -x containerd >/dev/null 2>&1; then nohup containerd >/var/log/containerd.log 2>&1 & sleep 2; fi"
+  ].join("; ")], { statusMessage: "Проверяю контейнерную среду..." });
 }
 
 async function hasCommand(command, args) {
@@ -1053,6 +1134,7 @@ async function ensureLimaAvailable() {
   }
 
   await waitForEmbeddedLimaShell();
+  await installEmbeddedStackScript();
   await ensureEmbeddedContainerdIfPossible();
   try {
     await exec(limaCommand(), ["shell", LIMA_INSTANCE_NAME, "test", "-r", runtimeComposeFile()]);
@@ -1205,18 +1287,31 @@ async function waitForDb() {
 }
 
 async function waitForApp() {
-  for (let attempt = 0; attempt < 90; attempt += 1) {
+  let lastStatus = "";
+  for (let attempt = 0; attempt < APP_READY_ATTEMPTS; attempt += 1) {
     try {
       const response = await fetchWithTimeout(APP_URL, { method: "GET" }, 3_000);
       if (response.status < 500) {
         return;
       }
+      lastStatus = `HTTP ${response.status}`;
     } catch (error) {
-      // wait
+      lastStatus = error.message || "сайт пока не отвечает";
     }
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+
+    const containers = await getSegmenticaContainerRows();
+    const frontend = containers.find((container) => getRuntimeContainerName(container) === "segmentica-frontend");
+    if (frontend && !isRuntimeContainerUp(frontend)) {
+      throw new Error(`Frontend-контейнер остановился во время запуска: ${frontend.Status || "статус неизвестен"}.`);
+    }
+
+    sendStatus(
+      "Жду запуск сайта...",
+      `${APP_URL} · попытка ${attempt + 1}/${APP_READY_ATTEMPTS}${lastStatus ? ` · ${lastStatus}` : ""}`
+    );
+    await delay(2_000);
   }
-  throw new Error("Segmentica не успела запуститься.");
+  throw new Error(`Segmentica не успела запуститься. Последний статус: ${lastStatus || "сайт не ответил"}.`);
 }
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = APP_HEALTHCHECK_TIMEOUT_MS) {
@@ -1250,6 +1345,58 @@ function normalizeRuntimeRows(rows) {
     }
     return normalized;
   });
+}
+
+function imageAlias(image) {
+  const repository = String(image.Repository || image.Name || "").replace(/^docker\.io\/library\//, "");
+  const tag = String(image.Tag || "").trim();
+  return tag ? `${repository}:${tag}` : repository;
+}
+
+function imagePreferenceScore(image) {
+  const repository = String(image.Repository || image.Name || "");
+  const tag = String(image.Tag || "");
+  if (repository.startsWith("ghcr.io/movementip/") && tag === RELEASE_VERSION) {
+    return 0;
+  }
+  if (repository.startsWith("ghcr.io/movementip/")) {
+    return 1;
+  }
+  if (tag === "local") {
+    return 2;
+  }
+  return 3;
+}
+
+function dedupeImages(images) {
+  const grouped = new Map();
+  for (const image of images) {
+    const key = image.ID || image.Digest || image.Name || `${image.Repository}:${image.Tag}`;
+    const current = grouped.get(key);
+    const alias = imageAlias(image);
+    if (!current) {
+      grouped.set(key, { primary: image, aliases: alias ? [alias] : [] });
+      continue;
+    }
+
+    if (alias && !current.aliases.includes(alias)) {
+      current.aliases.push(alias);
+    }
+    if (imagePreferenceScore(image) < imagePreferenceScore(current.primary)) {
+      current.primary = image;
+    }
+  }
+
+  return Array.from(grouped.values()).map((group) => ({
+    ...group.primary,
+    Tags: group.aliases
+      .sort((left, right) => {
+        const leftScore = left.includes(`:${RELEASE_VERSION}`) ? 0 : left.endsWith(":latest") ? 1 : left.endsWith(":local") ? 2 : 3;
+        const rightScore = right.includes(`:${RELEASE_VERSION}`) ? 0 : right.endsWith(":latest") ? 1 : right.endsWith(":local") ? 2 : 3;
+        return leftScore - rightScore || left.localeCompare(right);
+      })
+      .join(", ")
+  }));
 }
 
 async function getEmbeddedLimaStatus() {
@@ -1366,7 +1513,7 @@ async function collectRuntimeSnapshot() {
         getContainerLogs()
       ]);
       snapshot.containers = normalizeRuntimeRows(parseJsonLines(containers.stdout));
-      snapshot.images = normalizeRuntimeRows(parseJsonLines(images.stdout));
+      snapshot.images = dedupeImages(normalizeRuntimeRows(parseJsonLines(images.stdout)));
       snapshot.volumes = normalizeRuntimeRows(parseJsonLines(volumes.stdout)).map((volume) => ({
         ...volume,
         Size: volume.Size || volumeSizes.get(volume.Name) || ""
@@ -1389,7 +1536,7 @@ async function collectRuntimeSnapshot() {
       getContainerLogs()
     ]);
     snapshot.containers = normalizeRuntimeRows(parseJsonLines(containers.stdout));
-    snapshot.images = normalizeRuntimeRows(parseJsonLines(images.stdout));
+    snapshot.images = dedupeImages(normalizeRuntimeRows(parseJsonLines(images.stdout)));
     snapshot.volumes = normalizeRuntimeRows(parseJsonLines(volumes.stdout));
     snapshot.networks = normalizeRuntimeRows(parseJsonLines(networks.stdout));
     snapshot.logs = logs;
