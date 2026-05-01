@@ -35,8 +35,7 @@
         "from": "../release/dist",
         "to": "release",
         "filter": [
-          "segmentica-release.zip",
-          "segmentica-images.tar.gz"
+          "segmentica-release.zip"
         ]
       },
       {

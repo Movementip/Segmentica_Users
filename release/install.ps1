@@ -4,6 +4,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$ImagesArchive = "segmentica-images.tar.gz"
+$ImagesManifest = "segmentica-images.sha256"
 
 function Require-Command {
     param([string]$Name)
@@ -39,23 +41,94 @@ function Resolve-ImagesUrl {
     return $null
 }
 
+function Resolve-ImagesBaseUrl {
+    if (-not [string]::IsNullOrWhiteSpace($env:SEGMENTICA_IMAGES_BASE_URL)) {
+        return $env:SEGMENTICA_IMAGES_BASE_URL
+    }
+
+    if ((-not [string]::IsNullOrWhiteSpace($ReleaseUrl)) -and $ReleaseUrl.EndsWith("/segmentica-release.zip")) {
+        return ($ReleaseUrl -replace "/segmentica-release\.zip$", "")
+    }
+
+    return $null
+}
+
 function Download-ImagesArchive {
-    if (Test-Path "segmentica-images.tar.gz") {
+    if (Test-Path $ImagesArchive) {
         return
     }
 
     $imagesUrl = Resolve-ImagesUrl
-    if ([string]::IsNullOrWhiteSpace($imagesUrl)) {
+    if (-not [string]::IsNullOrWhiteSpace($imagesUrl)) {
+        Write-Host "Скачиваю архив container images..."
+        try {
+            Invoke-WebRequest -Uri $imagesUrl -OutFile $ImagesArchive
+            return
+        } catch {
+            Remove-Item $ImagesArchive -Force -ErrorAction SilentlyContinue
+            Write-Warning "Единый архив images недоступен, попробую скачать части архива."
+        }
+    }
+
+    $imagesBaseUrl = Resolve-ImagesBaseUrl
+    if ([string]::IsNullOrWhiteSpace($imagesBaseUrl)) {
         return
     }
 
-    Write-Host "Скачиваю архив container images..."
+    Write-Host "Скачиваю список частей архива images..."
     try {
-        Invoke-WebRequest -Uri $imagesUrl -OutFile "segmentica-images.tar.gz"
+        Invoke-WebRequest -Uri "$imagesBaseUrl/$ImagesManifest" -OutFile $ImagesManifest
     } catch {
-        Remove-Item "segmentica-images.tar.gz" -Force -ErrorAction SilentlyContinue
-        Write-Warning "Архив images недоступен, попробую загрузить images из registry."
+        Remove-Item $ImagesManifest -Force -ErrorAction SilentlyContinue
+        Write-Warning "Список частей images недоступен, попробую загрузить images из registry."
+        return
     }
+
+    $parts = Get-Content $ImagesManifest | ForEach-Object {
+        $columns = $_.Trim() -split "\s+"
+        if ($columns.Length -ge 2) { $columns[1] }
+    }
+
+    if (-not $parts -or $parts.Count -eq 0) {
+        Remove-Item $ImagesManifest -Force -ErrorAction SilentlyContinue
+        Write-Warning "Список частей images пустой, попробую загрузить images из registry."
+        return
+    }
+
+    foreach ($part in $parts) {
+        Write-Host "Скачиваю $part..."
+        Invoke-WebRequest -Uri "$imagesBaseUrl/$part" -OutFile $part
+    }
+
+    foreach ($line in Get-Content $ImagesManifest) {
+        $columns = $line.Trim() -split "\s+"
+        if ($columns.Length -lt 2) { continue }
+        $expected = $columns[0].ToLowerInvariant()
+        $part = $columns[1]
+        $actual = (Get-FileHash -Algorithm SHA256 -Path $part).Hash.ToLowerInvariant()
+        if ($actual -ne $expected) {
+            throw "Контрольная сумма $part не совпадает."
+        }
+    }
+
+    $tmpArchive = "$ImagesArchive.tmp"
+    Remove-Item $tmpArchive -Force -ErrorAction SilentlyContinue
+    $output = [System.IO.File]::Open($tmpArchive, [System.IO.FileMode]::CreateNew)
+    try {
+        foreach ($part in $parts) {
+            $input = [System.IO.File]::OpenRead($part)
+            try {
+                $input.CopyTo($output)
+            } finally {
+                $input.Dispose()
+            }
+            Remove-Item $part -Force
+        }
+    } finally {
+        $output.Dispose()
+    }
+
+    Move-Item $tmpArchive $ImagesArchive -Force
 }
 
 function Load-EnvFile {
@@ -114,12 +187,12 @@ function Restore-SeedIfPresent {
 }
 
 function Load-ImagesIfPresent {
-    if (-not (Test-Path "segmentica-images.tar.gz")) {
+    if (-not (Test-Path $ImagesArchive)) {
         return $false
     }
 
-    Write-Host "Загружаю container images из segmentica-images.tar.gz..."
-    docker load -i segmentica-images.tar.gz
+    Write-Host "Загружаю container images из $ImagesArchive..."
+    docker load -i $ImagesArchive
     if ($LASTEXITCODE -ne 0) {
         throw "docker load завершился с ошибкой."
     }

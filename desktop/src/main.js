@@ -3,6 +3,7 @@ const { spawn, execFile } = require("node:child_process");
 const fs = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
+const crypto = require("node:crypto");
 
 app.setName("Segmentica");
 app.setAppUserModelId("ru.segmentica.desktop");
@@ -52,6 +53,11 @@ const RUNTIME_SNAPSHOT_COMMAND_TIMEOUT_MS = 8_000;
 const RUNTIME_LOG_COMMAND_TIMEOUT_MS = 12_000;
 const RUNTIME_LOG_TAIL_PER_CONTAINER = 120;
 const IMAGE_ARCHIVE_LOAD_TIMEOUT_MS = 30 * 60_000;
+const IMAGE_ARCHIVE_DOWNLOAD_TIMEOUT_MS = 45 * 60_000;
+const RELEASE_ASSET_BASE_URL = process.env.SEGMENTICA_RELEASE_ASSET_BASE_URL
+  || `https://github.com/Movementip/Segmentica_Users/releases/download/v${RELEASE_VERSION}`;
+const IMAGE_ARCHIVE_NAME = "segmentica-images.tar.gz";
+const IMAGE_ARCHIVE_MANIFEST_NAME = "segmentica-images.sha256";
 const APP_READY_ATTEMPTS = 60;
 const RUNTIME_TAB_ID = "runtime-dashboard";
 const CONTAINER_RUNTIME = normalizeContainerRuntime(process.env.SEGMENTICA_CONTAINER_RUNTIME);
@@ -164,11 +170,11 @@ function releaseZipPath() {
 }
 
 function releaseImageArchivePath() {
-  const packagedPath = path.join(process.resourcesPath, "release", "segmentica-images.tar.gz");
+  const packagedPath = path.join(process.resourcesPath, "release", IMAGE_ARCHIVE_NAME);
   if (fs.existsSync(packagedPath)) {
     return packagedPath;
   }
-  return path.resolve(__dirname, "..", "..", "release", "dist", "segmentica-images.tar.gz");
+  return path.resolve(__dirname, "..", "..", "release", "dist", IMAGE_ARCHIVE_NAME);
 }
 
 function sendStatus(message, detail = "") {
@@ -1236,7 +1242,7 @@ async function ensureRuntimeFiles() {
 
   const archivePath = releaseImageArchivePath();
   if (fs.existsSync(archivePath)) {
-    fs.copyFileSync(archivePath, path.join(dir, "segmentica-images.tar.gz"));
+    fs.copyFileSync(archivePath, path.join(dir, IMAGE_ARCHIVE_NAME));
   }
 
   fs.writeFileSync(marker, new Date().toISOString());
@@ -1276,8 +1282,8 @@ async function ensureImages() {
 }
 
 async function loadImageArchiveIfAvailable(missingImages = []) {
-  const archivePath = path.join(runtimeDir(), "segmentica-images.tar.gz");
-  if (!fs.existsSync(archivePath)) {
+  const archivePath = path.join(runtimeDir(), IMAGE_ARCHIVE_NAME);
+  if (!fs.existsSync(archivePath) && !(await downloadImageArchivePartsIfAvailable())) {
     return false;
   }
 
@@ -1288,22 +1294,143 @@ async function loadImageArchiveIfAvailable(missingImages = []) {
 
   sendStatus(
     "Загружаю container images из пакета...",
-    missingImages.length > 0 ? missingImages.join(", ") : "segmentica-images.tar.gz"
+    missingImages.length > 0 ? missingImages.join(", ") : IMAGE_ARCHIVE_NAME
   );
 
   if (isEmbeddedLimaRuntime()) {
     await run(limaCommand(), limaNerdctlArgs(["load", "-i", archivePath]), {
-      timeout: IMAGE_ARCHIVE_LOAD_TIMEOUT_MS,
+      timeoutMs: IMAGE_ARCHIVE_LOAD_TIMEOUT_MS,
       statusMessage: "Загружаю container images..."
     });
   } else {
     await run("docker", ["load", "-i", archivePath], {
-      timeout: IMAGE_ARCHIVE_LOAD_TIMEOUT_MS,
+      timeoutMs: IMAGE_ARCHIVE_LOAD_TIMEOUT_MS,
       statusMessage: "Загружаю container images..."
     });
   }
 
   fs.writeFileSync(marker, new Date().toISOString());
+  return true;
+}
+
+function imageArchiveManifestPath() {
+  return path.join(runtimeDir(), IMAGE_ARCHIVE_MANIFEST_NAME);
+}
+
+function parseImageArchiveManifest(content = "") {
+  return content
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const match = line.match(/^([a-fA-F0-9]{64})\s+\*?(.+)$/);
+      if (!match) {
+        return null;
+      }
+      return {
+        hash: match[1].toLowerCase(),
+        name: path.basename(match[2].trim())
+      };
+    })
+    .filter((part) => part && part.name.startsWith(`${IMAGE_ARCHIVE_NAME}.part-`));
+}
+
+function releaseAssetUrl(assetName) {
+  return `${RELEASE_ASSET_BASE_URL.replace(/\/$/, "")}/${encodeURIComponent(assetName)}`;
+}
+
+async function downloadReleaseAsset(assetName, destinationPath) {
+  await run("curl", [
+    "-fsSL",
+    "--retry",
+    "3",
+    "--connect-timeout",
+    "20",
+    "-o",
+    destinationPath,
+    releaseAssetUrl(assetName)
+  ], {
+    timeoutMs: IMAGE_ARCHIVE_DOWNLOAD_TIMEOUT_MS,
+    statusMessage: "Скачиваю container images..."
+  });
+}
+
+function sha256File(filePath) {
+  return new Promise((resolve, reject) => {
+    const hash = crypto.createHash("sha256");
+    const stream = fs.createReadStream(filePath);
+    stream.on("data", (chunk) => hash.update(chunk));
+    stream.on("error", reject);
+    stream.on("end", () => resolve(hash.digest("hex")));
+  });
+}
+
+function appendFileToStream(sourcePath, output) {
+  return new Promise((resolve, reject) => {
+    const input = fs.createReadStream(sourcePath);
+    input.on("error", reject);
+    output.on("error", reject);
+    input.on("end", resolve);
+    input.pipe(output, { end: false });
+  });
+}
+
+async function downloadImageArchivePartsIfAvailable() {
+  const archivePath = path.join(runtimeDir(), IMAGE_ARCHIVE_NAME);
+  if (fs.existsSync(archivePath)) {
+    return true;
+  }
+
+  const manifestPath = imageArchiveManifestPath();
+  fs.mkdirSync(runtimeDir(), { recursive: true });
+
+  try {
+    sendStatus("Скачиваю список container images...", IMAGE_ARCHIVE_MANIFEST_NAME);
+    await downloadReleaseAsset(IMAGE_ARCHIVE_MANIFEST_NAME, manifestPath);
+  } catch (error) {
+    return false;
+  }
+
+  const parts = parseImageArchiveManifest(fs.readFileSync(manifestPath, "utf8"));
+  if (parts.length === 0) {
+    return false;
+  }
+
+  for (const part of parts) {
+    const partPath = path.join(runtimeDir(), part.name);
+    if (!fs.existsSync(partPath)) {
+      sendStatus("Скачиваю container images...", part.name);
+      await downloadReleaseAsset(part.name, partPath);
+    }
+  }
+
+  const tmpArchivePath = `${archivePath}.tmp`;
+  fs.rmSync(tmpArchivePath, { force: true });
+  const output = fs.createWriteStream(tmpArchivePath, { flags: "wx" });
+
+  try {
+    for (const part of parts) {
+      const partPath = path.join(runtimeDir(), part.name);
+      sendStatus("Проверяю container images...", part.name);
+      const actualHash = await sha256File(partPath);
+      if (actualHash !== part.hash) {
+        throw new Error(`Контрольная сумма ${part.name} не совпадает.`);
+      }
+
+      sendStatus("Собираю архив container images...", part.name);
+      await appendFileToStream(partPath, output);
+      fs.rmSync(partPath, { force: true });
+    }
+  } catch (error) {
+    output.destroy();
+    fs.rmSync(tmpArchivePath, { force: true });
+    throw error;
+  }
+
+  await new Promise((resolve, reject) => {
+    output.end((error) => (error ? reject(error) : resolve()));
+  });
+  fs.renameSync(tmpArchivePath, archivePath);
   return true;
 }
 

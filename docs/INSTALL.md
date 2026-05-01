@@ -20,12 +20,12 @@
 
 Если раньше использовалась старая среда `~/.lima/segmentica`, приложение переносит её в папку Segmentica, чтобы сохранить уже загруженные images, containers и volumes.
 
-DMG содержит архив container images и `seed/Segmentica.dump`. Первый запуск загружает образы во встроенную виртуальную машину, затем восстанавливает PostgreSQL volume из этого снимка. Так пользователь получает не пустую базу, а состояние, включённое в релиз.
+DMG содержит release-пакет и `seed/Segmentica.dump`. Первый запуск скачивает части архива container images из GitHub Release, загружает образы во встроенную виртуальную машину, затем восстанавливает PostgreSQL volume из этого снимка. Так пользователь получает не пустую базу, а состояние, включённое в релиз.
 
 ## Вариант 2. Docker Compose одной командой
 
 Этот способ подходит для macOS, Linux и Windows с Docker Desktop.
-Установщик скачивает `segmentica-release.zip` и соседний asset `segmentica-images.tar.gz`, поэтому GitHub Packages/GHCR не обязательны для первого запуска.
+Установщик скачивает `segmentica-release.zip`, `segmentica-images.sha256` и соседние части `segmentica-images.tar.gz.part-*`, поэтому GitHub Packages/GHCR не обязательны для первого запуска.
 
 ### macOS / Linux
 

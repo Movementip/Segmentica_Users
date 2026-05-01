@@ -114,18 +114,22 @@ jobs:
             tailscale/tailscale:latest \
             node:20-bookworm-slim \
             | gzip -1 > release/dist/segmentica-images.tar.gz
+          split -b 1800m -d -a 2 release/dist/segmentica-images.tar.gz release/dist/segmentica-images.tar.gz.part-
+          (cd release/dist && shasum -a 256 segmentica-images.tar.gz.part-* > segmentica-images.sha256)
+          rm release/dist/segmentica-images.tar.gz
 
       - uses: actions/upload-artifact@v4
         with:
           name: image-archive
-          path: release/dist/segmentica-images.tar.gz
+          path: |
+            release/dist/segmentica-images.tar.gz.part-*
+            release/dist/segmentica-images.sha256
 
   desktop-mac:
     name: Build macOS desktop
     runs-on: macos-14
     needs:
       - release-package
-      - packages
     steps:
       - uses: actions/checkout@v4
 
@@ -138,11 +142,6 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: release-dist
-          path: release/dist
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: image-archive
           path: release/dist
 
       - name: Install desktop dependencies
@@ -168,8 +167,7 @@ jobs:
         with:
           name: desktop-mac
           path: |
-            desktop/dist/*.dmg
-            desktop/dist/*mac*.zip
+            desktop/dist/Segmentica-macOS.dmg
             desktop/dist/Segmentica-macOS.zip
 
   desktop-win:
@@ -177,7 +175,6 @@ jobs:
     runs-on: windows-latest
     needs:
       - release-package
-      - packages
     steps:
       - uses: actions/checkout@v4
 
@@ -190,11 +187,6 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: release-dist
-          path: release/dist
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: image-archive
           path: release/dist
 
       - name: Install desktop dependencies
@@ -217,8 +209,7 @@ jobs:
         with:
           name: desktop-win
           path: |
-            desktop/dist/*.exe
-            desktop/dist/*win*.zip
+            desktop/dist/Segmentica-Windows-x64.exe
             desktop/dist/Segmentica-Windows-x64.zip
 
   github-release:
