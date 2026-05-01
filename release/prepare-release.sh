@@ -26,6 +26,7 @@ cp "$ROOT_DIR/release/.env.example" "$WORK_DIR/.env.example"
 cp "$ROOT_DIR/release/install.sh" "$WORK_DIR/install.sh"
 cp "$ROOT_DIR/release/install.ps1" "$WORK_DIR/install.ps1"
 cp "$ROOT_DIR/release/README.md" "$WORK_DIR/README.md"
+cp "$ROOT_DIR/infra/tailscale-db-proxy.js" "$WORK_DIR/tailscale-db-proxy.js"
 cp "$ROOT_DIR/infra/db/init/"* "$WORK_DIR/db/init/"
 cp "$ROOT_DIR/infra/db/schema/"* "$WORK_DIR/db/schema/"
 

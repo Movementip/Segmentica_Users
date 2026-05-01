@@ -10,6 +10,7 @@ const globalForDb = globalThis as typeof globalThis & {
     __segmenticaDbExitHandlerRegistered?: boolean;
     __segmenticaDbResetPromise?: Promise<void> | null;
     __segmenticaPgCryptoEnsurePromise?: Promise<void> | null;
+    __segmenticaRemoteDatabaseCheck?: RemoteDatabaseCheck | null;
 };
 export let isRemote = false;
 export type DbMode = 'local' | 'remote';
@@ -20,6 +21,21 @@ let resetPoolPromise: Promise<void> | null = globalForDb.__segmenticaDbResetProm
 let pgCryptoEnsurePromise: Promise<void> | null = globalForDb.__segmenticaPgCryptoEnsurePromise ?? null;
 
 type DatabaseSslConfig = false | { rejectUnauthorized: boolean };
+
+export type RemoteDatabaseTarget = {
+    host: string | null;
+    port: string | null;
+    database: string | null;
+};
+
+export type RemoteDatabaseCheck = {
+    available: boolean;
+    configured: boolean;
+    target: RemoteDatabaseTarget;
+    errorCode: string | null;
+    errorMessage: string | null;
+    checkedAt: string;
+};
 
 const isEnabledEnvFlag = (value?: string | null): boolean => {
     return ['1', 'true', 'yes', 'require', 'required', 'on'].includes(String(value || '').trim().toLowerCase());
@@ -88,9 +104,44 @@ const getDatabaseSslConfig = (connectionString: string, isRemoteDb: boolean): Da
     return { rejectUnauthorized: false };
 };
 
-const testDatabaseConnection = async (connectionString: string, isRemoteDb: boolean = true): Promise<boolean> => {
+const describePostgresConnectionString = (connectionString: string): RemoteDatabaseTarget => {
+    try {
+        const url = new URL(connectionString);
+        return {
+            host: url.hostname || null,
+            port: url.port || '5432',
+            database: url.pathname ? decodeURIComponent(url.pathname.replace(/^\//, '')) || null : null,
+        };
+    } catch {
+        return {
+            host: null,
+            port: null,
+            database: null,
+        };
+    }
+};
+
+const emptyRemoteDatabaseCheck = (configured = false): RemoteDatabaseCheck => ({
+    available: false,
+    configured,
+    target: {
+        host: null,
+        port: null,
+        database: null,
+    },
+    errorCode: null,
+    errorMessage: configured ? 'Адрес удалённой базы задан некорректно.' : 'Удалённая база не настроена.',
+    checkedAt: new Date().toISOString(),
+});
+
+export const getLastRemoteDatabaseCheck = (): RemoteDatabaseCheck => {
+    return globalForDb.__segmenticaRemoteDatabaseCheck ?? emptyRemoteDatabaseCheck(hasRemoteDatabaseConfig());
+};
+
+const testDatabaseConnection = async (connectionString: string, isRemoteDb: boolean = true): Promise<RemoteDatabaseCheck> => {
     let testPool: Pool | null = null;
     let client: PoolClient | null = null;
+    const target = describePostgresConnectionString(connectionString);
     try {
         testPool = new Pool({
             connectionString,
@@ -99,11 +150,23 @@ const testDatabaseConnection = async (connectionString: string, isRemoteDb: bool
         });
         client = await testPool.connect();
         await client.query('SELECT 1');
-        return true;
+        return {
+            available: true,
+            configured: true,
+            target,
+            errorCode: null,
+            errorMessage: null,
+            checkedAt: new Date().toISOString(),
+        };
     } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        void errorMessage;
-        return false;
+        return {
+            available: false,
+            configured: true,
+            target,
+            errorCode: typeof (error as any)?.code === 'string' ? (error as any).code : null,
+            errorMessage: error instanceof Error ? error.message : 'Неизвестная ошибка подключения.',
+            checkedAt: new Date().toISOString(),
+        };
     } finally {
         if (client) {
             await client.release();
@@ -323,15 +386,16 @@ const stopConnectionCheck = () => {
 
 export const refreshRemoteAvailability = async (): Promise<boolean> => {
     const remoteUrl = getRemoteDatabaseConnectionString();
-    const nextRemoteAvailable = remoteUrl ? await testDatabaseConnection(remoteUrl) : false;
-    remoteAvailable = nextRemoteAvailable;
+    const check = remoteUrl ? await testDatabaseConnection(remoteUrl) : emptyRemoteDatabaseCheck(false);
+    globalForDb.__segmenticaRemoteDatabaseCheck = check;
+    remoteAvailable = check.available;
 
     const shouldUseRemote = getEffectiveDbMode() === 'remote';
     if (shouldUseRemote !== isRemote && (pool || poolPromise)) {
         await resetPool();
     }
 
-    return nextRemoteAvailable;
+    return check.available;
 };
 
 const startConnectionCheck = (checkIntervalMs: number = 15000) => {

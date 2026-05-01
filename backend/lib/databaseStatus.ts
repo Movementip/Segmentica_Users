@@ -2,6 +2,7 @@ import { Pool } from 'pg';
 
 import {
     dbMode,
+    getLastRemoteDatabaseCheck,
     getLocalDatabaseConnectionString,
     getRemoteDatabaseHost,
     hasRemoteDatabaseConfig,
@@ -31,6 +32,10 @@ export type DatabaseStatusSnapshot = {
     activeLabel: string;
     activeHint: string;
     remoteHost: string | null;
+    remotePort: string | null;
+    remoteTarget: string | null;
+    remoteErrorCode: string | null;
+    remoteErrorMessage: string | null;
     checkedAt: string;
     sync: SymmetricSyncStatus;
 };
@@ -214,6 +219,10 @@ const buildDatabaseStatusSnapshot = async (): Promise<DatabaseStatusSnapshot> =>
 
     const activeMode = getActiveMode();
     const remoteHost = getRemoteDatabaseHost();
+    const remoteCheck = getLastRemoteDatabaseCheck();
+    const remoteTarget = remoteCheck.target.host
+        ? `${remoteCheck.target.host}:${remoteCheck.target.port || '5432'}`
+        : null;
     const sync = await readSymmetricSyncStatus();
 
     return {
@@ -225,6 +234,10 @@ const buildDatabaseStatusSnapshot = async (): Promise<DatabaseStatusSnapshot> =>
         activeLabel: getActiveLabel(activeMode),
         activeHint: getActiveHint(activeMode, remoteHost),
         remoteHost,
+        remotePort: remoteCheck.target.port,
+        remoteTarget,
+        remoteErrorCode: remoteCheck.errorCode,
+        remoteErrorMessage: remoteCheck.errorMessage,
         checkedAt: new Date().toISOString(),
         sync,
     };

@@ -22,12 +22,65 @@ services:
       retries: 30
     restart: unless-stopped
 
-  backend:
-    image: ${SEGMENTICA_IMAGE_PREFIX:-ghcr.io/your-org}/segmentica-backend:${SEGMENTICA_VERSION:-latest}
-    container_name: segmentica-backend
+  tailscale:
+    image: tailscale/tailscale:latest
+    container_name: segmentica-tailscale
+    hostname: ${TS_HOSTNAME:-segmentica-node}
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY:-}
+      TS_HOSTNAME: ${TS_HOSTNAME:-segmentica-node}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "false"
+      TS_AUTH_ONCE: "true"
+      TS_ACCEPT_DNS: "false"
+    ports:
+      - "${BACKEND_PORT:-3001}:3001"
+      - "${SYMMETRIC_HTTP_PORT:-31415}:31415"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+    healthcheck:
+      test: ["CMD-SHELL", "tailscale status --peers=false >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  db-tailscale-proxy:
+    image: node:20-bookworm-slim
+    container_name: segmentica-db-tailscale-proxy
+    network_mode: "service:tailscale"
     depends_on:
       db:
         condition: service_healthy
+      tailscale:
+        condition: service_started
+    environment:
+      LISTEN_HOST: 0.0.0.0
+      LISTEN_PORT: 5432
+      TARGET_HOST: db
+      TARGET_PORT: 5432
+    volumes:
+      - ./tailscale-db-proxy.js:/app/tailscale-db-proxy.js:ro
+    command: ["node", "/app/tailscale-db-proxy.js"]
+    restart: unless-stopped
+
+  backend:
+    image: ${SEGMENTICA_IMAGE_PREFIX:-ghcr.io/your-org}/segmentica-backend:${SEGMENTICA_VERSION:-latest}
+    container_name: segmentica-backend
+    network_mode: "service:tailscale"
+    depends_on:
+      db:
+        condition: service_healthy
+      tailscale:
+        condition: service_started
       libreoffice:
         condition: service_started
     environment:
@@ -47,6 +100,7 @@ services:
       AUTH_REMEMBER_ME_HOURS: ${AUTH_REMEMBER_ME_HOURS:-24}
       DOCUMENT_RENDERER_URL: http://libreoffice:3000
       DOCUMENT_RENDERER_FALLBACK_URLS: http://libreoffice:3000
+      TAILSCALE_WINDOWS_IP: ${TAILSCALE_WINDOWS_IP:-}
       REMOTE_DATABASE_URL: ${REMOTE_DATABASE_URL:-}
       REMOTE_DB_HOST: ${REMOTE_DB_HOST:-}
       REMOTE_DB_PORT: ${REMOTE_DB_PORT:-5432}
@@ -67,7 +121,7 @@ services:
       HOSTNAME: 0.0.0.0
       PORT: 3000
       NEXTAUTH_URL: ${NEXTAUTH_URL:-http://localhost:3000}
-      FRONTEND_API_INTERNAL_URL: http://backend:3001
+      FRONTEND_API_INTERNAL_URL: http://tailscale:3001
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     restart: unless-stopped
@@ -86,9 +140,12 @@ services:
   symmetricds:
     image: ${SEGMENTICA_IMAGE_PREFIX:-ghcr.io/your-org}/segmentica-symmetricds:${SEGMENTICA_VERSION:-latest}
     container_name: segmentica-symmetricds
+    network_mode: "service:tailscale"
     depends_on:
       db:
         condition: service_healthy
+      tailscale:
+        condition: service_started
     environment:
       DB_HOST: db
       DB_PORT: 5432
@@ -102,9 +159,10 @@ services:
       SYMMETRIC_DB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       SYMMETRIC_PUBLIC_URL: ${SYMMETRIC_PUBLIC_URL:-}
       SYMMETRIC_REGISTRATION_URL: ${SYMMETRIC_REGISTRATION_URL:-}
+      TAILSCALE_PUBLIC_HOST: ${TAILSCALE_PUBLIC_HOST:-}
+      TAILSCALE_MAC_IP: ${TAILSCALE_MAC_IP:-}
+      TAILSCALE_WINDOWS_IP: ${TAILSCALE_WINDOWS_IP:-}
       JAVA_TOOL_OPTIONS: -Dsun.net.inetaddr.ttl=10 -Dsun.net.inetaddr.negative.ttl=0
-    ports:
-      - "${SYMMETRIC_HTTP_PORT:-31415}:31415"
     volumes:
       - symmetricds-logs:/opt/symmetricds/logs
       - symmetricds-tmp:/opt/symmetricds/tmp
@@ -113,5 +171,6 @@ services:
 volumes:
   segmentica-postgres-data:
     name: segmentica-postgres-data
+  tailscale-state:
   symmetricds-logs:
   symmetricds-tmp:

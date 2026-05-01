@@ -58,6 +58,10 @@ type HeaderDbStatus = {
     activeLabel: string;
     activeHint: string;
     remoteHost: string | null;
+    remotePort: string | null;
+    remoteTarget: string | null;
+    remoteErrorCode: string | null;
+    remoteErrorMessage: string | null;
     checkedAt: string;
     sync: {
         available: boolean;
@@ -557,6 +561,10 @@ export function Header(): JSX.Element {
                 activeLabel: typeof data.activeLabel === 'string' ? data.activeLabel : 'Локальная база Docker',
                 activeHint: typeof data.activeHint === 'string' ? data.activeHint : 'Локальный контейнер PostgreSQL',
                 remoteHost: typeof data.remoteHost === 'string' ? data.remoteHost : null,
+                remotePort: typeof data.remotePort === 'string' ? data.remotePort : null,
+                remoteTarget: typeof data.remoteTarget === 'string' ? data.remoteTarget : null,
+                remoteErrorCode: typeof data.remoteErrorCode === 'string' ? data.remoteErrorCode : null,
+                remoteErrorMessage: typeof data.remoteErrorMessage === 'string' ? data.remoteErrorMessage : null,
                 checkedAt: typeof data.checkedAt === 'string' ? data.checkedAt : new Date().toISOString(),
                 sync: {
                     available: Boolean(data.sync?.available),
@@ -1212,6 +1220,24 @@ export function Header(): JSX.Element {
                                                     : 'Недоступна'}
                                         </span>
                                     </div>
+
+                                    {dbStatus?.remoteTarget ? (
+                                        <div className={styles.dbMenuRow}>
+                                            <span className={styles.dbMenuLabel}>Адрес БД</span>
+                                            <span className={styles.dbMenuValue}>{dbStatus.remoteTarget}</span>
+                                        </div>
+                                    ) : null}
+
+                                    {!dbStatus?.remoteAvailable && dbStatus?.remoteErrorMessage ? (
+                                        <div className={styles.dbMenuRow}>
+                                            <span className={styles.dbMenuLabel}>Ошибка</span>
+                                            <span className={styles.dbMenuValue}>
+                                                {[dbStatus.remoteErrorCode, dbStatus.remoteErrorMessage]
+                                                    .filter(Boolean)
+                                                    .join(': ')}
+                                            </span>
+                                        </div>
+                                    ) : null}
 
                                     <div className={styles.dbMenuRow}>
                                         <span className={styles.dbMenuLabel}>SymmetricDS</span>
